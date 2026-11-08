@@ -10,3 +10,4 @@ testdata/rapid/
 /app/android/
 /app/ios/
 /app/modules/core/android/libs/
+/app/modules/core/android/build/
