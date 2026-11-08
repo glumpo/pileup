@@ -250,3 +250,22 @@ func TestOpsFrom(t *testing.T) {
 		t.Errorf("vv = %v", got)
 	}
 }
+
+func TestOwnershipStaysWithFirstAdder(t *testing.T) {
+	a, b := newNode(1), newNode(2)
+	a.join(t, "Аня", "ios")
+	b.join(t, "Боря", "android")
+	a.create(t, op.AssetAdd{Assets: []op.AssetMeta{asset("x", "1.jpg")}})
+	b.pull(t, a.State)
+	b.create(t, op.AssetAdd{Assets: []op.AssetMeta{asset("x", "b.jpg")}})
+	a.pull(t, b.State)
+	a.create(t, op.AssetRemove{AssetIDs: [][]byte{[]byte("x")}})
+	a.create(t, op.AssetAdd{Assets: []op.AssetMeta{asset("x", "2.jpg")}})
+	b.pull(t, a.State)
+	want := map[string]state.Asset{"x": {Owner: a.author(), Meta: asset("x", "2.jpg")}}
+	for _, n := range []*node{a, b} {
+		if got := n.View().Assets; !reflect.DeepEqual(got, want) {
+			t.Errorf("assets = %v, want %v", got, want)
+		}
+	}
+}

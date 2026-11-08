@@ -3,7 +3,6 @@ package state_test
 import (
 	"bytes"
 	"crypto/ed25519"
-	"testing"
 
 	"github.com/glumpo/pileup/core/crdt/op"
 	"github.com/glumpo/pileup/core/crdt/state"
@@ -14,6 +13,11 @@ var (
 	pile   = bytes.Repeat([]byte{0x50}, 32)
 	secret = bytes.Repeat([]byte{0x53}, 32)
 )
+
+type tb interface {
+	Helper()
+	Fatal(...any)
+}
 
 type node struct {
 	key ed25519.PrivateKey
@@ -31,12 +35,12 @@ func (n *node) author() op.Author {
 	return op.Author(n.key.Public().(ed25519.PublicKey))
 }
 
-func (n *node) join(t testing.TB, name, platform string) op.Op {
+func (n *node) join(t tb, name, platform string) op.Op {
 	t.Helper()
 	return n.create(t, op.Join{Name: name, Platform: platform, Proof: op.JoinProof(secret, n.author())})
 }
 
-func (n *node) create(t testing.TB, c op.Change) op.Op {
+func (n *node) create(t tb, c op.Change) op.Op {
 	t.Helper()
 	o, err := n.Create(n.key, 1700000000000, c)
 	if err != nil {
@@ -45,7 +49,7 @@ func (n *node) create(t testing.TB, c op.Change) op.Op {
 	return o
 }
 
-func (n *node) pull(t testing.TB, from *state.State) {
+func (n *node) pull(t tb, from *state.State) {
 	t.Helper()
 	for a, r := range vv.Missing(n.View().VV, from.View().VV) {
 		for _, raw := range from.Ops(a, r.From) {

@@ -5,7 +5,7 @@ status: In Progress
 assignee:
   - '@claude'
 created_date: '2026-11-08T06:49:00Z'
-updated_date: '2026-11-08T10:18:00Z'
+updated_date: '2026-11-08T10:23:00Z'
 labels:
   - core
   - protocol
@@ -48,3 +48,11 @@ crdt — сердце протокола синхронизации, и меня
 7. Golden vectors в testdata, fuzz декодера (≥60 с на цель) → verify: go test -fuzz
 8. gofmt, go vet, go test -race, make check
 <!-- SECTION:PLAN:END -->
+
+## Implementation Notes
+
+<!-- SECTION:NOTES:BEGIN -->
+- crdt/op: конверт CBOR [body, sig], Body с целыми ключами 1..9, Decode проверяет подпись над байтами body как есть и разбирает payload известных типов; Validator.Check: pile_id, seq, prev, lamport, Join на seq 1.
+- crdt/clock, crdt/vv (Missing).
+- crdt/state: Apply/Create/Ops/View; владелец файла — автор AssetAdd с наименьшей парой (lamport, author), чтобы владелец не зависел от порядка доставки.
+<!-- SECTION:NOTES:END -->
