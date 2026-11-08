@@ -11,6 +11,7 @@ import (
 
 	"github.com/glumpo/pileup/core/httpapi"
 	"github.com/glumpo/pileup/core/node"
+	"github.com/glumpo/pileup/core/show"
 )
 
 type Keystore interface {
@@ -52,6 +53,7 @@ func (d nativeDiscovery) Browse(service string, handler node.DiscoveryHandler) e
 var (
 	mu       sync.Mutex
 	core     *node.Node
+	shows    *show.Host
 	listener net.Listener
 	server   *http.Server
 	port     int
@@ -83,8 +85,9 @@ func Start(dir, platform string, keystore Keystore, media MediaProvider, renditi
 	}
 	t := rand.Text()
 	core = n
+	shows = show.New(n, show.DefaultBudget)
 	listener = ln
-	server = &http.Server{Handler: httpapi.WithNode(t, n)}
+	server = &http.Server{Handler: httpapi.WithNode(t, n, shows)}
 	port = ln.Addr().(*net.TCPAddr).Port
 	token = t
 	go server.Serve(ln)
@@ -121,8 +124,9 @@ func Stop() error {
 	if errors.Is(err, net.ErrClosed) {
 		err = nil
 	}
+	shows.Stop()
 	err = errors.Join(err, core.Close())
-	core, listener, server, port, token = nil, nil, nil, 0, ""
+	core, shows, listener, server, port, token = nil, nil, nil, nil, 0, ""
 	return err
 }
 

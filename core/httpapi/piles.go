@@ -11,9 +11,10 @@ import (
 	"github.com/glumpo/pileup/core/crdt/op"
 	"github.com/glumpo/pileup/core/invite"
 	"github.com/glumpo/pileup/core/node"
+	"github.com/glumpo/pileup/core/show"
 )
 
-func WithNode(token string, n *node.Node) http.Handler {
+func WithNode(token string, n *node.Node, h *show.Host) http.Handler {
 	mux := base()
 	mux.HandleFunc("GET /piles", func(w http.ResponseWriter, r *http.Request) {
 		ps, err := n.Piles()
@@ -69,6 +70,7 @@ func WithNode(token string, n *node.Node) http.Handler {
 	timeline(mux, n)
 	screens(mux, n)
 	diagnostics(mux, n)
+	shows(mux, h)
 	return authorized(token, mux)
 }
 

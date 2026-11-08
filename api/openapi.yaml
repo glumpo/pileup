@@ -378,6 +378,159 @@ paths:
                 type: string
         "401":
           description: Missing or invalid token.
+  /show:
+    post:
+      operationId: startShow
+      summary: Start a show of a pile on a screen, with this device as the host
+      description: >-
+        One show per host: a running show is stopped first. The session lives
+        only on this device. On a Cast screen the host connects to the Default
+        Media Receiver, serves media to it over plain HTTP in the local network
+        under a token valid until the show stops, and loads the current file
+        on every cursor change; T2 of the cursor and the next 20 files is
+        prefetched from their owners. An AirPlay screen is available only on
+        an iPhone host, where the app renders it natively.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - pile
+                - screen
+              properties:
+                pile:
+                  type: string
+                  pattern: "^[0-9a-f]+$"
+                screen:
+                  type: string
+                  description: Screen id from GET /screens.
+                asset:
+                  type: string
+                  pattern: "^[0-9a-f]+$"
+                  description: File to start from; the first file of the timeline if absent.
+      responses:
+        "201":
+          description: The show is running.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ShowState"
+        "400":
+          $ref: "#/components/responses/Error"
+        "401":
+          description: Missing or invalid token.
+        "404":
+          description: unknown_pile, unknown_screen or unknown_asset.
+          $ref: "#/components/responses/Error"
+        "409":
+          description: >-
+            screen_unavailable (with reason to show as is) or empty_pile.
+          $ref: "#/components/responses/Error"
+        "502":
+          description: screen_unreachable — could not connect to the screen.
+          $ref: "#/components/responses/Error"
+    get:
+      operationId: getShow
+      summary: State of the running show
+      responses:
+        "200":
+          description: Show state.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ShowState"
+        "401":
+          description: Missing or invalid token.
+        "404":
+          description: no_show.
+          $ref: "#/components/responses/Error"
+    delete:
+      operationId: stopShow
+      summary: Stop the running show, if any
+      description: Stops playback on the screen and revokes the screen's token.
+      responses:
+        "204":
+          description: No show is running.
+        "401":
+          description: Missing or invalid token.
+  /show/next:
+    post:
+      operationId: showNext
+      summary: Move to the next file; stays on the last one
+      responses:
+        "200":
+          $ref: "#/components/responses/ShowState"
+        "401":
+          description: Missing or invalid token.
+        "404":
+          $ref: "#/components/responses/Error"
+  /show/prev:
+    post:
+      operationId: showPrev
+      summary: Move to the previous file; stays on the first one
+      responses:
+        "200":
+          $ref: "#/components/responses/ShowState"
+        "401":
+          description: Missing or invalid token.
+        "404":
+          $ref: "#/components/responses/Error"
+  /show/goto:
+    post:
+      operationId: showGoto
+      summary: Move to a file of the pile
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - asset
+              properties:
+                asset:
+                  type: string
+                  pattern: "^[0-9a-f]+$"
+      responses:
+        "200":
+          $ref: "#/components/responses/ShowState"
+        "400":
+          $ref: "#/components/responses/Error"
+        "401":
+          description: Missing or invalid token.
+        "404":
+          description: no_show or unknown_asset.
+          $ref: "#/components/responses/Error"
+  /show/play:
+    post:
+      operationId: showPlay
+      summary: Resume the current video
+      responses:
+        "200":
+          $ref: "#/components/responses/ShowState"
+        "401":
+          description: Missing or invalid token.
+        "404":
+          $ref: "#/components/responses/Error"
+        "409":
+          description: not_video.
+          $ref: "#/components/responses/Error"
+  /show/pause:
+    post:
+      operationId: showPause
+      summary: Pause the current video
+      responses:
+        "200":
+          $ref: "#/components/responses/ShowState"
+        "401":
+          description: Missing or invalid token.
+        "404":
+          $ref: "#/components/responses/Error"
+        "409":
+          description: not_video.
+          $ref: "#/components/responses/Error"
 components:
   parameters:
     PileID:
@@ -581,7 +734,88 @@ components:
               selected:
                 type: boolean
                 description: Published to the pile.
+    ShowItem:
+      type: object
+      required:
+        - id
+        - revision
+        - author
+        - kind
+        - taken_at
+      properties:
+        id:
+          type: string
+          pattern: "^[0-9a-f]+$"
+        revision:
+          type: string
+          pattern: "^[0-9a-f]+$"
+        author:
+          type: string
+          pattern: "^[0-9a-f]+$"
+          description: Public key of the owner, hex; matches author in the timeline.
+        kind:
+          type: string
+          description: photo, video or live_photo; newer versions may add others.
+        taken_at:
+          type: integer
+          format: int64
+    ShowState:
+      type: object
+      required:
+        - pile
+        - screen
+        - index
+        - total
+        - current
+        - playing
+        - waiting
+      properties:
+        pile:
+          type: string
+          pattern: "^[0-9a-f]+$"
+        screen:
+          $ref: "#/components/schemas/Screen"
+        index:
+          type: integer
+          description: Position of the current file in the timeline, from 0.
+        total:
+          type: integer
+        current:
+          $ref: "#/components/schemas/ShowItem"
+        playing:
+          type: boolean
+          description: The current file is a video that is playing.
+        renderer_error:
+          type: object
+          description: >-
+            Last error of the screen, until the next successful load or
+            command; disconnected stays until the show is restarted.
+          required:
+            - code
+            - message
+          properties:
+            code:
+              type: string
+              description: >-
+                load_failed, command_failed, playback_failed or disconnected;
+                newer versions may add others.
+            message:
+              type: string
+              description: Technical details in English.
+        waiting:
+          type: array
+          description: >-
+            Files of the prefetch window not loaded yet because their owner is
+            offline or not answering, in timeline order.
+          items:
+            $ref: "#/components/schemas/ShowItem"
   responses:
+    ShowState:
+      description: Show state after the command.
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ShowState"
     Error:
       description: Request failed.
       content:
@@ -591,6 +825,9 @@ components:
             required:
               - error
             properties:
+              reason:
+                type: string
+                description: With screen_unavailable, the screen's reason to show as is.
               error:
                 type: string
                 enum:
@@ -604,4 +841,10 @@ components:
                   - unknown_asset
                   - no_media
                   - source_unavailable
+                  - no_show
+                  - unknown_screen
+                  - screen_unavailable
+                  - empty_pile
+                  - not_video
+                  - screen_unreachable
                   - internal

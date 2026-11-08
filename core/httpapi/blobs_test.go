@@ -21,6 +21,7 @@ import (
 	"github.com/glumpo/pileup/core/device"
 	"github.com/glumpo/pileup/core/httpapi"
 	"github.com/glumpo/pileup/core/node"
+	"github.com/glumpo/pileup/core/show"
 )
 
 type phone struct{ library }
@@ -107,7 +108,7 @@ func errorCode(t *testing.T, body []byte) string {
 
 func TestThumbnailAndDisplayForUI(t *testing.T) {
 	n, p, photo := sourceWithPhoto(t)
-	srv := httptest.NewServer(httpapi.WithNode("secret", n))
+	srv := httptest.NewServer(httpapi.WithNode("secret", n, show.New(n, show.DefaultBudget)))
 	t.Cleanup(srv.Close)
 
 	for _, tier := range []string{"1", "2"} {

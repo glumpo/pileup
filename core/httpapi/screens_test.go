@@ -12,6 +12,7 @@ import (
 	"github.com/glumpo/pileup/core/device"
 	"github.com/glumpo/pileup/core/httpapi"
 	"github.com/glumpo/pileup/core/node"
+	"github.com/glumpo/pileup/core/show"
 )
 
 type screen struct {
@@ -74,7 +75,7 @@ func startIn(t *testing.T, platform string) (client, *room) {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { n.Close() })
-	srv := httptest.NewServer(httpapi.WithNode("secret", n))
+	srv := httptest.NewServer(httpapi.WithNode("secret", n, show.New(n, show.DefaultBudget)))
 	t.Cleanup(srv.Close)
 	return client{t: t, url: srv.URL}, r
 }
