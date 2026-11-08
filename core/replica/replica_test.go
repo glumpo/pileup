@@ -11,6 +11,7 @@ import (
 	"reflect"
 	"sync"
 	"testing"
+	"time"
 
 	"github.com/fxamacker/cbor/v2"
 	"github.com/glumpo/pileup/core/crdt/op"
@@ -253,4 +254,34 @@ func TestResentOpsAreIgnored(t *testing.T) {
 	waitFor(t, "first sync", converged(t, vv.VV{author(ka): 2, author(kb): 1}, b), s)
 	a.create(t, assets("y"))
 	waitFor(t, "sync of a new op", func() bool { return b.vv(t)[author(ka)] == 3 }, s)
+}
+
+func TestIdleConnectionWaitsForNewOps(t *testing.T) {
+	ka, kb := key(1), key(2)
+	a, b := newNode(t, ka, "Аня"), newNode(t, kb, "Боря")
+	var mu sync.Mutex
+	requests := 0
+	addrA := a.serve(t, func(h http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			mu.Lock()
+			requests++
+			mu.Unlock()
+			h.ServeHTTP(w, r)
+		})
+	})
+	s := b.pull(t, addrA)
+	waitFor(t, "first sync", func() bool { return b.vv(t)[author(ka)] == 1 }, s)
+	time.Sleep(50 * time.Millisecond)
+	mu.Lock()
+	before := requests
+	mu.Unlock()
+	time.Sleep(500 * time.Millisecond)
+	mu.Lock()
+	idle := requests - before
+	mu.Unlock()
+	if idle != 0 {
+		t.Fatalf("%d requests while nothing changed", idle)
+	}
+	a.create(t, assets("x"))
+	waitFor(t, "new op", func() bool { return b.vv(t)[author(ka)] == 2 }, s)
 }
