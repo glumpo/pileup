@@ -2,6 +2,7 @@ package httpapi_test
 
 import (
 	"bytes"
+	"context"
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
@@ -19,84 +20,54 @@ import (
 	"github.com/glumpo/pileup/core/crdt/op"
 	"github.com/glumpo/pileup/core/device"
 	"github.com/glumpo/pileup/core/httpapi"
-	"github.com/glumpo/pileup/core/invite"
 	"github.com/glumpo/pileup/core/node"
-	"github.com/glumpo/pileup/core/store"
 )
 
-type thumbnails struct{}
+type phone struct{ library }
 
-func (thumbnails) Rendition(local string, tier int) ([]byte, error) {
+func (phone) Rendition(local string, tier int) ([]byte, error) {
 	return []byte(fmt.Sprintf("T%d of %s", tier, local)), nil
 }
 
-func (thumbnails) OriginalSize(string) (int64, error) { return 0, errors.New("not used") }
+func (phone) OriginalSize(string) (int64, error) { return 0, errors.New("not used") }
 
-func (thumbnails) ReadOriginal(string, int64, int64) ([]byte, error) {
+func (phone) ReadOriginal(string, int64, int64) ([]byte, error) {
 	return nil, errors.New("not used")
 }
 
-func localID(assetID []byte) (string, bool) {
-	return strings.CutPrefix(string(assetID), "asset:")
-}
-
-var photo = op.AssetMeta{
-	AssetID:      []byte("asset:IMG_1"),
-	Revision:     []byte("rev:1"),
-	Kind:         op.KindPhoto,
-	MIME:         "image/jpeg",
-	OriginalName: "IMG_1.jpg",
-}
-
-func sourceWithPhoto(t *testing.T) (*node.Node, node.Pile) {
+func sourceWithPhoto(t *testing.T) (*node.Node, node.Pile, op.AssetMeta) {
 	t.Helper()
 	dir := t.TempDir()
-	cfg := node.Config{
+	n, err := node.Open(node.Config{
 		Dir:        dir,
 		Keystore:   device.File(filepath.Join(dir, "device.key")),
 		Platform:   "ios",
 		Addrs:      func() []netip.Addr { return []netip.Addr{netip.MustParseAddr("127.0.0.1")} },
-		Renditions: thumbnails{},
-		LocalID:    localID,
-	}
-	n, err := node.Open(cfg)
+		Media:      phone{photos},
+		Renditions: phone{photos},
+	})
 	if err != nil {
 		t.Fatal(err)
 	}
+	t.Cleanup(func() { n.Close() })
 	p, err := n.Create("Грузия", "Аня")
 	if err != nil {
 		t.Fatal(err)
 	}
-	inv, err := n.Invite(p.ID)
+	if err := n.Select(context.Background(), p.ID, july1, july10); err != nil {
+		t.Fatal(err)
+	}
+	s, err := n.Selection(p.ID)
 	if err != nil {
 		t.Fatal(err)
 	}
-	i, err := invite.Parse(inv)
-	if err != nil {
-		t.Fatal(err)
+	for _, c := range s.Items {
+		if c.LocalID == "plain" {
+			return n, p, c.Meta
+		}
 	}
-	if err := n.Close(); err != nil {
-		t.Fatal(err)
-	}
-	key, err := device.Key(cfg.Keystore)
-	if err != nil {
-		t.Fatal(err)
-	}
-	s, err := store.Open(filepath.Join(dir, "piles", hex.EncodeToString(p.ID)+".db"), p.ID, i.Secret)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if _, err := s.Create(key, time.Now().UnixMilli(), op.AssetAdd{Assets: []op.AssetMeta{photo}}); err != nil {
-		t.Fatal(err)
-	}
-	if err := s.Close(); err != nil {
-		t.Fatal(err)
-	}
-	if n, err = node.Open(cfg); err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(func() { n.Close() })
-	return n, p
+	t.Fatalf("selection %+v has no photo", s)
+	return nil, node.Pile{}, op.AssetMeta{}
 }
 
 func getBlob(t *testing.T, url, path, token string, header ...string) (*http.Response, []byte) {
@@ -135,12 +106,12 @@ func errorCode(t *testing.T, body []byte) string {
 }
 
 func TestThumbnailAndDisplayForUI(t *testing.T) {
-	n, p := sourceWithPhoto(t)
+	n, p, photo := sourceWithPhoto(t)
 	srv := httptest.NewServer(httpapi.WithNode("secret", n))
 	t.Cleanup(srv.Close)
 
 	for _, tier := range []string{"1", "2"} {
-		want := []byte("T" + tier + " of IMG_1")
+		want := []byte("T" + tier + " of plain")
 		sum := sha256.Sum256(want)
 		etag := `"` + hex.EncodeToString(sum[:]) + `"`
 		resp, body := getBlob(t, srv.URL, blobPath(p, photo, tier), "secret")
@@ -162,7 +133,7 @@ func TestThumbnailAndDisplayForUI(t *testing.T) {
 	}
 
 	other := photo
-	other.Revision = []byte("rev:2")
+	other.Revision = []byte("other revision")
 	for name, c := range map[string]struct {
 		path   string
 		status int
@@ -183,7 +154,7 @@ func TestThumbnailAndDisplayForUI(t *testing.T) {
 }
 
 func TestDisplayOfOfflineOwnerIsUnavailable(t *testing.T) {
-	a, p := sourceWithPhoto(t)
+	a, p, photo := sourceWithPhoto(t)
 	inv, err := a.Invite(p.ID)
 	if err != nil {
 		t.Fatal(err)
@@ -195,7 +166,7 @@ func TestDisplayOfOfflineOwnerIsUnavailable(t *testing.T) {
 	deadline := time.Now().Add(10 * time.Second)
 	for {
 		resp, body := getBlob(t, b.url, blobPath(p, photo, "1"), "secret")
-		if resp.StatusCode == http.StatusOK && string(body) == "T1 of IMG_1" {
+		if resp.StatusCode == http.StatusOK && string(body) == "T1 of plain" {
 			break
 		}
 		if time.Now().After(deadline) {
