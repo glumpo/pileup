@@ -5,7 +5,7 @@ status: In Progress
 assignee:
   - '@claude'
 created_date: '2026-11-08T06:49:00Z'
-updated_date: '2026-11-08T22:29:00Z'
+updated_date: '2026-11-08T22:33:00Z'
 labels:
   - core
   - network
@@ -31,10 +31,10 @@ ordinal: 7000
 ## Acceptance Criteria
 <!-- AC:BEGIN -->
 - [ ] #1 Android и iPhone в одной Wi-Fi-сети находят друг друга через mDNS и NSD (_pileup._tcp) без ввода адресов
-- [ ] #2 Если mDNS недоступен, соединение устанавливается по адресу из QR
+- [x] #2 Если mDNS недоступен, соединение устанавливается по адресу из QR
 - [x] #3 Узел, не знающий секрета pile, не проходит handshake
 - [x] #4 Тест: ретрансляция handshake через посредника не проходит благодаря привязке к TLS-каналу
-- [ ] #5 В Info.plist объявлены NSLocalNetworkUsageDescription и NSBonjourServices; на Android включается MulticastLock
+- [x] #5 В Info.plist объявлены NSLocalNetworkUsageDescription и NSBonjourServices; на Android включается MulticastLock
 <!-- AC:END -->
 
 ## Implementation Plan
@@ -81,4 +81,6 @@ iOS: NSLocalNetworkUsageDescription и NSBonjourServices (_pileup._tcp, _googlec
 Риски: _airplay._tcp объявляют и HomePod/Mac/ТВ с AirPlay 2 — фильтр по TXT features/model не сделан; resolveService и NsdServiceInfo.host устарели в API 34 (работают); в будущих Android может понадобиться разрешение на локальную сеть; на реальных устройствах не проверено.
 
 Проверено: gofmt -l пусто, go vet ./..., go test -race ./... (все пакеты), make check без ANDROID_HOME (Go, лицензии, tsc, jest 14/14), :core:testDebugUnitTest (DiscoveryTest 10/10 и прежние), make android-debug — BUILD SUCCESSFUL, в собранном манифесте есть CHANGE_WIFI_MULTICAST_STATE.
+
+Обнаружение влито в master, решение A22 записано. AC #2 — существующие тесты входа по адресу из приглашения без обнаружения; AC #5 — Info.plist сгенерирован prebuild с обоими ключами, MulticastLock покрыт юнит-тестами, манифест содержит CHANGE_WIFI_MULTICAST_STATE. Осталось AC #1 на устройствах и Swift-провайдер обнаружения (iOS).
 <!-- SECTION:NOTES:END -->
