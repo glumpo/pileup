@@ -15,6 +15,7 @@ import (
 	"mime/multipart"
 	"net"
 	"net/http"
+	"net/http/httptest"
 	"net/netip"
 	"path/filepath"
 	"strconv"
@@ -609,5 +610,142 @@ func TestMembersJoinedThroughOneInviterFetchEachOthersThumbnails(t *testing.T) {
 				t.Fatalf("member address %s leaked into an op", addr)
 			}
 		}
+	}
+}
+
+func TestDisplayCachedOnMemberCanBeEvictedAndFetchedAgain(t *testing.T) {
+	ma := newMedia()
+	a, b := openSource(t, t.TempDir(), "ios", ma), open(t, t.TempDir(), "android")
+	p := create(t, a, "Грузия", "Аня")
+	ma.add(photo("IMG_1", day), []byte("jpeg"))
+	img := share(t, a, p)["IMG_1"]
+	join(t, b, inviteTo(t, a, p), "Боря")
+	eventually(t, "b stores T1", func() bool { return b.Stored(p.ID, img.AssetID, img.Revision, node.T1) })
+
+	if _, ok := b.Cached(p.ID, img.AssetID, img.Revision, node.T2); ok {
+		t.Fatal("T2 cached before any request")
+	}
+	f, _, err := b.Blob(context.Background(), p.ID, img.AssetID, img.Revision, node.T2)
+	if err != nil {
+		t.Fatal(err)
+	}
+	f.Close()
+	want := rendition("IMG_1", node.T2)
+	if size, ok := b.Cached(p.ID, img.AssetID, img.Revision, node.T2); !ok || size != int64(len(want)) {
+		t.Fatalf("cached T2: %d, %v; want %d bytes", size, ok, len(want))
+	}
+
+	for range 2 {
+		if err := b.Evict(p.ID, img.AssetID, img.Revision, node.T2); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if _, ok := b.Cached(p.ID, img.AssetID, img.Revision, node.T2); ok {
+		t.Fatal("T2 cached after eviction")
+	}
+	if _, ok := b.Cached(p.ID, img.AssetID, img.Revision, node.T1); !ok {
+		t.Fatal("T1 evicted together with T2")
+	}
+	f, _, err = b.Blob(context.Background(), p.ID, img.AssetID, img.Revision, node.T2)
+	if err != nil {
+		t.Fatal(err)
+	}
+	got, err := io.ReadAll(f)
+	f.Close()
+	if err != nil || !bytes.Equal(got, want) {
+		t.Fatalf("T2 after eviction: %q, %v", got, err)
+	}
+	if _, ok := b.Cached(p.ID, img.AssetID, img.Revision, node.T2); !ok {
+		t.Fatal("T2 fetched again is not cached")
+	}
+	if err := b.Evict([]byte("no such pile"), img.AssetID, img.Revision, node.T2); !errors.Is(err, node.ErrUnknownPile) {
+		t.Fatalf("evict in unknown pile: %v", err)
+	}
+}
+
+func TestOriginalIsStreamedFromOwnerWithRanges(t *testing.T) {
+	ma := newMedia()
+	a, b := openSource(t, t.TempDir(), "ios", ma), open(t, t.TempDir(), "android")
+	p := create(t, a, "Грузия", "Аня")
+	original := make([]byte, 2<<20+777)
+	rng := rand.New(rand.NewPCG(3, 4))
+	for i := range original {
+		original[i] = byte(rng.Uint32())
+	}
+	clip := video("VID_1", day, 15_000)
+	clip.MIME = "video/quicktime"
+	ma.add(clip, original)
+	movie := share(t, a, p)["VID_1"]
+	join(t, b, inviteTo(t, a, p), "Боря")
+	waitAssets(t, p.ID, idSet(movie.AssetID), b)
+
+	serve := func(n *node.Node, assetID, revision []byte) string {
+		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			n.ServeOriginal(w, r, p.ID, assetID, revision)
+		}))
+		t.Cleanup(srv.Close)
+		return srv.URL
+	}
+	get := func(url string, header ...string) (*http.Response, []byte) {
+		t.Helper()
+		req, err := http.NewRequest(http.MethodGet, url, nil)
+		if err != nil {
+			t.Fatal(err)
+		}
+		for i := 0; i < len(header); i += 2 {
+			req.Header.Set(header[i], header[i+1])
+		}
+		resp, err := http.DefaultClient.Do(req)
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer resp.Body.Close()
+		body, err := io.ReadAll(resp.Body)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return resp, body
+	}
+
+	for name, url := range map[string]string{
+		"member": serve(b, movie.AssetID, movie.Revision),
+		"owner":  serve(a, movie.AssetID, movie.Revision),
+	} {
+		resp, body := get(url)
+		if resp.StatusCode != http.StatusOK || !bytes.Equal(body, original) || resp.Header.Get("Content-Type") != "video/quicktime" ||
+			resp.Header.Get("Accept-Ranges") != "bytes" || resp.Header.Get("ETag") == "" {
+			t.Fatalf("%s: full original: status %d, %d bytes, headers %v", name, resp.StatusCode, len(body), resp.Header)
+		}
+		size := len(original)
+		for _, c := range []struct {
+			header     string
+			start, end int
+		}{
+			{"bytes=0-1", 0, 2},
+			{"bytes=1048570-1048580", 1048570, 1048581},
+			{"bytes=-100", size - 100, size},
+		} {
+			resp, body := get(url, "Range", c.header)
+			wantRange := fmt.Sprintf("bytes %d-%d/%d", c.start, c.end-1, size)
+			if resp.StatusCode != http.StatusPartialContent || resp.Header.Get("Content-Range") != wantRange || !bytes.Equal(body, original[c.start:c.end]) {
+				t.Fatalf("%s %s: status %d, Content-Range %q, %d bytes", name, c.header, resp.StatusCode, resp.Header.Get("Content-Range"), len(body))
+			}
+		}
+		if resp, _ := get(url, "Range", fmt.Sprintf("bytes=%d-", size)); resp.StatusCode != http.StatusRequestedRangeNotSatisfiable {
+			t.Fatalf("%s: range past the end: status %d", name, resp.StatusCode)
+		}
+	}
+
+	other := movie
+	other.Revision = []byte("other revision")
+	if resp, _ := get(serve(b, other.AssetID, other.Revision)); resp.StatusCode != http.StatusNotFound {
+		t.Fatalf("unknown revision: status %d", resp.StatusCode)
+	}
+	url := serve(b, movie.AssetID, movie.Revision)
+	if err := a.Close(); err != nil {
+		t.Fatal(err)
+	}
+	if resp, _ := get(url, "Range", "bytes=0-1"); resp.StatusCode != http.StatusBadGateway {
+		t.Fatalf("owner offline: status %d", resp.StatusCode)
 	}
 }

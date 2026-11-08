@@ -42,3 +42,11 @@ func (s *Store) Ref(name string) (Hash, bool, error) {
 	copy(h[:], b)
 	return h, err == nil, err
 }
+
+func (s *Store) RemoveRef(name string) error {
+	err := os.Remove(s.refPath(name))
+	if errors.Is(err, fs.ErrNotExist) {
+		return nil
+	}
+	return err
+}

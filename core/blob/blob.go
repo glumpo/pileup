@@ -69,3 +69,11 @@ func (s *Store) Has(h Hash) (bool, error) {
 	}
 	return err == nil, err
 }
+
+func (s *Store) Remove(h Hash) error {
+	err := os.Remove(s.path(h))
+	if errors.Is(err, fs.ErrNotExist) {
+		return nil
+	}
+	return err
+}

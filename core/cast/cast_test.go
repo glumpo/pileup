@@ -255,3 +255,14 @@ func TestOtherReceiverStatusKeepsSession(t *testing.T) {
 		t.Fatal(err)
 	}
 }
+
+func TestLocalAddrIsTheAddressTheReceiverSees(t *testing.T) {
+	f := newFakeReceiver(t)
+	s := connect(t, f)
+	f.mu.Lock()
+	seen := f.conns[0].RemoteAddr().String()
+	f.mu.Unlock()
+	if got := s.LocalAddr().String(); got != seen {
+		t.Fatalf("LocalAddr = %s, receiver sees %s", got, seen)
+	}
+}

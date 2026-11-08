@@ -47,3 +47,33 @@ func TestRefPointsNameToBlob(t *testing.T) {
 		t.Fatal("ref that was never set is present after reopen")
 	}
 }
+
+func TestRemovedRefAndBlobAreGone(t *testing.T) {
+	dir := t.TempDir()
+	s := open(t, dir)
+	display, other := put(t, s, []byte("T2")), put(t, s, []byte("other"))
+	setRef(t, s, "asset/rev/2", display)
+	setRef(t, s, "asset/rev/1", other)
+	for range 2 {
+		if err := s.RemoveRef("asset/rev/2"); err != nil {
+			t.Fatal(err)
+		}
+		if err := s.Remove(display); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	s = open(t, dir)
+	if _, ok := ref(t, s, "asset/rev/2"); ok {
+		t.Fatal("removed ref is present")
+	}
+	if has(t, s, display) {
+		t.Fatal("removed blob is present")
+	}
+	if h, ok := ref(t, s, "asset/rev/1"); !ok || h != other || !has(t, s, other) {
+		t.Fatal("other ref or blob was removed")
+	}
+	if count, _ := files(t, dir); count != 2 {
+		t.Fatalf("%d files left, want the other blob and its ref", count)
+	}
+}

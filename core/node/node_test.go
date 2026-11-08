@@ -257,3 +257,24 @@ func TestPilesSurviveRestart(t *testing.T) {
 	}}
 	waitConverged(t, p.ID, three, a, b, c)
 }
+
+func TestMemberIsOnlineWhileConnected(t *testing.T) {
+	a, b := open(t, t.TempDir(), "ios"), open(t, t.TempDir(), "android")
+	p := create(t, a, "Грузия", "Аня")
+	join(t, b, inviteTo(t, a, p), "Боря")
+	online := func(n *node.Node, who op.Author, want bool) func() bool {
+		return func() bool { return n.Online(p.ID)[who] == want }
+	}
+	eventually(t, "a sees b online", online(a, b.Author(), true))
+	eventually(t, "b sees a online", online(b, a.Author(), true))
+	if b.Online(p.ID)[b.Author()] {
+		t.Fatal("node reports itself as a connected member")
+	}
+	if err := b.Close(); err != nil {
+		t.Fatal(err)
+	}
+	eventually(t, "a sees b offline", online(a, b.Author(), false))
+	if len(a.Online([]byte("no such pile"))) != 0 {
+		t.Fatal("members online in an unknown pile")
+	}
+}

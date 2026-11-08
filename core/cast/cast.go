@@ -150,6 +150,8 @@ func (s *Session) Media() Media {
 
 func (s *Session) Changed() <-chan struct{} { return s.changed }
 
+func (s *Session) LocalAddr() net.Addr { return s.conn.LocalAddr() }
+
 func (s *Session) Done() <-chan struct{} { return s.done }
 
 func (s *Session) Err() error {

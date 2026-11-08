@@ -88,14 +88,14 @@ func (n *Node) blob(ctx context.Context, p *pile, assetID, revision []byte, tier
 		return blob.Hash{}, err
 	}
 	key := ref(a.Owner, assetID, revision, tier)
-	if h, ok, err := n.blobs.Ref(key); ok || err != nil {
+	if h, ok, err := n.stored(key); ok || err != nil {
 		return h, err
 	}
 	var h blob.Hash
 	if a.Owner == n.Author() {
 		n.rendering.Lock()
 		defer n.rendering.Unlock()
-		if h, ok, err := n.blobs.Ref(key); ok || err != nil {
+		if h, ok, err := n.stored(key); ok || err != nil {
 			return h, err
 		}
 		h, err = n.render(p, assetID, tier)
@@ -108,6 +108,59 @@ func (n *Node) blob(ctx context.Context, p *pile, assetID, revision []byte, tier
 		err = n.blobs.SetRef(key, h)
 	}
 	return h, err
+}
+
+func (n *Node) stored(key string) (blob.Hash, bool, error) {
+	h, ok, err := n.blobs.Ref(key)
+	if ok && err == nil {
+		ok, err = n.blobs.Has(h)
+	}
+	return h, ok, err
+}
+
+func (n *Node) refOf(pileID, assetID, revision []byte, tier int) (string, error) {
+	p, err := n.find(pileID)
+	if err != nil {
+		return "", err
+	}
+	a, err := p.asset(assetID, revision)
+	if err != nil {
+		return "", err
+	}
+	return ref(a.Owner, assetID, revision, tier), nil
+}
+
+func (n *Node) Cached(pileID, assetID, revision []byte, tier int) (int64, bool) {
+	key, err := n.refOf(pileID, assetID, revision, tier)
+	if err != nil {
+		return 0, false
+	}
+	h, ok, err := n.blobs.Ref(key)
+	if !ok || err != nil {
+		return 0, false
+	}
+	f, err := n.blobs.Open(h)
+	if err != nil {
+		return 0, false
+	}
+	defer f.Close()
+	info, err := f.Stat()
+	if err != nil {
+		return 0, false
+	}
+	return info.Size(), true
+}
+
+func (n *Node) Evict(pileID, assetID, revision []byte, tier int) error {
+	key, err := n.refOf(pileID, assetID, revision, tier)
+	if err != nil {
+		return err
+	}
+	h, ok, err := n.blobs.Ref(key)
+	if !ok || err != nil {
+		return err
+	}
+	return errors.Join(n.blobs.RemoveRef(key), n.blobs.Remove(h))
 }
 
 func (n *Node) localID(p *pile, assetID []byte) (string, error) {
@@ -224,6 +277,60 @@ func (n *Node) serveBlob(p *pile, w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Cache-Control", Immutable)
 		http.ServeContent(w, r, "", time.Time{}, content)
 	}
+}
+
+func (n *Node) ServeOriginal(w http.ResponseWriter, r *http.Request, pileID, assetID, revision []byte) {
+	p, err := n.find(pileID)
+	var a state.Asset
+	if err == nil {
+		a, err = p.asset(assetID, revision)
+	}
+	if err != nil {
+		http.NotFound(w, r)
+		return
+	}
+	if a.Owner != n.Author() {
+		n.relayOriginal(p, a, w, r)
+		return
+	}
+	content, err := n.original(p, assetID)
+	n.report(diag.Media, p.ID, "", fmt.Sprintf("original %x", assetID), err)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadGateway)
+		return
+	}
+	w.Header().Set("ETag", `"`+hex.EncodeToString(revision)+`"`)
+	w.Header().Set("Content-Type", a.Meta.MIME)
+	w.Header().Set("Cache-Control", Immutable)
+	http.ServeContent(w, r, "", time.Time{}, content)
+}
+
+func (n *Node) relayOriginal(p *pile, a state.Asset, w http.ResponseWriter, r *http.Request) {
+	u := fmt.Sprintf("http://%x/blob/%x/%x/%d", a.Owner[:], a.Meta.AssetID, a.Meta.Revision, T3)
+	req, err := http.NewRequestWithContext(r.Context(), r.Method, u, nil)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	for _, h := range []string{"Range", "If-Range", "If-None-Match"} {
+		if v := r.Header.Get(h); v != "" {
+			req.Header.Set(h, v)
+		}
+	}
+	resp, err := p.stream.Do(req)
+	n.report(diag.Media, p.ID, hex.EncodeToString(a.Owner[:]), fmt.Sprintf("stream %x", a.Meta.AssetID), err)
+	if err != nil {
+		http.Error(w, ErrUnavailable.Error(), http.StatusBadGateway)
+		return
+	}
+	defer resp.Body.Close()
+	for _, h := range []string{"Accept-Ranges", "Cache-Control", "Content-Length", "Content-Range", "Content-Type", "ETag"} {
+		if v := resp.Header.Get(h); v != "" {
+			w.Header().Set(h, v)
+		}
+	}
+	w.WriteHeader(resp.StatusCode)
+	io.Copy(w, resp.Body)
 }
 
 func (n *Node) original(p *pile, assetID []byte) (io.ReadSeeker, error) {

@@ -74,7 +74,9 @@ type pile struct {
 	store   *store.Store
 	replica *replica.Node
 	owners  *http.Client
+	stream  *http.Client
 	local   map[string]string
+	online  map[op.Author]int
 }
 
 type Node struct {
@@ -275,8 +277,9 @@ func (n *Node) start(e entry, changes ...op.Change) (*pile, error) {
 	}
 	e.Port = uint16(ln.Addr().(*net.TCPAddr).Port)
 	n.diag.Add(diag.Connection, e.ID, "", fmt.Sprintf("listening on port %d", e.Port))
-	p := &pile{entry: e, store: s, replica: replica.New(s, n.key, e.ID, e.Secret), local: c.Local}
+	p := &pile{entry: e, store: s, replica: replica.New(s, n.key, e.ID, e.Secret), local: c.Local, online: map[op.Author]int{}}
 	p.owners = n.owners(p)
+	p.stream = &http.Client{Transport: p.owners.Transport}
 	for _, a := range p.Peers {
 		n.pull(p, a)
 	}
@@ -351,8 +354,15 @@ func (n *Node) pull(p *pile, addr string) {
 	go func() {
 		defer n.wg.Done()
 		for {
-			n.report(diag.Connection, p.ID, addr, "announce", n.announce(p, addr))
+			who, err := n.announce(p, addr)
+			n.report(diag.Connection, p.ID, addr, "announce", err)
+			if err == nil {
+				n.connected(p, who, 1)
+			}
 			n.report(diag.Sync, p.ID, addr, "sync", p.replica.Pull(n.ctx, addr, n.synced(p, addr)))
+			if err == nil {
+				n.connected(p, who, -1)
+			}
 			select {
 			case <-n.ctx.Done():
 				return
@@ -362,34 +372,67 @@ func (n *Node) pull(p *pile, addr string) {
 	}()
 }
 
-func (n *Node) announce(p *pile, addr string) error {
+func (n *Node) announce(p *pile, addr string) (op.Author, error) {
+	var mu sync.Mutex
+	var who op.Author
 	c := http.Client{Timeout: timeout, Transport: &http.Transport{
 		DisableKeepAlives: true,
 		DialContext: func(ctx context.Context, _, a string) (net.Conn, error) {
-			return peer.Dial(ctx, a, n.key, p.ID, p.Secret)
+			c, err := peer.Dial(ctx, a, n.key, p.ID, p.Secret)
+			if err == nil {
+				mu.Lock()
+				who = op.Author(c.Peer())
+				mu.Unlock()
+			}
+			return c, err
 		},
 	}}
 	u := "http://" + addr + "/announce?port=" + strconv.Itoa(int(p.Port))
 	req, err := http.NewRequestWithContext(n.ctx, http.MethodPost, u, nil)
 	if err != nil {
-		return err
+		return op.Author{}, err
 	}
 	resp, err := c.Do(req)
 	if err != nil {
-		return err
+		return op.Author{}, err
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusOK {
-		return errors.New(resp.Status)
+		return op.Author{}, errors.New(resp.Status)
 	}
 	var others []string
 	if err := json.NewDecoder(resp.Body).Decode(&others); err != nil {
-		return err
+		return op.Author{}, err
 	}
 	for _, a := range others {
 		n.report(diag.Discovery, p.ID, a, "add peer", n.addPeer(p, a))
 	}
-	return nil
+	mu.Lock()
+	defer mu.Unlock()
+	return who, nil
+}
+
+func (n *Node) connected(p *pile, who op.Author, d int) {
+	n.mu.Lock()
+	defer n.mu.Unlock()
+	p.online[who] += d
+	if p.online[who] == 0 {
+		delete(p.online, who)
+	}
+}
+
+func (n *Node) Online(pileID []byte) map[op.Author]bool {
+	out := map[op.Author]bool{}
+	p, err := n.find(pileID)
+	if err != nil {
+		return out
+	}
+	n.mu.Lock()
+	defer n.mu.Unlock()
+	for a := range p.online {
+		out[a] = true
+	}
+	return out
 }
 
 func (n *Node) save() error {
