@@ -6,7 +6,9 @@ import (
 	"reflect"
 	"testing"
 
+	"github.com/fxamacker/cbor/v2"
 	"github.com/glumpo/pileup/core/crdt/op"
+	"github.com/glumpo/pileup/core/crdt/state"
 )
 
 func TestStateSurvivesReopen(t *testing.T) {
@@ -50,5 +52,43 @@ func TestPathIsUsedVerbatim(t *testing.T) {
 	create(t, s, key(1), join(key(1), "Аня"))
 	if _, err := os.Stat(path); err != nil {
 		t.Fatal(err)
+	}
+}
+
+func TestOpsFromOtherEncodersAreReducedLikeReference(t *testing.T) {
+	s := open(t, filepath.Join(t.TempDir(), "pile.db"))
+	defer s.Close()
+	ref := state.New(pile, secret)
+	k := key(1)
+	payloads := map[op.Type]any{
+		op.TypeAssetAdd:    map[int]any{1: []any{map[int]any{2: []byte("r"), 3: 1}}},
+		op.TypeAssetRemove: map[int]any{1: []any{nil}},
+	}
+	head := op.Head{}
+	raws := [][]byte{op.New(k, pile, head, 1, wallTime, join(k, "Аня"))}
+	for i, typ := range []op.Type{op.TypeAssetAdd, op.TypeAssetRemove, op.TypeAssetAdd} {
+		o, err := op.Decode(raws[len(raws)-1])
+		if err != nil {
+			t.Fatal(err)
+		}
+		head = o.Head()
+		payload, err := cbor.Marshal(payloads[typ])
+		if err != nil {
+			t.Fatal(err)
+		}
+		raws = append(raws, op.Sign(k, op.Body{
+			PileID: pile, Author: author(k), Seq: head.Seq + 1, Prev: head.ID[:], Lamport: uint64(i + 2),
+			Schema: op.Schema, Type: typ, Payload: payload,
+		}))
+	}
+	for i, raw := range raws {
+		_, gotErr := s.Apply(raw)
+		_, wantErr := ref.Apply(raw)
+		if !sameErr(gotErr, wantErr) {
+			t.Fatalf("op %d: err %v, want %v", i, gotErr, wantErr)
+		}
+		if got, want := view(t, s), ref.View(); !reflect.DeepEqual(got, want) {
+			t.Fatalf("op %d: view differs from reference:\n got %+v\nwant %+v", i, got, want)
+		}
 	}
 }

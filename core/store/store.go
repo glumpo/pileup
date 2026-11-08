@@ -154,13 +154,13 @@ func reduce(tx *sql.Tx, o op.Op) error {
 			}
 			if _, err := tx.Exec(`INSERT INTO claims (asset_id, author, first_lamport, present, meta) VALUES (?, ?, ?, 1, ?)
 				ON CONFLICT (asset_id, author) DO UPDATE SET present = 1, meta = excluded.meta`,
-				blob(m.AssetID), a, o.Lamport, meta); err != nil {
+				notNull(m.AssetID), a, o.Lamport, meta); err != nil {
 				return err
 			}
 		}
 	case op.AssetRemove:
 		for _, id := range c.AssetIDs {
-			if _, err := tx.Exec(`UPDATE claims SET present = 0 WHERE asset_id = ? AND author = ?`, blob(id), a); err != nil {
+			if _, err := tx.Exec(`UPDATE claims SET present = 0 WHERE asset_id = ? AND author = ?`, notNull(id), a); err != nil {
 				return err
 			}
 		}
@@ -168,7 +168,7 @@ func reduce(tx *sql.Tx, o op.Op) error {
 	return nil
 }
 
-func blob(b []byte) []byte {
+func notNull(b []byte) []byte {
 	return append([]byte{}, b...)
 }
 
