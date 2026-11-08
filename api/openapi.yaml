@@ -32,8 +32,162 @@ paths:
                     const: ok
         "401":
           description: Missing or invalid token.
+  /piles:
+    get:
+      operationId: listPiles
+      summary: List piles this device is a member of
+      responses:
+        "200":
+          description: Piles in creation and join order.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Pile"
+        "401":
+          description: Missing or invalid token.
+    post:
+      operationId: createPile
+      summary: Create a pile with this device as its first member
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - name
+                - member
+              properties:
+                name:
+                  type: string
+                member:
+                  type: string
+                  description: Name of this device's member.
+      responses:
+        "201":
+          description: Pile created.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Pile"
+        "400":
+          $ref: "#/components/responses/Error"
+        "401":
+          description: Missing or invalid token.
+  /piles/{id}/invite:
+    get:
+      operationId: getInvite
+      summary: Get the invite string to show as a QR code
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            pattern: "^[0-9a-f]+$"
+      responses:
+        "200":
+          description: Invite with the pile id, its secret and this device's addresses.
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - invite
+                properties:
+                  invite:
+                    type: string
+                    pattern: "^PILEUP:[A-Z2-7]+$"
+        "401":
+          description: Missing or invalid token.
+        "404":
+          $ref: "#/components/responses/Error"
+        "503":
+          $ref: "#/components/responses/Error"
+  /piles/join:
+    post:
+      operationId: joinPile
+      summary: Join a pile by a scanned invite
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - invite
+                - member
+              properties:
+                invite:
+                  type: string
+                member:
+                  type: string
+                  description: Name of this device's member.
+      responses:
+        "201":
+          description: Joined; name and members arrive as the pile syncs.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Pile"
+        "400":
+          $ref: "#/components/responses/Error"
+        "401":
+          description: Missing or invalid token.
+        "409":
+          $ref: "#/components/responses/Error"
+        "502":
+          $ref: "#/components/responses/Error"
 components:
   securitySchemes:
     bearer:
       type: http
       scheme: bearer
+  schemas:
+    Pile:
+      type: object
+      required:
+        - id
+        - name
+        - members
+      properties:
+        id:
+          type: string
+          pattern: "^[0-9a-f]+$"
+        name:
+          type: string
+        members:
+          type: array
+          items:
+            type: object
+            required:
+              - name
+              - platform
+            properties:
+              name:
+                type: string
+              platform:
+                type: string
+  responses:
+    Error:
+      description: Request failed.
+      content:
+        application/json:
+          schema:
+            type: object
+            required:
+              - error
+            properties:
+              error:
+                type: string
+                enum:
+                  - bad_request
+                  - bad_invite
+                  - unknown_invite_version
+                  - unknown_pile
+                  - already_joined
+                  - inviter_unreachable
+                  - offline
+                  - internal
