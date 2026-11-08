@@ -1,9 +1,11 @@
 ---
 id: TASK-4
 title: 'Пакет crdt: формат операций и редьюсер'
-status: To Do
-assignee: []
+status: In Progress
+assignee:
+  - '@claude'
 created_date: '2026-11-08T06:49:00Z'
+updated_date: '2026-11-08T10:13:00Z'
 labels:
   - core
   - protocol
