@@ -4,7 +4,17 @@ import { FlatList, Pressable, Text, View } from 'react-native';
 import { Api, Pile } from '../api';
 import { Button, describe, ErrorText, Field, Screen, styles } from '../ui';
 
-export function Piles({ api, onOpen, onJoin }: { api: Api; onOpen: (pile: Pile) => void; onJoin: () => void }) {
+export function Piles({
+  api,
+  onOpen,
+  onJoin,
+  onLog,
+}: {
+  api: Api;
+  onOpen: (pile: Pile) => void;
+  onJoin: () => void;
+  onLog: () => void;
+}) {
   const [piles, setPiles] = useState<Pile[]>([]);
   const [name, setName] = useState('');
   const [member, setMember] = useState('');
@@ -46,6 +56,7 @@ export function Piles({ api, onOpen, onJoin }: { api: Api; onOpen: (pile: Pile) 
             <Button title="Создать" onPress={create} disabled={busy || !name.trim() || !member.trim()} />
             <ErrorText error={error} />
             <Button title="Войти по приглашению" onPress={onJoin} />
+            <Button title="Журнал" onPress={onLog} />
           </View>
         }
       />

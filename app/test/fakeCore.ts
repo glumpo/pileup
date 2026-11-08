@@ -18,7 +18,12 @@ export function fakeCore(routes: Record<string, Reply | ((body: any) => Reply)>)
     const route = routes[`${method} ${path}`];
     const [status, reply] =
       route === undefined ? [404, { error: 'unknown_pile' }] : typeof route === 'function' ? route(body) : route;
-    return { ok: status >= 200 && status < 300, status, json: async () => reply } as Response;
+    return {
+      ok: status >= 200 && status < 300,
+      status,
+      json: async () => reply,
+      text: async () => (typeof reply === 'string' ? reply : JSON.stringify(reply)),
+    } as Response;
   }) as unknown as typeof fetch;
   return requests;
 }

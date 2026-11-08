@@ -5,6 +5,7 @@ import { BackHandler, StyleSheet, Text, View } from 'react-native';
 import { Api, Pile, TimelineItem } from './src/api';
 import { startCore } from './src/core';
 import { Join } from './src/screens/Join';
+import { Log } from './src/screens/Log';
 import { PileScreen } from './src/screens/PileScreen';
 import { Piles } from './src/screens/Piles';
 import { SelectionScreen } from './src/screens/SelectionScreen';
@@ -15,6 +16,7 @@ import { styles } from './src/ui';
 type Route =
   | { name: 'piles' }
   | { name: 'join' }
+  | { name: 'log' }
   | { name: 'pile'; pile: Pile }
   | { name: 'selection'; pile: Pile }
   | { name: 'timeline'; pile: Pile }
@@ -55,7 +57,16 @@ export default function App() {
   const render = (route: Route) => {
     switch (route.name) {
       case 'piles':
-        return <Piles api={api} onOpen={(pile) => push({ name: 'pile', pile })} onJoin={() => push({ name: 'join' })} />;
+        return (
+          <Piles
+            api={api}
+            onOpen={(pile) => push({ name: 'pile', pile })}
+            onJoin={() => push({ name: 'join' })}
+            onLog={() => push({ name: 'log' })}
+          />
+        );
+      case 'log':
+        return <Log api={api} onBack={back} />;
       case 'join':
         return <Join api={api} onBack={back} onJoined={(pile) => replace({ name: 'pile', pile })} />;
       case 'pile':

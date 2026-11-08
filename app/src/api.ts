@@ -29,6 +29,15 @@ export type TimelineItem = {
   thumbhash: string;
 };
 
+export type DiagEvent = {
+  time: number;
+  kind: string;
+  pile?: string;
+  peer?: string;
+  message: string;
+  count: number;
+};
+
 export type ImageSource = { uri: string; headers: Record<string, string> };
 
 export class ApiError extends Error {
@@ -57,6 +66,12 @@ export function connect(port: number, token: string) {
     return res.status === 204 ? (undefined as T) : res.json();
   }
 
+  async function text(path: string): Promise<string> {
+    const res = await fetch(base + path, { headers: auth });
+    if (!res.ok) throw new ApiError(res.status, 'internal');
+    return res.text();
+  }
+
   return {
     piles: () => call<Pile[]>('GET', '/piles'),
     createPile: (name: string, member: string) => call<Pile>('POST', '/piles', { name, member }),
@@ -68,6 +83,8 @@ export function connect(port: number, token: string) {
     setSelected: (pile: string, asset: string, selected: boolean) =>
       call<void>('PUT', `/piles/${pile}/selection/${asset}`, { selected }),
     timeline: (pile: string) => call<TimelineItem[]>('GET', `/piles/${pile}/timeline`),
+    diag: () => call<DiagEvent[]>('GET', '/diag'),
+    diagExport: () => text('/diag/export'),
     blob: (pile: string, item: TimelineItem, tier: 1 | 2): ImageSource => ({
       uri: `${base}/piles/${pile}/blob/${item.id}/${item.revision}/${tier}`,
       headers: auth,
