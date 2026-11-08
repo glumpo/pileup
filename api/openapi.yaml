@@ -140,7 +140,100 @@ paths:
           $ref: "#/components/responses/Error"
         "502":
           $ref: "#/components/responses/Error"
+  /piles/{id}/selection:
+    parameters:
+      - $ref: "#/components/parameters/PileID"
+    get:
+      operationId: getSelection
+      summary: List this device's media in the selected date range
+      responses:
+        "200":
+          description: Range and its media; selected ones are published to the pile.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Selection"
+        "401":
+          description: Missing or invalid token.
+        "404":
+          $ref: "#/components/responses/Error"
+        "501":
+          $ref: "#/components/responses/Error"
+    put:
+      operationId: setSelection
+      summary: Choose the date range to contribute and publish the difference
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - from
+                - to
+              properties:
+                from:
+                  type: integer
+                  format: int64
+                  description: Start of taken_at range, UTC ms, inclusive.
+                to:
+                  type: integer
+                  format: int64
+                  description: End of taken_at range, UTC ms, exclusive.
+      responses:
+        "204":
+          description: Range saved; screenshots and hidden albums are excluded unless chosen manually.
+        "400":
+          $ref: "#/components/responses/Error"
+        "401":
+          description: Missing or invalid token.
+        "404":
+          $ref: "#/components/responses/Error"
+        "501":
+          $ref: "#/components/responses/Error"
+  /piles/{id}/selection/{asset}:
+    parameters:
+      - $ref: "#/components/parameters/PileID"
+      - name: asset
+        in: path
+        required: true
+        schema:
+          type: string
+          pattern: "^[0-9a-f]+$"
+    put:
+      operationId: setAssetSelected
+      summary: Exclude a file from the pile or bring it back
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - selected
+              properties:
+                selected:
+                  type: boolean
+      responses:
+        "204":
+          description: Decision saved and published.
+        "400":
+          $ref: "#/components/responses/Error"
+        "401":
+          description: Missing or invalid token.
+        "404":
+          $ref: "#/components/responses/Error"
+        "501":
+          $ref: "#/components/responses/Error"
 components:
+  parameters:
+    PileID:
+      name: id
+      in: path
+      required: true
+      schema:
+        type: string
+        pattern: "^[0-9a-f]+$"
   securitySchemes:
     bearer:
       type: http
@@ -170,6 +263,58 @@ components:
                 type: string
               platform:
                 type: string
+    Selection:
+      type: object
+      required:
+        - from
+        - to
+        - assets
+      properties:
+        from:
+          type: integer
+          format: int64
+        to:
+          type: integer
+          format: int64
+        assets:
+          type: array
+          items:
+            type: object
+            required:
+              - id
+              - local_id
+              - kind
+              - taken_at
+              - original_name
+              - screenshot
+              - hidden
+              - selected
+            properties:
+              id:
+                type: string
+                pattern: "^[0-9a-f]+$"
+              local_id:
+                type: string
+                description: Platform id of the file; never leaves this device.
+              kind:
+                type: string
+                enum:
+                  - photo
+                  - video
+                  - live_photo
+              taken_at:
+                type: integer
+                format: int64
+              original_name:
+                type: string
+              screenshot:
+                type: boolean
+              hidden:
+                type: boolean
+                description: The file is in a hidden album.
+              selected:
+                type: boolean
+                description: Published to the pile.
   responses:
     Error:
       description: Request failed.
@@ -190,4 +335,6 @@ components:
                   - already_joined
                   - inviter_unreachable
                   - offline
+                  - unknown_asset
+                  - no_media
                   - internal
