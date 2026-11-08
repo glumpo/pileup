@@ -1,0 +1,39 @@
+openapi: 3.1.0
+info:
+  title: Pileup core API
+  version: 0.1.0
+  license:
+    name: Apache-2.0
+    identifier: Apache-2.0
+servers:
+  - url: http://127.0.0.1:{port}
+    variables:
+      port:
+        default: "8080"
+security:
+  - bearer: []
+paths:
+  /health:
+    get:
+      operationId: getHealth
+      summary: Check that the core is running
+      responses:
+        "200":
+          description: Core is running.
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - status
+                properties:
+                  status:
+                    type: string
+                    const: ok
+        "401":
+          description: Missing or invalid token.
+components:
+  securitySchemes:
+    bearer:
+      type: http
+      scheme: bearer
