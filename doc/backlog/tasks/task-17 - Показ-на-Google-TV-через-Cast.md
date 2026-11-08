@@ -5,7 +5,7 @@ status: In Progress
 assignee:
   - '@claude'
 created_date: '2026-11-08T06:49:00Z'
-updated_date: '2026-11-08T12:32:00Z'
+updated_date: '2026-11-08T12:33:00Z'
 labels:
   - core
   - cast
@@ -57,4 +57,6 @@ Go-часть: пакет core/cast (клиент CASTV2 для Default Media Re
 - LOAD: contentId = URL, streamType BUFFERED, autoplay; по одному LOAD на элемент показа.
 - Проверено против фейкового receiver (TLS на локальном порту): показ фото, затем видео, пауза/продолжение/стоп; LOAD_FAILED и INVALID_REQUEST как ошибки, сессия после них работает; LAUNCH_ERROR; PING/PONG в обе стороны держат сессию; молчащий receiver обнаруживается, ожидающий Load получает ошибку; переподключение после обрыва; уведомление о FINISHED; завершение сессии при остановке приложения.
 - Остаётся на реальном Google TV: загружает ли receiver медиа по http с LAN-адреса телефона (риск 8), HEVC с iPhone, обнаружение mDNS _googlecast._tcp (нативно), реальное поведение ответа на LAUNCH (приходит ли RECEIVER_STATUS с приложением в ответ на сам запрос).
+
+Go-клиент влит в master (24aed07), решение A14 записано. На устройстве осталось: загрузка медиа по http с LAN-адреса телефона, HEVC с iPhone, обнаружение _googlecast._tcp (нативно), приходит ли transportId в ответе на LAUNCH, playerState для изображений.
 <!-- SECTION:NOTES:END -->
