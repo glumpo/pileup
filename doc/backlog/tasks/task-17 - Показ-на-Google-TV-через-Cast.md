@@ -5,7 +5,7 @@ status: In Progress
 assignee:
   - '@claude'
 created_date: '2026-11-08T06:49:00Z'
-updated_date: '2026-11-08T12:23:00Z'
+updated_date: '2026-11-08T12:32:00Z'
 labels:
   - core
   - cast
@@ -34,8 +34,27 @@ ordinal: 17000
 - [ ] #4 Если receiver не загружает медиа по http из LAN, это зафиксировано в задаче вместе с вариантами обхода
 <!-- AC:END -->
 
+## Implementation Plan
+
+<!-- SECTION:PLAN:BEGIN -->
+Go-часть (клиент CASTV2, пакет core/cast):
+1. Кадры CASTV2: 4 байта длины big-endian + protobuf CastMessage, кодек на encoding/binary без новой зависимости.
+2. Connect(addr): TLS без проверки сертификата, CONNECT к receiver-0, PING/PONG, обнаружение молчащего receiver, LAUNCH Default Media Receiver (CC1AD845), CONNECT к transportId.
+3. Load(url, contentType) — один LOAD на элемент показа; Play/Pause/Stop по mediaSessionId; статус воспроизведения и уведомления об изменениях.
+4. Ошибки receiver (LAUNCH_ERROR, LOAD_FAILED, INVALID_REQUEST и т. п.) возвращаются как ошибки с типом, причиной и кодом; обрыв, молчание и завершение сессии receiver — через Done/Err; переподключение — новым Connect.
+5. Тесты против фейкового receiver (TLS на локальном порту): показ фото и видео, пауза/продолжение/стоп, heartbeat, мёртвый receiver, LOAD_FAILED, ошибка запуска, переподключение.
+6. Проверка на реальном Google TV (http из LAN, HEVC, mDNS) — вне Go-части, остаётся на устройство.
+<!-- SECTION:PLAN:END -->
+
 ## Implementation Notes
 
 <!-- SECTION:NOTES:BEGIN -->
 Начата Go-часть: клиент CASTV2 для Default Media Receiver с тестами против фейкового receiver. Обнаружение (mDNS) и проверка на Google TV — позже.
+
+Go-часть: пакет core/cast (клиент CASTV2 для Default Media Receiver, без новых зависимостей; CastMessage кодируется вручную через encoding/binary).
+- API: Connect(ctx, addr, heartbeat) → *Session (TLS без проверки сертификата, CONNECT, LAUNCH CC1AD845, CONNECT к transportId); Load(ctx, url, contentType), Play, Pause, Stop → Media{SessionID, State, IdleReason}; Media()/Changed() — последний статус и уведомление о его смене; Done()/Err(); Close().
+- Ошибки: ответы receiver, кроме RECEIVER_STATUS/MEDIA_STATUS, возвращаются как *cast.Error{Type, Reason, Code(detailedErrorCode)} — LAUNCH_ERROR, LOAD_FAILED, INVALID_REQUEST и т. п. Сессия завершается с ErrClosed (обрыв), ErrNoHeartbeat (нет входящих сообщений 3 интервала heartbeat), ErrSessionEnded (CLOSE от receiver или приложение пропало из RECEIVER_STATUS), ErrNotLaunched (в ответе на LAUNCH нет приложения). Переподключение — новым Connect, автоматического нет.
+- LOAD: contentId = URL, streamType BUFFERED, autoplay; по одному LOAD на элемент показа.
+- Проверено против фейкового receiver (TLS на локальном порту): показ фото, затем видео, пауза/продолжение/стоп; LOAD_FAILED и INVALID_REQUEST как ошибки, сессия после них работает; LAUNCH_ERROR; PING/PONG в обе стороны держат сессию; молчащий receiver обнаруживается, ожидающий Load получает ошибку; переподключение после обрыва; уведомление о FINISHED; завершение сессии при остановке приложения.
+- Остаётся на реальном Google TV: загружает ли receiver медиа по http с LAN-адреса телефона (риск 8), HEVC с iPhone, обнаружение mDNS _googlecast._tcp (нативно), реальное поведение ответа на LAUNCH (приходит ли RECEIVER_STATUS с приложением в ответ на сам запрос).
 <!-- SECTION:NOTES:END -->
