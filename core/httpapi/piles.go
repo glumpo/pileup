@@ -64,6 +64,7 @@ func WithNode(token string, n *node.Node) http.Handler {
 		}
 		reply(w, http.StatusCreated, toJSON(p))
 	})
+	media(mux, n)
 	return authorized(token, mux)
 }
 
@@ -114,6 +115,10 @@ func fail(w http.ResponseWriter, err error) {
 		reply(w, http.StatusBadGateway, problem("inviter_unreachable"))
 	case errors.Is(err, node.ErrOffline):
 		reply(w, http.StatusServiceUnavailable, problem("offline"))
+	case errors.Is(err, node.ErrUnknownAsset):
+		reply(w, http.StatusNotFound, problem("unknown_asset"))
+	case errors.Is(err, node.ErrNoMedia):
+		reply(w, http.StatusNotImplemented, problem("no_media"))
 	default:
 		reply(w, http.StatusInternalServerError, problem("internal"))
 	}

@@ -48,6 +48,7 @@ type Config struct {
 	Keystore device.Keystore
 	Platform string
 	Addrs    func() []netip.Addr
+	Media    MediaProvider
 }
 
 type Pile struct {
@@ -78,6 +79,8 @@ type Node struct {
 
 	mu    sync.Mutex
 	piles []*pile
+
+	selecting sync.Mutex
 }
 
 func Open(cfg Config) (*Node, error) {
