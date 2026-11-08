@@ -52,6 +52,7 @@ type Config struct {
 	Media    MediaProvider
 
 	Renditions RenditionMaker
+	Discovery  DiscoveryProvider
 }
 
 type Pile struct {
@@ -85,6 +86,7 @@ type Node struct {
 
 	mu    sync.Mutex
 	piles []*pile
+	found map[string]map[string]service
 
 	selecting sync.Mutex
 	rendering sync.Mutex
@@ -113,7 +115,7 @@ func Open(cfg Config) (*Node, error) {
 		return nil, err
 	}
 	ctx, cancel := context.WithCancel(context.Background())
-	n := &Node{cfg: cfg, key: key, ctx: ctx, cancel: cancel, blobs: blobs}
+	n := &Node{cfg: cfg, key: key, ctx: ctx, cancel: cancel, blobs: blobs, found: map[string]map[string]service{}}
 	n.mu.Lock()
 	for _, e := range entries {
 		var p *pile
@@ -130,10 +132,12 @@ func Open(cfg Config) (*Node, error) {
 		n.Close()
 		return nil, err
 	}
+	n.discover()
 	return n, nil
 }
 
 func (n *Node) Close() error {
+	n.stopDiscovery()
 	n.mu.Lock()
 	n.cancel()
 	n.mu.Unlock()
@@ -212,14 +216,18 @@ func (n *Node) find(id []byte) (*pile, error) {
 }
 
 func (n *Node) reach(ctx context.Context, i invite.Invite) (string, error) {
-	var errs []error
+	addrs := n.discovered(i.PileID)
 	for _, a := range i.Addrs {
+		addrs = append(addrs, a.String())
+	}
+	var errs []error
+	for _, a := range addrs {
 		dctx, cancel := context.WithTimeout(ctx, dialTimeout)
-		c, err := peer.Dial(dctx, a.String(), n.key, i.PileID, i.Secret)
+		c, err := peer.Dial(dctx, a, n.key, i.PileID, i.Secret)
 		cancel()
 		if err == nil {
 			c.Close()
-			return a.String(), nil
+			return a, nil
 		}
 		errs = append(errs, err)
 	}
@@ -238,6 +246,7 @@ func (n *Node) add(e entry, changes ...op.Change) (Pile, error) {
 	if err != nil {
 		return Pile{}, err
 	}
+	n.advertise(p)
 	return p.info()
 }
 
