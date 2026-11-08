@@ -22,10 +22,10 @@ type Validator struct {
 }
 
 func NewValidator(pileID, secret []byte) Validator {
-	return Validator{pileID: pileID, kAuth: authKey(secret)}
+	return Validator{pileID: pileID, kAuth: AuthKey(secret)}
 }
 
-func authKey(secret []byte) []byte {
+func AuthKey(secret []byte) []byte {
 	k, err := hkdf.Key(sha256.New, secret, nil, "pileup-auth", sha256.Size)
 	if err != nil {
 		panic(err)
@@ -40,7 +40,7 @@ func proof(kAuth []byte, a Author) []byte {
 }
 
 func JoinProof(secret []byte, a Author) []byte {
-	return proof(authKey(secret), a)
+	return proof(AuthKey(secret), a)
 }
 
 func (v Validator) Check(o Op, head Head) error {

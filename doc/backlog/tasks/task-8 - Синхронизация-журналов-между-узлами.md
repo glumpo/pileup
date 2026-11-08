@@ -1,9 +1,11 @@
 ---
 id: TASK-8
 title: Синхронизация журналов между узлами
-status: To Do
-assignee: []
+status: In Progress
+assignee:
+  - '@claude'
 created_date: '2026-11-08T06:49:00Z'
+updated_date: '2026-11-08T11:03:00Z'
 labels:
   - core
   - network

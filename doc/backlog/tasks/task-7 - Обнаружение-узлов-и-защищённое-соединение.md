@@ -5,7 +5,7 @@ status: In Progress
 assignee:
   - '@claude'
 created_date: '2026-11-08T06:49:00Z'
-updated_date: '2026-11-08T10:53:00Z'
+updated_date: '2026-11-08T11:00:00Z'
 labels:
   - core
   - network
@@ -37,8 +37,23 @@ ordinal: 7000
 - [ ] #5 В Info.plist объявлены NSLocalNetworkUsageDescription и NSBonjourServices; на Android включается MulticastLock
 <!-- AC:END -->
 
+## Implementation Plan
+
+<!-- SECTION:PLAN:BEGIN -->
+План покрывает только Go-часть соединения (критерии #3 и #4); discovery, QR-адреса, Info.plist и MulticastLock — отдельно, после TASK-3.
+1. Экспортировать из crdt/op функцию AuthKey(secret) — единственное место вывода K_auth; формат операций и golden vectors не меняются → verify: go test ./crdt/...
+2. Пакет core/peer (имя net конфликтует со stdlib): самоподписанный X.509-сертификат на ключе устройства ed25519, взаимный TLS 1.3 без CA, проверка, что сертификат собеседника подписан его же ключом.
+3. Handshake членства внутри TLS: клиент называет pile, обе стороны шлют HMAC(K_auth, tls_exporter ‖ own_pubkey) (метка экспортёра RFC 9266), при ошибке соединение закрывается. Результат — net.Conn / net.Listener для будущего HTTP.
+4. Тесты по спецификации: успех (pubkey и pile id у обеих сторон), чужой секрет у клиента и у сервера, неизвестный pile, MITM-ретрансляция (свой ключ и украденный ключ без S), сертификат с несовпадающей подписью, отказ от TLS 1.2.
+5. gofmt, go vet, go test -race, make check.
+<!-- SECTION:PLAN:END -->
+
 ## Implementation Notes
 
 <!-- SECTION:NOTES:BEGIN -->
 Начата Go-часть: TLS на ключах устройств и handshake членства с привязкой к каналу. Нативное обнаружение (NWBrowser/NSD), Info.plist и MulticastLock — после TASK-3.
+
+Go-часть соединения: пакет core/peer (Dial, NewListener, Conn с Peer/PileID/Handshake); K_auth берётся из op.AuthKey.
+Решения, требующие ревью: экспортёр TLS с меткой RFC 9266 «EXPORTER-Channel-Binding», пустой контекст, 32 байта; MAC = HMAC-SHA256(K_auth, exporter ‖ pubkey из TLS-сертификата отправителя). Формат: клиент → [len(pile_id) 1 байт][pile_id][MAC клиента 32]; сервер проверяет и отвечает [MAC сервера 32]; при ошибке соединение закрывается без сообщения. pile_id — до 255 байт, в открытом виде внутри TLS. Сертификат: срок 1970–9999, даты не проверяются (CA нет, часы телефонов не доверенные). Таймауты handshake: у клиента — из ctx, у сервера handshake ленивый (при первом Read/Write, как в crypto/tls), таймаут задаёт вызывающий (например, http.Server).
+Тесты: успех и HTTP поверх соединения, чужой секрет у каждой стороны, неизвестный pile, MITM-ретрансляция (свой ключ и украденный ключ клиента без S — второй случай ловит только привязка к каналу), отражение proof клиента, поддельная подпись сертификата, отказ от TLS 1.2; мутационная проверка — каждая проверка в коде ловится тестом.
 <!-- SECTION:NOTES:END -->
