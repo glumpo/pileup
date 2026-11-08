@@ -5,7 +5,7 @@ status: In Progress
 assignee:
   - '@claude'
 created_date: '2026-11-08T06:49:00Z'
-updated_date: '2026-11-08T10:36:00Z'
+updated_date: '2026-11-08T10:40:00Z'
 labels:
   - core
   - media
@@ -48,4 +48,13 @@ ordinal: 10000
 
 <!-- SECTION:NOTES:BEGIN -->
 Начата только Go-часть (функция выбора taken_at и табличные тесты, AC #1–#2). Проверка на реальных устройствах (AC #3–#4) ждёт TASK-9 и устройств.
+
+Go-часть: core/media, func TakenAt(device []op.RawTime) []Time (Time{TakenAt, TakenAtSource, LocalOffsetSec}). Тесты: TestTakenAt (таблица по правилам 1–6), TestDeviceTimeZoneIsNotUsed (та же таблица при разных time.Local), TestBorrowedOffsetDoesNotDependOnInputOrder, FuzzTakenAt.
+Решения, принятые без владельца (на ревью):
+- EXIF-время принимается только в формате EXIF «YYYY:MM:DD HH:MM:SS» (без пояса, разбирается как UTC); «0000:00:00 00:00:00», пробелы, лишний текст, несуществующая дата — правило неприменимо.
+- OffsetTimeOriginal принимается только как «±HH:MM», часы ≤ 14, минуты ≤ 59.
+- platform_time и creation_time видео ≤ 0 считаются отсутствующими (getLong у NULL в MediaStore даёт 0; creation_time = 0 в MP4 — это 1904 год).
+- Донор для правила 4 — файл того же устройства с разбираемыми EXIF-временем и смещением (каким бы правилом ни получен его taken_at). «Ближайший» — по модулю разницы локальных EXIF-времён; при равенстве побеждает более ранний донор, затем меньшее смещение. Результат не зависит от порядка входа.
+- local_offset — известное EXIF-смещение файла при любом правиле, либо заимствованное в правиле 4; иначе нет.
+- Если нет даже времени файла, taken_at = 0 с источником file_time: отдельного значения «нет времени» в op.TimeSource нет.
 <!-- SECTION:NOTES:END -->
