@@ -1,9 +1,11 @@
 ---
 id: TASK-3
 title: Go-ядро внутри приложения на iOS и Android
-status: To Do
-assignee: []
+status: In Progress
+assignee:
+  - '@claude'
 created_date: '2026-11-08T06:49:00Z'
+updated_date: '2026-11-08T10:53:00Z'
 labels:
   - core
   - app
@@ -33,3 +35,9 @@ ordinal: 3000
 - [ ] #3 Ядро корректно останавливается при выходе из приложения и запускается снова
 - [ ] #4 В задаче записаны время сборки и размер приложения с ядром и без него на обеих платформах
 <!-- AC:END -->
+
+## Implementation Notes
+
+<!-- SECTION:NOTES:BEGIN -->
+Начата Android-часть и Go-фасад. iOS-часть ждёт Mac/раннер и аккаунт Apple (TASK-1).
+<!-- SECTION:NOTES:END -->

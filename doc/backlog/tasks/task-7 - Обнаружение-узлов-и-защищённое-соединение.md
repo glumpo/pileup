@@ -1,9 +1,11 @@
 ---
 id: TASK-7
 title: Обнаружение узлов и защищённое соединение
-status: To Do
-assignee: []
+status: In Progress
+assignee:
+  - '@claude'
 created_date: '2026-11-08T06:49:00Z'
+updated_date: '2026-11-08T10:53:00Z'
 labels:
   - core
   - network
@@ -34,3 +36,9 @@ ordinal: 7000
 - [ ] #4 Тест: ретрансляция handshake через посредника не проходит благодаря привязке к TLS-каналу
 - [ ] #5 В Info.plist объявлены NSLocalNetworkUsageDescription и NSBonjourServices; на Android включается MulticastLock
 <!-- AC:END -->
+
+## Implementation Notes
+
+<!-- SECTION:NOTES:BEGIN -->
+Начата Go-часть: TLS на ключах устройств и handshake членства с привязкой к каналу. Нативное обнаружение (NWBrowser/NSD), Info.plist и MulticastLock — после TASK-3.
+<!-- SECTION:NOTES:END -->
