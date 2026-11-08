@@ -5,7 +5,7 @@ status: In Progress
 assignee:
   - '@claude'
 created_date: '2026-11-08T06:49:00Z'
-updated_date: '2026-11-08T21:40:00Z'
+updated_date: '2026-11-08T21:50:00Z'
 labels:
   - core
   - app
@@ -48,4 +48,6 @@ ordinal: 19000
 
 <!-- SECTION:NOTES:BEGIN -->
 core/diag: буфер на узел (Node.Diag()), 1000 событий; повтор одинакового события (вид, pile, пир, текст) увеличивает счётчик и поднимается наверх — так ретраи раз в секунду не вытесняют остальное. Ошибки с таймаутом получают вид timeout. replica.Pull получил колбэк числа операций раунда. События узла: listening, announce/announce received, incoming handshake, join, sync established/received N ops/ошибки sync (в т. ч. форк), new peer address, render/fetch/original/thumbhash.
+
+HTTP: GET /diag (JSON, новые сверху, time — UTC ms) и GET /diag/export (text/plain, attachment pileup-diag.txt, по строке на событие, старые сверху); api/openapi.yaml обновлён. Приложение: экран «Журнал» (кнопка на экране списка pile), pull-to-refresh, «Экспортировать» отдаёт текст экспорта в Share.share. Проверено: gofmt, go vet, go test -race ./..., make check.
 <!-- SECTION:NOTES:END -->
