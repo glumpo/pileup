@@ -2,12 +2,14 @@ import { StatusBar } from 'expo-status-bar';
 import { useEffect, useState } from 'react';
 import { BackHandler, StyleSheet, Text, View } from 'react-native';
 
-import { Api, Pile, TimelineItem } from './src/api';
+import { Api, Pile, ShowState, TimelineItem } from './src/api';
 import { startCore } from './src/core';
 import { Join } from './src/screens/Join';
 import { Log } from './src/screens/Log';
 import { PileScreen } from './src/screens/PileScreen';
 import { Piles } from './src/screens/Piles';
+import { Remote } from './src/screens/Remote';
+import { ScreenPicker } from './src/screens/ScreenPicker';
 import { SelectionScreen } from './src/screens/SelectionScreen';
 import { Timeline } from './src/screens/Timeline';
 import { Viewer } from './src/screens/Viewer';
@@ -20,7 +22,9 @@ type Route =
   | { name: 'pile'; pile: Pile }
   | { name: 'selection'; pile: Pile }
   | { name: 'timeline'; pile: Pile }
-  | { name: 'viewer'; pile: Pile; items: TimelineItem[]; index: number };
+  | { name: 'viewer'; pile: Pile; items: TimelineItem[]; index: number }
+  | { name: 'screens'; pile: Pile; asset?: string }
+  | { name: 'show'; pile: Pile; state: ShowState };
 
 export default function App() {
   const [api, setApi] = useState<Api>();
@@ -32,14 +36,15 @@ export default function App() {
   }, []);
 
   const depth = stack.length;
+  const showing = stack[depth - 1].name === 'show';
   useEffect(() => {
     const sub = BackHandler.addEventListener('hardwareBackPress', () => {
       if (depth === 1) return false;
-      setStack((s) => s.slice(0, -1));
+      if (!showing) setStack((s) => s.slice(0, -1));
       return true;
     });
     return () => sub.remove();
-  }, [depth]);
+  }, [depth, showing]);
 
   if (!api) {
     return (
@@ -77,6 +82,7 @@ export default function App() {
             onBack={back}
             onTimeline={(pile) => push({ name: 'timeline', pile })}
             onSelection={(pile) => push({ name: 'selection', pile })}
+            onShow={(pile) => push({ name: 'screens', pile })}
           />
         );
       case 'selection':
@@ -91,7 +97,28 @@ export default function App() {
           />
         );
       case 'viewer':
-        return <Viewer api={api} pile={route.pile} items={route.items} index={route.index} onBack={back} />;
+        return (
+          <Viewer
+            api={api}
+            pile={route.pile}
+            items={route.items}
+            index={route.index}
+            onBack={back}
+            onShow={(item) => push({ name: 'screens', pile: route.pile, asset: item.id })}
+          />
+        );
+      case 'screens':
+        return (
+          <ScreenPicker
+            api={api}
+            pile={route.pile}
+            asset={route.asset}
+            onBack={back}
+            onStarted={(state) => replace({ name: 'show', pile: route.pile, state })}
+          />
+        );
+      case 'show':
+        return <Remote api={api} pile={route.pile} initial={route.state} onStop={back} />;
     }
   };
 

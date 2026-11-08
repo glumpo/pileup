@@ -11,12 +11,14 @@ export function PileScreen({
   onBack,
   onTimeline,
   onSelection,
+  onShow,
 }: {
   api: Api;
   pile: Pile;
   onBack: () => void;
   onTimeline: (pile: Pile) => void;
   onSelection: (pile: Pile) => void;
+  onShow: (pile: Pile) => void;
 }) {
   const [pile, setPile] = useState(initial);
   const [invite, setInvite] = useState<string>();
@@ -54,6 +56,7 @@ export function PileScreen({
         <Text style={styles.muted}>Участники: {pile.members.map((m) => m.name).join(', ')}</Text>
         <Button title="Хронология" onPress={() => onTimeline(pile)} />
         <Button title="Мои файлы" onPress={() => onSelection(pile)} />
+        <Button title="Показать на экране" onPress={() => onShow(pile)} />
         <ErrorText error={error} />
         {invite && (
           <>

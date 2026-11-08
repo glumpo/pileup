@@ -38,12 +38,35 @@ export type DiagEvent = {
   count: number;
 };
 
+export type Screen = {
+  id: string;
+  name: string;
+  kind: string;
+  address: string;
+  available: boolean;
+  reason?: string;
+};
+
+export type ShowItem = { id: string; revision: string; author: string; kind: string; taken_at: number };
+
+export type ShowState = {
+  pile: string;
+  screen: Screen;
+  index: number;
+  total: number;
+  current: ShowItem;
+  playing: boolean;
+  renderer_error?: { code: string; message: string };
+  waiting: ShowItem[];
+};
+
 export type ImageSource = { uri: string; headers: Record<string, string> };
 
 export class ApiError extends Error {
   constructor(
     readonly status: number,
     readonly code: string,
+    readonly reason?: string,
   ) {
     super(code);
   }
@@ -61,7 +84,7 @@ export function connect(port: number, token: string) {
     });
     if (!res.ok) {
       const problem = await res.json().catch(() => ({}));
-      throw new ApiError(res.status, problem.error ?? 'internal');
+      throw new ApiError(res.status, problem.error ?? 'internal', problem.reason);
     }
     return res.status === 204 ? (undefined as T) : res.json();
   }
@@ -85,7 +108,13 @@ export function connect(port: number, token: string) {
     timeline: (pile: string) => call<TimelineItem[]>('GET', `/piles/${pile}/timeline`),
     diag: () => call<DiagEvent[]>('GET', '/diag'),
     diagExport: () => text('/diag/export'),
-    blob: (pile: string, item: TimelineItem, tier: 1 | 2): ImageSource => ({
+    screens: () => call<Screen[]>('GET', '/screens'),
+    startShow: (pile: string, screen: string, asset?: string) =>
+      call<ShowState>('POST', '/show', { pile, screen, asset }),
+    show: () => call<ShowState>('GET', '/show'),
+    showCommand: (command: 'next' | 'prev' | 'play' | 'pause') => call<ShowState>('POST', `/show/${command}`),
+    stopShow: () => call<void>('DELETE', '/show'),
+    blob: (pile: string, item: { id: string; revision: string }, tier: 1 | 2): ImageSource => ({
       uri: `${base}/piles/${pile}/blob/${item.id}/${item.revision}/${tier}`,
       headers: auth,
     }),
