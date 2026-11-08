@@ -2,6 +2,7 @@ package mobile
 
 import (
 	"crypto/rand"
+	"errors"
 	"net"
 	"net/http"
 	"sync"
@@ -45,6 +46,9 @@ func Stop() error {
 	listener.Close()
 	err := server.Close()
 	listener, server, port, token = nil, nil, 0, ""
+	if errors.Is(err, net.ErrClosed) {
+		return nil
+	}
 	return err
 }
 
