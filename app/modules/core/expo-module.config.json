@@ -1,0 +1,9 @@
+{
+  "platforms": ["apple", "android"],
+  "apple": {
+    "modules": ["PileupCoreModule"]
+  },
+  "android": {
+    "modules": ["com.glumpo.pileup.core.PileupCoreModule"]
+  }
+}
