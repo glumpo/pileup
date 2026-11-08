@@ -1,9 +1,11 @@
 ---
 id: TASK-11
 title: Генерация превью T1 и T2
-status: To Do
-assignee: []
+status: In Progress
+assignee:
+  - '@claude'
 created_date: '2026-11-08T06:49:00Z'
+updated_date: '2026-11-08T20:57:00Z'
 labels:
   - app
   - media
@@ -32,3 +34,9 @@ ordinal: 11000
 - [ ] #3 thumbhash вычисляется и попадает в AssetMeta
 - [ ] #4 После правки фото в галерее телефона меняется revision и генерируются новые превью
 <!-- AC:END -->
+
+## Implementation Notes
+
+<!-- SECTION:NOTES:BEGIN -->
+Начаты: Go-часть (thumbhash в AssetMeta, публикация обновлений) и Android-генерация T1/T2/T3. iOS — позже.
+<!-- SECTION:NOTES:END -->
