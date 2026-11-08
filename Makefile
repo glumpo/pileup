@@ -31,4 +31,4 @@ mobile-android:
 android-debug: mobile-android
 	cd app && npm ci --no-audit --no-fund
 	cd app && CI=1 npx expo prebuild --platform android --clean --no-install
-	cd app/android && ./gradlew assembleDebug
+	cd app/android && ./gradlew :app:assembleDebug
