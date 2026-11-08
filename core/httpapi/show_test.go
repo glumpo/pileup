@@ -23,15 +23,24 @@ type showItem struct {
 	TakenAt  int64  `json:"taken_at"`
 }
 
+type hint struct {
+	Author   string `json:"author"`
+	Name     string `json:"name"`
+	Platform string `json:"platform"`
+	Reason   string `json:"reason"`
+}
+
 type showState struct {
-	Pile          string          `json:"pile"`
-	Screen        screen          `json:"screen"`
-	Index         int             `json:"index"`
-	Total         int             `json:"total"`
-	Current       showItem        `json:"current"`
-	Playing       bool            `json:"playing"`
-	RendererError *map[string]any `json:"renderer_error"`
-	Waiting       []showItem      `json:"waiting"`
+	Pile             string          `json:"pile"`
+	Screen           screen          `json:"screen"`
+	Index            int             `json:"index"`
+	Total            int             `json:"total"`
+	Current          showItem        `json:"current"`
+	Playing          bool            `json:"playing"`
+	VideoUnavailable bool            `json:"video_unavailable"`
+	RendererError    *map[string]any `json:"renderer_error"`
+	Waiting          []showItem      `json:"waiting"`
+	Hints            []hint          `json:"hints"`
 }
 
 func hostIn(t *testing.T, platform string) (client, *room, pile, []item) {
@@ -108,6 +117,7 @@ func TestShowOnIPhoneHostIsControlledThroughAPI(t *testing.T) {
 		Total:   3,
 		Current: asShowItem(items[0]),
 		Waiting: []showItem{},
+		Hints:   []hint{},
 	}
 	if !reflect.DeepEqual(st, want) {
 		t.Fatalf("started show\n%+v\nwant\n%+v", st, want)

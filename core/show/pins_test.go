@@ -1,14 +1,17 @@
 package show_test
 
 import (
+	"encoding/json"
 	"fmt"
 	"net/http"
+	"net/http/httptest"
 	"reflect"
 	"strings"
 	"sync"
 	"testing"
 
 	"github.com/glumpo/pileup/core/diag"
+	"github.com/glumpo/pileup/core/httpapi"
 	"github.com/glumpo/pileup/core/show"
 )
 
@@ -31,6 +34,17 @@ func TestHintNamesMemberWhoseFilesWait(t *testing.T) {
 	must(t)(b.show.Start(p.ID, b.tv(rx), nil))
 	want := []show.Hint{{Member: c.Author(), Name: "участник 1", Platform: "ios", Reason: show.Unreachable}}
 	eventually(t, "hint names c", func() bool { return reflect.DeepEqual(must(t)(b.show.State()).Hints, want) })
+	ui := httptest.NewServer(httpapi.WithNode("ui", b.Node, b.show))
+	t.Cleanup(ui.Close)
+	_, body := get(t, ui.URL+"/show", "Authorization", "Bearer ui")
+	var st struct{ Hints []map[string]string }
+	if err := json.Unmarshal(body, &st); err != nil {
+		t.Fatal(err)
+	}
+	wantJSON := []map[string]string{{"author": fmt.Sprintf("%x", c.Author()), "name": "участник 1", "platform": "ios", "reason": "unreachable"}}
+	if !reflect.DeepEqual(st.Hints, wantJSON) {
+		t.Fatalf("hints in the UI API: %s", body)
+	}
 	eventually(t, "timeout in diag", func() bool {
 		for _, e := range b.Diag().Events() {
 			if e.Kind == diag.Timeout && e.Peer == fmt.Sprintf("%x", c.Author()) && strings.Contains(e.Message, "участник 1") {
@@ -283,6 +297,11 @@ func TestVideoOfUnavailableSourceShowsPosterAndShowGoesOn(t *testing.T) {
 		}
 	}
 	poster(2)
+	ui := httptest.NewServer(httpapi.WithNode("ui", b.Node, b.show))
+	t.Cleanup(ui.Close)
+	if _, body := get(t, ui.URL+"/show", "Authorization", "Bearer ui"); !strings.Contains(string(body), `"video_unavailable":true`) {
+		t.Fatalf("show state in the UI API: %s", body)
+	}
 
 	st := must(t)(b.show.Next())
 	if current(st) != "A2" || st.VideoUnavailable {

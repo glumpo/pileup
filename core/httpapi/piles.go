@@ -71,6 +71,7 @@ func WithNode(token string, n *node.Node, h *show.Host) http.Handler {
 	screens(mux, n)
 	diagnostics(mux, n)
 	shows(mux, h)
+	pins(mux, h)
 	return authorized(token, mux)
 }
 

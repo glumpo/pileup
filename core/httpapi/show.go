@@ -23,15 +23,28 @@ type rendererError struct {
 	Message string `json:"message"`
 }
 
+type hint struct {
+	Author   string `json:"author"`
+	Name     string `json:"name"`
+	Platform string `json:"platform"`
+	Reason   string `json:"reason"`
+}
+
 type showState struct {
-	Pile          string         `json:"pile"`
-	Screen        screen         `json:"screen"`
-	Index         int            `json:"index"`
-	Total         int            `json:"total"`
-	Current       showItem       `json:"current"`
-	Playing       bool           `json:"playing"`
-	RendererError *rendererError `json:"renderer_error,omitempty"`
-	Waiting       []showItem     `json:"waiting"`
+	Pile             string         `json:"pile"`
+	Screen           screen         `json:"screen"`
+	Index            int            `json:"index"`
+	Total            int            `json:"total"`
+	Current          showItem       `json:"current"`
+	Playing          bool           `json:"playing"`
+	VideoUnavailable bool           `json:"video_unavailable"`
+	RendererError    *rendererError `json:"renderer_error,omitempty"`
+	Waiting          []showItem     `json:"waiting"`
+	Hints            []hint         `json:"hints"`
+}
+
+func toHint(h show.Hint) hint {
+	return hint{Author: hex.EncodeToString(h.Member[:]), Name: h.Name, Platform: h.Platform, Reason: h.Reason}
 }
 
 func toShowItem(a state.Asset) showItem {
@@ -47,19 +60,24 @@ func toShowItem(a state.Asset) showItem {
 func toShowState(st show.State) showState {
 	s := st.Screen
 	out := showState{
-		Pile:    hex.EncodeToString(st.Pile),
-		Screen:  screen{ID: s.ID, Name: s.Name, Kind: s.Kind, Address: s.Addr.String(), Available: s.Available, Reason: s.Reason},
-		Index:   st.Index,
-		Total:   st.Total,
-		Current: toShowItem(st.Current),
-		Playing: st.Playing,
-		Waiting: []showItem{},
+		Pile:             hex.EncodeToString(st.Pile),
+		Screen:           screen{ID: s.ID, Name: s.Name, Kind: s.Kind, Address: s.Addr.String(), Available: s.Available, Reason: s.Reason},
+		Index:            st.Index,
+		Total:            st.Total,
+		Current:          toShowItem(st.Current),
+		Playing:          st.Playing,
+		VideoUnavailable: st.VideoUnavailable,
+		Waiting:          []showItem{},
+		Hints:            []hint{},
 	}
 	if st.Error != nil {
 		out.RendererError = &rendererError{Code: st.Error.Code, Message: st.Error.Message}
 	}
 	for _, a := range st.Waiting {
 		out.Waiting = append(out.Waiting, toShowItem(a))
+	}
+	for _, h := range st.Hints {
+		out.Hints = append(out.Hints, toHint(h))
 	}
 	return out
 }

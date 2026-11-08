@@ -319,6 +319,141 @@ paths:
           description: Range not satisfiable.
         "502":
           $ref: "#/components/responses/Error"
+  /piles/{id}/pins:
+    parameters:
+      - $ref: "#/components/parameters/PileID"
+    get:
+      operationId: getPins
+      summary: Progress of loading pinned display versions (T2), per member
+      description: >-
+        Pinned files are T2 (display versions and video posters) loaded by
+        «Загрузить всё с участника» and «Загрузить вообще всё». They are kept
+        on this device and never evicted from the cache until unpinned, even
+        over the budget; pins survive restarts. Loading goes on in the
+        background with or without a show, in timeline order from the show
+        cursor (from the start without a show), at most 5 requests per
+        member together with the show prefetch. Video originals are never
+        loaded.
+      responses:
+        "200":
+          $ref: "#/components/responses/PinProgress"
+        "401":
+          description: Missing or invalid token.
+        "404":
+          $ref: "#/components/responses/Error"
+    post:
+      operationId: pin
+      summary: Pin and load all T2 of a member, or of the whole pile
+      description: >-
+        Pins every file of the member (all files without member) that is in
+        the pile now; files added later are not pinned.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                member:
+                  type: string
+                  pattern: "^[0-9a-f]+$"
+                  description: Author of the member; the whole pile if absent.
+      responses:
+        "200":
+          $ref: "#/components/responses/PinProgress"
+        "400":
+          $ref: "#/components/responses/Error"
+        "401":
+          description: Missing or invalid token.
+        "404":
+          description: unknown_pile or unknown_member.
+          $ref: "#/components/responses/Error"
+    delete:
+      operationId: unpin
+      summary: Unpin files of a member, or all pinned files of the pile
+      description: >-
+        Unpinned files stay in the cache until the budget evicts them
+        (earliest taken_at first).
+      parameters:
+        - name: member
+          in: query
+          required: false
+          schema:
+            type: string
+            pattern: "^[0-9a-f]+$"
+          description: Author of the member; all pins of the pile if absent.
+      responses:
+        "200":
+          $ref: "#/components/responses/PinProgress"
+        "401":
+          description: Missing or invalid token.
+        "404":
+          description: unknown_pile or unknown_member.
+          $ref: "#/components/responses/Error"
+  /piles/{id}/pins/estimate:
+    parameters:
+      - $ref: "#/components/parameters/PileID"
+    get:
+      operationId: estimatePins
+      summary: What pinning a member or the whole pile would load
+      description: >-
+        Sizes of T2 are unknown before loading, so the estimate takes the
+        average size of T2 of this pile already on the device, or 400 KiB if
+        there are none.
+      parameters:
+        - name: member
+          in: query
+          required: false
+          schema:
+            type: string
+            pattern: "^[0-9a-f]+$"
+          description: Author of the member; the whole pile if absent.
+      responses:
+        "200":
+          description: Estimate.
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - files
+                  - missing
+                  - estimated_bytes
+                  - budget_bytes
+                  - free_bytes
+                  - over_budget
+                properties:
+                  files:
+                    type: integer
+                    description: Files of the member (of the pile), videos count by their poster.
+                  missing:
+                    type: integer
+                    description: Of them, not loaded yet.
+                  estimated_bytes:
+                    type: integer
+                    format: int64
+                    description: Estimated size of the missing files.
+                  budget_bytes:
+                    type: integer
+                    format: int64
+                    description: Cache budget of this device for the pile.
+                  free_bytes:
+                    type:
+                      - integer
+                      - "null"
+                    format: int64
+                    description: Free space on the device's data volume; null if unknown.
+                  over_budget:
+                    type: boolean
+                    description: >-
+                      Already pinned files plus these would not fit in the
+                      budget; warn the user before pinning. Pinned files are
+                      loaded and kept anyway.
+        "401":
+          description: Missing or invalid token.
+        "404":
+          description: unknown_pile or unknown_member.
+          $ref: "#/components/responses/Error"
   /screens:
     get:
       operationId: listScreens
@@ -388,8 +523,9 @@ paths:
         Media Receiver, serves media to it over plain HTTP in the local network
         under a token valid until the show stops, and loads the current file
         on every cursor change; T2 of the cursor and the next 20 files is
-        prefetched from their owners. An AirPlay screen is available only on
-        an iPhone host, where the app renders it natively.
+        prefetched from their owners into the cache of the pile, which
+        outlives the show (see /piles/{id}/pins). An AirPlay screen is
+        available only on an iPhone host, where the app renders it natively.
       requestBody:
         required: true
         content:
@@ -768,7 +904,9 @@ components:
         - total
         - current
         - playing
+        - video_unavailable
         - waiting
+        - hints
       properties:
         pile:
           type: string
@@ -785,6 +923,13 @@ components:
         playing:
           type: boolean
           description: The current file is a video that is playing.
+        video_unavailable:
+          type: boolean
+          description: >-
+            The current file is a video whose owner is not answering; the
+            screen shows its poster (T2) instead, hints name the owner. The
+            show goes on with next; play retries the video once the owner is
+            back.
         renderer_error:
           type: object
           description: >-
@@ -809,7 +954,82 @@ components:
             offline or not answering, in timeline order.
           items:
             $ref: "#/components/schemas/ShowItem"
+        hints:
+          type: array
+          description: >-
+            Members the show waits for: owners of waiting files and of an
+            unavailable current video, in timeline order. The UI words them,
+            e.g. «Нет ответа от iPhone Ани. Возможно, погас экран — попросите
+            разблокировать телефон и открыть Pileup» with «Загрузить всё с
+            iPhone Ани» (POST /piles/{id}/pins). A member whose files wait is
+            also logged in /diag as kind timeout.
+          items:
+            $ref: "#/components/schemas/Hint"
+    Hint:
+      type: object
+      required:
+        - author
+        - name
+        - platform
+        - reason
+      properties:
+        author:
+          type: string
+          pattern: "^[0-9a-f]+$"
+        name:
+          type: string
+          description: Member name in the pile.
+        platform:
+          type: string
+          description: ios or android, as the member's device reported it.
+        reason:
+          type: string
+          description: >-
+            unreachable — no connection to the member's device; timeout —
+            connected, but requests to it fail or time out. Newer versions
+            may add others.
+    PinProgress:
+      type: object
+      required:
+        - author
+        - name
+        - platform
+        - total
+        - done
+        - failed
+      properties:
+        author:
+          type: string
+          pattern: "^[0-9a-f]+$"
+        name:
+          type: string
+        platform:
+          type: string
+        total:
+          type: integer
+          description: Pinned files of the member.
+        done:
+          type: integer
+          description: Of them, loaded.
+        failed:
+          type: integer
+          description: >-
+            Of them, failed for good (the owner has no such file or cannot
+            render it); not retried until the core restarts.
+        reason:
+          type: string
+          description: >-
+            Present while files remain and the member is not answering:
+            unreachable or timeout, as in Hint.
   responses:
+    PinProgress:
+      description: Members with pinned files, by name.
+      content:
+        application/json:
+          schema:
+            type: array
+            items:
+              $ref: "#/components/schemas/PinProgress"
     ShowState:
       description: Show state after the command.
       content:
@@ -847,4 +1067,5 @@ components:
                   - empty_pile
                   - not_video
                   - screen_unreachable
+                  - unknown_member
                   - internal
