@@ -5,7 +5,7 @@ status: In Progress
 assignee:
   - '@claude'
 created_date: '2026-11-08T06:49:00Z'
-updated_date: '2026-11-08T10:37:00Z'
+updated_date: '2026-11-08T10:49:00Z'
 labels:
   - core
 milestone: m-0
@@ -40,3 +40,14 @@ ordinal: 5000
 3. core/blob: content-addressed хранилище на ФС по SHA-256: Put(io.Reader) пишет во временный файл и атомарно переименовывает, Open, Has. Тесты: хеш, повтор без копии, частичная запись не видна, ошибка чтения не оставляет blob, переживает переоткрытие.
 4. gofmt, go vet, go test -race, make check (лицензии новых зависимостей).
 <!-- SECTION:PLAN:END -->
+
+## Implementation Notes
+
+<!-- SECTION:NOTES:BEGIN -->
+Сделано:
+- core/store: один файл SQLite на pile (WAL, synchronous=FULL, одно соединение). Таблицы ops (журнал, raw байт-в-байт), pile (L и LWW-регистр имени), members, claims (заявки на файлы, владелец по A7 вычисляется запросом). Apply/Create: Decode → Check с head из БД → вставка операции → L = max(L, lamport) → проекция, всё в одной транзакции. API повторяет crdt/state, View возвращает state.View.
+- Правила редьюсера продублированы в SQL; расхождение с crdt/state ловит property-тест (проверено мутациями: каждая из 5 порч правил роняет тест). Тест прерывания с SIGKILL ловит запись операции и счётчиков в разных транзакциях.
+- AssetMeta хранится в claims как CBOR (cbor.Marshal по умолчанию), чтобы nil и пустые []byte и указатели сохранялись как при декодировании.
+- Путь к БД передаётся драйверу как есть: с префиксом file: SQLite декодировал %XX в имени файла.
+- core/blob: файлы <sha256-hex> в каталоге, запись через tmp/ и rename; tmp/ очищается при Open. Новые зависимости: modernc.org/sqlite и её транзитивные (BSD-3-Clause, MIT), make check проходит.
+<!-- SECTION:NOTES:END -->
