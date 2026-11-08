@@ -7,5 +7,5 @@ export async function startCore() {
 }
 
 export function requestMediaPermissions(): Promise<boolean> {
-  return (PileupCore as unknown as { requestMediaPermissions(): Promise<boolean> }).requestMediaPermissions();
+  return PileupCore.requestMediaPermissions();
 }

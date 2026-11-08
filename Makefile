@@ -1,12 +1,12 @@
 SHELL := /bin/bash
 .SHELLFLAGS := -eo pipefail -c
 
-.PHONY: check test build licenses licenses-go licenses-npm mobile-android android-debug
+.PHONY: check test build licenses licenses-go licenses-npm app mobile-android android-debug
 
 CORE_AAR := app/modules/core/android/libs/pileup-core.aar
 TOOLS_BIN := $(CURDIR)/build/bin
 
-check: test build licenses
+check: test build licenses app
 
 test:
 	cd core && go test ./...
@@ -15,6 +15,10 @@ build:
 	cd core && go build ./...
 
 licenses: licenses-go licenses-npm
+
+app:
+	cd app && npx tsc --noEmit
+	cd app && npm test -- --ci
 
 licenses-go:
 	cd core && go run github.com/google/go-licenses/v2@v2.0.1 check ./... --ignore github.com/glumpo/pileup/core --disallowed_types=forbidden,restricted,unknown
