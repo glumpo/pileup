@@ -137,17 +137,18 @@ func (l *loader) syncPins() {
 func (l *loader) setPins(member []byte, pin bool) ([]Progress, error) {
 	l.mu.Lock()
 	defer l.mu.Unlock()
-	for _, a := range l.items {
-		if member == nil || bytes.Equal(a.Owner[:], member) {
-			if pin {
-				l.pins[hex.EncodeToString(a.Meta.AssetID)] = true
-			} else {
-				delete(l.pins, hex.EncodeToString(a.Meta.AssetID))
-			}
-		}
-	}
 	if member == nil && !pin {
 		clear(l.pins)
+	}
+	for _, a := range l.items {
+		if member != nil && !bytes.Equal(a.Owner[:], member) {
+			continue
+		}
+		if pin {
+			l.pins[hex.EncodeToString(a.Meta.AssetID)] = true
+		} else {
+			delete(l.pins, hex.EncodeToString(a.Meta.AssetID))
+		}
 	}
 	err := l.n.SetPins(l.pile, slices.Collect(maps.Keys(l.pins)))
 	l.syncPins()
