@@ -5,7 +5,7 @@ status: In Progress
 assignee:
   - '@claude'
 created_date: '2026-11-08T06:49:00Z'
-updated_date: '2026-11-08T21:35:00Z'
+updated_date: '2026-11-08T21:40:00Z'
 labels:
   - core
   - app
@@ -43,3 +43,9 @@ ordinal: 19000
 5. Приложение: экран «Журнал» с экспортом через Share, вход с экрана списка pile → jest
 6. gofmt, go vet, go test -race, make check
 <!-- SECTION:PLAN:END -->
+
+## Implementation Notes
+
+<!-- SECTION:NOTES:BEGIN -->
+core/diag: буфер на узел (Node.Diag()), 1000 событий; повтор одинакового события (вид, pile, пир, текст) увеличивает счётчик и поднимается наверх — так ретраи раз в секунду не вытесняют остальное. Ошибки с таймаутом получают вид timeout. replica.Pull получил колбэк числа операций раунда. События узла: listening, announce/announce received, incoming handshake, join, sync established/received N ops/ошибки sync (в т. ч. форк), new peer address, render/fetch/original/thumbhash.
+<!-- SECTION:NOTES:END -->
