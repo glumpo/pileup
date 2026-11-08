@@ -21,6 +21,7 @@ type model struct {
 	cached   map[string]int64
 	loading  map[string]string
 	pinned   map[string]bool
+	broken   map[string]bool
 	offline  map[string]bool
 	failed   map[string]bool
 	lastFail map[string]time.Time
@@ -50,6 +51,21 @@ func (m *model) window() []prefetch.Item {
 	w := []prefetch.Item{m.items[i]}
 	for _, it := range m.items[i+1:] {
 		if !it.Skip && len(w) <= prefetch.WindowSize {
+			w = append(w, it)
+		}
+	}
+	return w
+}
+
+func (m *model) wanted() []prefetch.Item {
+	w := m.window()
+	seen := map[string]bool{}
+	for _, it := range w {
+		seen[it.ID] = true
+	}
+	start := max(slices.IndexFunc(m.items, func(it prefetch.Item) bool { return it.ID == m.cursor }), 0)
+	for _, it := range slices.Concat(m.items[start:], m.items[:start]) {
+		if m.pinned[it.ID] && !seen[it.ID] {
 			w = append(w, it)
 		}
 	}
@@ -102,7 +118,7 @@ func (m *model) pickLoading(t *rapid.T) (string, bool) {
 }
 
 func (m *model) step(t *rapid.T) {
-	switch rapid.IntRange(0, 8).Draw(t, "action") {
+	switch rapid.IntRange(0, 9).Draw(t, "action") {
 	case 0, 1:
 		if len(m.items) > 0 {
 			m.cursor = rapid.SampledFrom(m.items).Draw(t, "cursor").ID
@@ -157,6 +173,13 @@ func (m *model) step(t *rapid.T) {
 		}
 		m.items = kept
 		m.c.SetItems(kept)
+	case 9:
+		if x, ok := m.pickLoading(t); ok {
+			m.c.Broken(x)
+			m.broken[x] = true
+			m.failed[m.loading[x]] = false
+			delete(m.loading, x)
+		}
 	}
 }
 
@@ -165,6 +188,11 @@ func (m *model) plan(t *rapid.T) {
 	inWindow := map[string]int{}
 	for i, it := range window {
 		inWindow[it.ID] = i
+	}
+	wanted := m.wanted()
+	inWanted := map[string]int{}
+	for i, it := range wanted {
+		inWanted[it.ID] = i
 	}
 	before := map[string]int{}
 	for _, src := range sources {
@@ -177,21 +205,24 @@ func (m *model) plan(t *rapid.T) {
 	last := -1
 	dispatched := map[string]int{}
 	for _, x := range load {
-		i, ok := inWindow[x]
+		i, ok := inWanted[x]
 		if !ok {
-			t.Fatalf("loads %s outside the window", x)
+			t.Fatalf("loads %s outside the window and pins", x)
 		}
 		if i <= last {
-			t.Fatalf("loads %v out of chronological order", load)
+			t.Fatalf("loads %v out of order", load)
 		}
 		last = i
 		if _, ok := m.cached[x]; ok {
 			t.Fatalf("loads cached %s", x)
 		}
+		if m.broken[x] {
+			t.Fatalf("loads broken %s", x)
+		}
 		if _, ok := m.loading[x]; ok {
 			t.Fatalf("loads %s twice", x)
 		}
-		src := window[i].Source
+		src := wanted[i].Source
 		m.loading[x] = src
 		dispatched[src]++
 	}
@@ -208,16 +239,16 @@ func (m *model) plan(t *rapid.T) {
 			t.Fatalf("more than one probe to failed %s: %d new, %d before", src, dispatched[src], before[src])
 		}
 		var missing []string
-		for _, it := range window {
+		for _, it := range wanted {
 			_, cached := m.cached[it.ID]
 			_, loading := m.loading[it.ID]
-			if it.Source == src && !cached && !loading {
+			if it.Source == src && !cached && !loading && !m.broken[it.ID] {
 				missing = append(missing, it.ID)
 			}
 		}
 		for _, x := range missing {
 			for _, y := range load {
-				if m.loading[y] == src && inWindow[y] > inWindow[x] {
+				if m.loading[y] == src && inWanted[y] > inWanted[x] {
 					t.Fatalf("loads %s before earlier %s from %s", y, x, src)
 				}
 			}
@@ -268,12 +299,30 @@ func (m *model) plan(t *rapid.T) {
 
 	var waiting []string
 	for _, it := range window {
-		if _, ok := m.cached[it.ID]; !ok && m.unavailable(it.Source) {
+		if _, ok := m.cached[it.ID]; !ok && !m.broken[it.ID] && m.unavailable(it.Source) {
 			waiting = append(waiting, it.ID)
 		}
 	}
 	if got := m.c.Waiting(); !slices.Equal(got, waiting) {
 		t.Fatalf("waiting %v, want %v", got, waiting)
+	}
+
+	progress := map[string]prefetch.Progress{}
+	for _, it := range m.items {
+		if !m.pinned[it.ID] {
+			continue
+		}
+		p := progress[it.Source]
+		p.Total++
+		if _, ok := m.cached[it.ID]; ok {
+			p.Done++
+		} else if m.broken[it.ID] {
+			p.Failed++
+		}
+		progress[it.Source] = p
+	}
+	if got := m.c.Progress(); !maps.Equal(got, progress) {
+		t.Fatalf("progress %v, want %v", got, progress)
 	}
 }
 
@@ -289,6 +338,7 @@ func TestInvariantsOverRandomEvents(t *testing.T) {
 			cached:   map[string]int64{},
 			loading:  map[string]string{},
 			pinned:   map[string]bool{},
+			broken:   map[string]bool{},
 			offline:  map[string]bool{},
 			failed:   map[string]bool{},
 			lastFail: map[string]time.Time{},

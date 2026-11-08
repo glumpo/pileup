@@ -339,3 +339,117 @@ func TestLoadFinishedAfterJumpIsKept(t *testing.T) {
 	equal(t, "load", load, ids(100, 105))
 	equal(t, "evict", evict, nil)
 }
+
+func pinAll(c *prefetch.Cache, list []string) {
+	for _, x := range list {
+		c.Pin(x)
+	}
+}
+
+func TestPinnedItemsLoadAfterWindowFromCursor(t *testing.T) {
+	c := newCache(1000, chronology(60, ownSource))
+	pinAll(c, ids(0, 10))
+	pinAll(c, ids(55, 60))
+	c.SetCursor(id(30))
+	load, _ := c.Plan(t0)
+	equal(t, "load", load, slices.Concat(ids(30, 51), ids(55, 60), ids(0, 10)))
+}
+
+func TestPinnedItemsLoadWithoutCursorInChronologicalOrder(t *testing.T) {
+	c := newCache(1000, chronology(30, ownSource))
+	pinAll(c, []string{id(20), id(3), id(11)})
+	load, _ := c.Plan(t0)
+	equal(t, "load", load, []string{id(3), id(11), id(20)})
+}
+
+func TestPinnedItemsShareFiveLoadsPerSource(t *testing.T) {
+	c := newCache(1000, chronology(100, oneSource))
+	pinAll(c, ids(0, 100))
+	c.SetCursor(id(90))
+	load, _ := c.Plan(t0)
+	equal(t, "load", load, ids(90, 95))
+	loadAll(c, load, 1)
+	load, _ = c.Plan(t0)
+	equal(t, "load", load, ids(95, 100))
+	loadAll(c, load, 1)
+	load, _ = c.Plan(t0)
+	equal(t, "load after the end of chronology", load, ids(0, 5))
+}
+
+func TestPinnedItemsAreNotEvictedOverBudget(t *testing.T) {
+	c := newCache(10, chronology(100, oneSource))
+	pinAll(c, ids(0, 100))
+	for range 20 {
+		load, evict := c.Plan(t0)
+		equal(t, "evict", evict, nil)
+		loadAll(c, load, 10)
+	}
+	if p := c.Progress()["ann"]; p != (prefetch.Progress{Total: 100, Done: 100}) {
+		t.Fatalf("progress %+v", p)
+	}
+	for _, x := range ids(0, 99) {
+		c.Unpin(x)
+	}
+	_, evict := c.Plan(t0)
+	equal(t, "evict after unpin", evict, ids(0, 99))
+}
+
+func TestBrokenItemDoesNotBlockItsSource(t *testing.T) {
+	c := newCache(1000, chronology(100, oneSource))
+	c.SetCursor(id(0))
+	load, _ := c.Plan(t0)
+	equal(t, "load", load, ids(0, 5))
+	c.Broken(id(0))
+	load, _ = c.Plan(t0)
+	equal(t, "load after broken", load, []string{id(5)})
+	c.Failed(id(1), t0)
+	c.Broken(id(2))
+	equal(t, "waiting", c.Waiting(), nil)
+	load, _ = c.Plan(t0)
+	equal(t, "load after the source answered", load, []string{id(1), id(6)})
+	c.SetOnline("ann", false)
+	equal(t, "waiting", c.Waiting(), slices.DeleteFunc(ids(1, 21), func(x string) bool { return x == id(2) }))
+	c.SetOnline("ann", true)
+	loadAll(c, []string{id(3), id(4), id(5)}, 1)
+	for range 10 {
+		loadAll(c, load, 1)
+		load, _ = c.Plan(t0)
+		for _, x := range load {
+			if x == id(0) || x == id(2) {
+				t.Fatalf("broken %s is loaded again", x)
+			}
+		}
+	}
+}
+
+func TestProgressCountsPinnedItemsPerSource(t *testing.T) {
+	c := newCache(1000, chronology(10, func(i int) string {
+		if i < 4 {
+			return "ann"
+		}
+		return "bob"
+	}))
+	pinAll(c, ids(0, 4))
+	pinAll(c, []string{id(4), id(5)})
+	c.Loaded(id(9), 1)
+	c.Plan(t0)
+	c.Loaded(id(0), 1)
+	c.Loaded(id(1), 1)
+	c.Broken(id(2))
+	c.Loaded(id(4), 1)
+	c.Failed(id(5), t0)
+	got := c.Progress()
+	want := map[string]prefetch.Progress{"ann": {Total: 4, Done: 2, Failed: 1}, "bob": {Total: 2, Done: 1}}
+	if fmt.Sprint(got) != fmt.Sprint(want) {
+		t.Fatalf("progress %v, want %v", got, want)
+	}
+	if c.Unavailable("ann") || !c.Unavailable("bob") {
+		t.Fatalf("unavailable: ann %v, bob %v", c.Unavailable("ann"), c.Unavailable("bob"))
+	}
+	if size, ok := c.Size(id(9)); !ok || size != 1 {
+		t.Fatalf("size of a cached item: %d %v", size, ok)
+	}
+	if _, ok := c.Size(id(3)); ok {
+		t.Fatal("size of a missing item")
+	}
+}

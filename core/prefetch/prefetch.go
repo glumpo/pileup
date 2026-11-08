@@ -20,6 +20,12 @@ type Item struct {
 	Skip    bool
 }
 
+type Progress struct {
+	Total  int
+	Done   int
+	Failed int
+}
+
 type source struct {
 	offline  bool
 	failures int
@@ -46,6 +52,7 @@ type Cache struct {
 	cursor  string
 	cached  map[string]int64
 	pinned  map[string]bool
+	broken  map[string]bool
 	loading map[string]string
 	sources map[string]*source
 }
@@ -56,6 +63,7 @@ func New(budget int64) *Cache {
 		index:   map[string]int{},
 		cached:  map[string]int64{},
 		pinned:  map[string]bool{},
+		broken:  map[string]bool{},
 		loading: map[string]string{},
 		sources: map[string]*source{},
 	}
@@ -87,6 +95,16 @@ func (c *Cache) SetOnline(src string, online bool) {
 }
 
 func (c *Cache) Loaded(id string, size int64) {
+	c.answered(id)
+	c.cached[id] = size
+}
+
+func (c *Cache) Broken(id string) {
+	c.answered(id)
+	c.broken[id] = true
+}
+
+func (c *Cache) answered(id string) {
 	if src, ok := c.loading[id]; ok {
 		delete(c.loading, id)
 		s := c.sources[src]
@@ -94,7 +112,6 @@ func (c *Cache) Loaded(id string, size int64) {
 		s.failures = 0
 		s.retryAt = time.Time{}
 	}
-	c.cached[id] = size
 }
 
 func (c *Cache) Failed(id string, now time.Time) {
@@ -110,8 +127,8 @@ func (c *Cache) Failed(id string, now time.Time) {
 
 func (c *Cache) Plan(now time.Time) (load, evict []string) {
 	window := c.window()
-	for _, it := range window {
-		if c.has(it.ID) {
+	for _, it := range slices.Concat(window, c.wanted()) {
+		if c.has(it.ID) || c.broken[it.ID] {
 			continue
 		}
 		s := c.source(it.Source)
@@ -128,8 +145,47 @@ func (c *Cache) Plan(now time.Time) (load, evict []string) {
 func (c *Cache) Waiting() []string {
 	var out []string
 	for _, it := range c.window() {
-		if _, ok := c.cached[it.ID]; !ok && c.source(it.Source).unavailable() {
+		if _, ok := c.cached[it.ID]; !ok && !c.broken[it.ID] && c.source(it.Source).unavailable() {
 			out = append(out, it.ID)
+		}
+	}
+	return out
+}
+
+func (c *Cache) Progress() map[string]Progress {
+	out := map[string]Progress{}
+	for _, it := range c.items {
+		if !c.pinned[it.ID] {
+			continue
+		}
+		p := out[it.Source]
+		p.Total++
+		if _, ok := c.cached[it.ID]; ok {
+			p.Done++
+		} else if c.broken[it.ID] {
+			p.Failed++
+		}
+		out[it.Source] = p
+	}
+	return out
+}
+
+func (c *Cache) Size(id string) (int64, bool) {
+	size, ok := c.cached[id]
+	return size, ok
+}
+
+func (c *Cache) Unavailable(src string) bool { return c.source(src).unavailable() }
+
+func (c *Cache) wanted() []Item {
+	if len(c.pinned) == 0 {
+		return nil
+	}
+	start := c.index[c.cursor]
+	var out []Item
+	for _, it := range slices.Concat(c.items[start:], c.items[:start]) {
+		if c.pinned[it.ID] {
+			out = append(out, it)
 		}
 	}
 	return out
