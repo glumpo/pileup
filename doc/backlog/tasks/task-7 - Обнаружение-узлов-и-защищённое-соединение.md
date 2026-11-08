@@ -5,7 +5,7 @@ status: In Progress
 assignee:
   - '@claude'
 created_date: '2026-11-08T06:49:00Z'
-updated_date: '2026-11-08T12:22:00Z'
+updated_date: '2026-11-08T21:31:00Z'
 labels:
   - core
   - network
@@ -58,4 +58,6 @@ Go-часть соединения: пакет core/peer (Dial, NewListener, Con
 Тесты: успех и HTTP поверх соединения, чужой секрет у каждой стороны, неизвестный pile, MITM-ретрансляция (свой ключ и украденный ключ клиента без S — второй случай ловит только привязка к каналу), отражение proof клиента, поддельная подпись сертификата, отказ от TLS 1.2; мутационная проверка — каждая проверка в коде ловится тестом.
 
 Go-часть влита в master (adf193d), решение A11 записано. Остаются AC #1, #2, #5: нативное обнаружение (NWBrowser/NSD), адрес из QR, Info.plist и MulticastLock.
+
+Начата оставшаяся часть: интерфейс DiscoveryProvider в ядре, объявление и поиск _pileup._tcp, список экранов (_googlecast._tcp, _airplay._tcp), Android NSD с MulticastLock, ключи Info.plist через конфиг.
 <!-- SECTION:NOTES:END -->

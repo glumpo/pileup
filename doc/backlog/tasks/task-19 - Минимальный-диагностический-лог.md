@@ -1,9 +1,11 @@
 ---
 id: TASK-19
 title: Минимальный диагностический лог
-status: To Do
-assignee: []
+status: In Progress
+assignee:
+  - '@claude'
 created_date: '2026-11-08T06:49:00Z'
+updated_date: '2026-11-08T21:31:00Z'
 labels:
   - core
   - app
