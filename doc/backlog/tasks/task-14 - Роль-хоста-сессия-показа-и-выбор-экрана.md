@@ -5,7 +5,7 @@ status: In Progress
 assignee:
   - '@claude'
 created_date: '2026-11-08T06:49:00Z'
-updated_date: '2026-11-08T22:40:00Z'
+updated_date: '2026-11-08T22:59:00Z'
 labels:
   - core
   - app
@@ -50,4 +50,11 @@ Go-часть (сессия показа на хосте):
 
 <!-- SECTION:NOTES:BEGIN -->
 Начата Go-часть: сессия показа на хосте, раздача медиа экрану, встраивание планировщика кеша (TASK-15) и управление Cast (TASK-17). Интерфейс выбора экрана и пульта — следующим шагом.
+
+Go-часть сделана (коммиты 80c7bfe, 4749140), интерфейс выбора экрана и пульта — за UI.
+- Пакет core/show: Host (show.New(node, budget), DefaultBudget = 1 ГиБ) с одной сессией в памяти; Start(pile, screen, asset?) останавливает идущий показ; Next/Prev (на краях стоит), Goto(asset), Play/Pause (только видео, иначе ErrNotVideo), State, Stop (идемпотентен). Хронология перечитывается на каждом шаге курсора — файлы, пришедшие во время показа, появляются после следующей команды.
+- Экран: из node.Screens(); недоступный — UnavailableError с пояснением экрана (AirPlay не с iPhone); Cast — подключение core/cast; AirPlay на iPhone-хосте — сессия без Go-рендерера (курсор и кеш в Go, рисует натив, TASK-18).
+- Медиа для экрана: на время Cast-сессии отдельный plain HTTP listener на локальном адресе соединения с Cast (порт случайный), единственный маршрут GET /show/{token}/{asset}/{revision}/{2|3}; токен — rand.Text() на сессию, отзывается остановкой или новым стартом (403 на чужой токен). 2 — T2 (image/jpeg) из blob-хранилища хоста или от владельца; 3 — только для видео, оригинал стримится с источника через хост с Range (node.ServeOriginal). UI- и peer-маршруты токену экрана недоступны (проверено тестом).
+- HTTP API UI: POST /show {pile, screen, asset?} → 201 состояние; GET /show; DELETE /show → 204; POST /show/next|prev|play|pause, POST /show/goto {asset}. Ошибки: no_show, unknown_screen, screen_unavailable (+reason), empty_pile, not_video, screen_unreachable, unknown_pile, unknown_asset. httpapi.WithNode теперь принимает *show.Host; мобильный фасад создаёт и останавливает его сам, экспортируемый API фасада не менялся.
+- Решения на ревью: токен живёт до конца сессии без TTL; быстрые шаги курсора склеиваются — экран получает LOAD только последнего файла; автоматического переподключения к Cast нет (ошибка disconnected до перезапуска показа, перезапуск с текущего файла — POST /show с asset).
 <!-- SECTION:NOTES:END -->

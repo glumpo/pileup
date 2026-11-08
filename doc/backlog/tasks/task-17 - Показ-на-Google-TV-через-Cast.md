@@ -5,7 +5,7 @@ status: In Progress
 assignee:
   - '@claude'
 created_date: '2026-11-08T06:49:00Z'
-updated_date: '2026-11-08T12:33:00Z'
+updated_date: '2026-11-08T22:59:00Z'
 labels:
   - core
   - cast
@@ -59,4 +59,6 @@ Go-часть: пакет core/cast (клиент CASTV2 для Default Media Re
 - Остаётся на реальном Google TV: загружает ли receiver медиа по http с LAN-адреса телефона (риск 8), HEVC с iPhone, обнаружение mDNS _googlecast._tcp (нативно), реальное поведение ответа на LAUNCH (приходит ли RECEIVER_STATUS с приложением в ответ на сам запрос).
 
 Go-клиент влит в master (24aed07), решение A14 записано. На устройстве осталось: загрузка медиа по http с LAN-адреса телефона, HEVC с iPhone, обнаружение _googlecast._tcp (нативно), приходит ли transportId в ответе на LAUNCH, playerState для изображений.
+
+Go-часть встроена в сессию показа (core/show, коммит 4749140): Connect к экрану из node.Screens(), LOAD текущего файла (T2 image/jpeg для фото, оригинал с mime видео) при старте и на каждой смене курсора, PLAY/PAUSE командой, STOP при остановке показа. URL медиа — http://<локальный адрес соединения с Cast>:<порт>/show/<токен>/<asset>/<revision>/<2|3>; добавлен cast.Session.LocalAddr. Ошибки в состоянии (renderer_error) и в журнале диагностики (вид renderer): load_failed (LOAD_FAILED и т. п.), command_failed, playback_failed (MEDIA_STATUS IDLE/ERROR — так receiver, вероятно, сообщит о неподдерживаемом HEVC), disconnected (обрыв, молчание, завершение приложения на ТВ); неудачное подключение — 502 screen_unreachable и событие connect. Автоматического переподключения нет. Проверено против фейкового receiver; на устройстве по-прежнему не проверено: http из LAN, HEVC, playerState для изображений.
 <!-- SECTION:NOTES:END -->
