@@ -338,6 +338,46 @@ paths:
                   $ref: "#/components/schemas/Screen"
         "401":
           description: Missing or invalid token.
+  /diag:
+    get:
+      operationId: getDiag
+      summary: List this device's diagnostic events, newest first
+      description: >-
+        Local only, never replicated. A bounded ring buffer: the oldest events
+        are dropped. A repeat of an event (same kind, pile, peer and message)
+        increments its count, takes the new time and moves to the top.
+      responses:
+        "200":
+          description: Diagnostic events, newest first.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/DiagEvent"
+        "401":
+          description: Missing or invalid token.
+  /diag/export:
+    get:
+      operationId: exportDiag
+      summary: Export the diagnostic log as a text file for a bug report
+      description: >-
+        One event per line, oldest first: UTC time, kind, pile=<hex> and
+        peer=<peer> if present, x<count> if repeated, message.
+      responses:
+        "200":
+          description: The diagnostic log.
+          headers:
+            Content-Disposition:
+              schema:
+                type: string
+                const: attachment; filename="pileup-diag.txt"
+          content:
+            text/plain:
+              schema:
+                type: string
+        "401":
+          description: Missing or invalid token.
 components:
   parameters:
     PileID:
@@ -457,6 +497,38 @@ components:
           description: >-
             Present when not available: why and what to do, in Russian, for
             the UI to show as is. AirPlay is available only on an iPhone host.
+    DiagEvent:
+      type: object
+      required:
+        - time
+        - kind
+        - message
+        - count
+      properties:
+        time:
+          type: integer
+          format: int64
+          description: UTC ms of the latest occurrence.
+        kind:
+          type: string
+          description: >-
+            discovery, connection, sync, timeout, renderer or media; newer
+            versions may add others.
+        pile:
+          type: string
+          pattern: "^[0-9a-f]+$"
+          description: Pile id, if the event belongs to a pile.
+        peer:
+          type: string
+          description: >-
+            Peer address (host:port or host), or the owner's public key in hex
+            for blob fetches, if the event concerns a peer.
+        message:
+          type: string
+        count:
+          type: integer
+          minimum: 1
+          description: How many times the event occurred.
     Selection:
       type: object
       required:

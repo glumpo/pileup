@@ -218,7 +218,7 @@ func (p remote) vv(ctx context.Context, mine vv.VV) (vv.VV, error) {
 	return v, cbor.NewDecoder(resp.Body).Decode(&v)
 }
 
-func (n *Node) Pull(ctx context.Context, addr string) error {
+func (n *Node) Pull(ctx context.Context, addr string, synced func(ops int)) error {
 	tr := &http.Transport{DialContext: func(ctx context.Context, _, a string) (net.Conn, error) {
 		return peer.Dial(ctx, a, n.key, n.pileID, n.secret)
 	}}
@@ -233,9 +233,11 @@ func (n *Node) Pull(ctx context.Context, addr string) error {
 	}()
 	theirs, err := p.vv(ctx, nil)
 	for err == nil {
-		if err = n.round(ctx, p, theirs); err != nil {
+		var ops int
+		if ops, err = n.round(ctx, p, theirs); err != nil {
 			break
 		}
+		synced(ops)
 		if first {
 			first = false
 			n.track(-1)
@@ -248,36 +250,39 @@ func (n *Node) Pull(ctx context.Context, addr string) error {
 	return err
 }
 
-func (n *Node) round(ctx context.Context, p remote, theirs vv.VV) error {
+func (n *Node) round(ctx context.Context, p remote, theirs vv.VV) (int, error) {
 	mine, err := n.store.VV()
 	if err != nil {
-		return err
+		return 0, err
 	}
+	total := 0
 	var errs []error
 	for a, r := range vv.Missing(mine, theirs) {
-		errs = append(errs, n.fetch(ctx, p, a, r.From))
+		ops, err := n.fetch(ctx, p, a, r.From)
+		total += ops
+		errs = append(errs, err)
 	}
-	return errors.Join(errs...)
+	return total, errors.Join(errs...)
 }
 
-func (n *Node) fetch(ctx context.Context, p remote, a op.Author, from uint64) error {
+func (n *Node) fetch(ctx context.Context, p remote, a op.Author, from uint64) (int, error) {
 	q := url.Values{"author": {hex.EncodeToString(a[:])}, "from": {strconv.FormatUint(from, 10)}}
 	resp, err := p.do(ctx, http.MethodGet, "/ops?"+q.Encode(), nil)
 	if err != nil {
-		return err
+		return 0, err
 	}
 	defer resp.Body.Close()
 	defer n.notify()
 	dec := cbor.NewDecoder(resp.Body)
-	for {
+	for ops := 0; ; ops++ {
 		var raw []byte
 		if err := dec.Decode(&raw); err == io.EOF {
-			return nil
+			return ops, nil
 		} else if err != nil {
-			return err
+			return ops, err
 		}
 		if err := n.apply(raw); err != nil {
-			return err
+			return ops, err
 		}
 	}
 }
