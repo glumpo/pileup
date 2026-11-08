@@ -5,7 +5,7 @@ web-build/
 *.test
 *.out
 .DS_Store
-testdata/rapid/
+**/testdata/rapid/
 /build/
 /app/android/
 /app/ios/
