@@ -87,6 +87,7 @@ type Node struct {
 	piles []*pile
 
 	selecting sync.Mutex
+	rendering sync.Mutex
 }
 
 func Open(cfg Config) (*Node, error) {
@@ -268,6 +269,7 @@ func (n *Node) start(e entry, changes ...op.Change) (*pile, error) {
 	}
 	n.serve(p, ln)
 	n.thumbnails(p)
+	n.thumbhashes(p)
 	return p, nil
 }
 

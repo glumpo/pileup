@@ -256,6 +256,9 @@ func (n *Node) commit(ctx context.Context, p *pile, c choice, cs []Candidate) er
 		}
 		m, ok := have[string(x.Meta.AssetID)]
 		delete(have, string(x.Meta.AssetID))
+		if ok && bytes.Equal(m.Revision, x.Meta.Revision) {
+			x.Meta.Thumbhash = m.Thumbhash
+		}
 		if !ok || !same(m, x.Meta) {
 			add.Assets = append(add.Assets, x.Meta)
 		}

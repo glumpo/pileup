@@ -92,6 +92,11 @@ func (n *Node) blob(ctx context.Context, p *pile, assetID, revision []byte, tier
 	}
 	var h blob.Hash
 	if a.Owner == n.Author() {
+		n.rendering.Lock()
+		defer n.rendering.Unlock()
+		if h, ok, err := n.blobs.Ref(key); ok || err != nil {
+			return h, err
+		}
 		h, err = n.render(p, assetID, tier)
 	} else {
 		h, err = n.fetch(ctx, p, a.Owner, assetID, revision, tier)
