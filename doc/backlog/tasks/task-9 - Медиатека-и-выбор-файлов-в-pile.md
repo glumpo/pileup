@@ -5,7 +5,7 @@ status: In Progress
 assignee:
   - '@claude'
 created_date: '2026-11-08T06:49:00Z'
-updated_date: '2026-11-08T12:53:00Z'
+updated_date: '2026-11-08T21:27:00Z'
 labels:
   - app
   - media
@@ -64,4 +64,7 @@ Go-часть сделана (ветка task-9):
 
 Go-часть влита в master, решение A17 записано. AC #1–#4 доказаны тестами ядра с фейковым провайдером. Осталось: нативные PhotoKit/MediaStore (включая iCloud без локального оригинала, AC #5), подключение провайдера в мобильный фасад, экран выбора.
 Риски: изменения медиатеки не подхватываются автоматически (только при Select/Decide); Selection() каждый раз опрашивает провайдера; AssetAdd на 10k+ файлов не проверялся под нагрузкой.
+
+Android MediaProvider (2026-11-08): MediaStoreProvider — два запроса (Images, Video) по EXTERNAL_CONTENT_URI, на API 29+ is_pending = 0, на 30+ is_trashed = 0. Диапазон с запасом ±14 ч: datetaken в окне или (datetaken пусто/0 и date_added в окне). JSON строго по node.MediaItem: local_id image:<_ID> / video:<_ID>, kind photo|video, platform_time = DATE_TAKEN (0/NULL — поле отсутствует), file_time = DATE_ADDED·1000, modified = DATE_MODIFIED·1000, width/height с учётом ORIENTATION 90/270, duration_ms у видео, size_bytes, mime, original_name = DISPLAY_NAME, screenshot — сегмент пути RELATIVE_PATH или BUCKET_DISPLAY_NAME равен Screenshots (без учёта регистра), hidden всегда false (на Android нет скрытых альбомов). EXIF-поля и codec не заполняются (чтение каждого файла дорого), GPS не читается. requestMediaPermissions() в JS: READ_MEDIA_IMAGES/VIDEO на 13+, плюс READ_MEDIA_VISUAL_USER_SELECTED (частичный доступ считается разрешением) на 14+, READ_EXTERNAL_STORAGE ниже 13. Провайдер подключён к мобильному фасаду. JVM-тесты JSON, скриншотов, окна запроса, разрешений.
+Осталось: проверка на устройстве (AC #5 Android), PhotoKit на iOS (включая iCloud), экран выбора (UI). Риски: без разрешения запрос MediaStore бросает SecurityException → HTTP 500 internal; DATE_MODIFIED в секундах — две правки в одну секунду не сменят revision.
 <!-- SECTION:NOTES:END -->

@@ -5,7 +5,7 @@ status: In Progress
 assignee:
   - '@claude'
 created_date: '2026-11-08T06:49:00Z'
-updated_date: '2026-11-08T12:39:00Z'
+updated_date: '2026-11-08T21:27:00Z'
 labels:
   - core
   - app
@@ -61,4 +61,7 @@ Go-часть сделана (нативные Keychain/Keystore и экран Q
 
 Go-часть влита в master, решение A16 записано. Проверено на уровне ядра: приглашение (AC #2 частично), вход с проверкой proof у всех, включая отсутствовавших (AC #3, три узла в одном процессе), любая сторона может приглашать (AC #4). Осталось: нативное хранение ключа (Keychain ThisDeviceOnly, Android Keystore без бэкапа) — AC #1; кнопка показа QR и сканирование в приложении; проверка iPhone↔Android на устройствах.
 Риски: недоступный пир опрашивается раз в секунду без увеличения паузы (батарея); список пиров только растёт; ошибки синхронизации (включая ErrFork) никуда не сообщаются — нужен диагностический лог (TASK-19).
+
+Android-часть хранения ключа (2026-11-08): SeedKeystore реализует mobile.Keystore — seed ed25519 шифруется AES-256-GCM ключом AndroidKeyStore (alias pileup-device-seed, ключ не покидает устройство) и пишется атомарно в noBackupFilesDir/device.seed, вне Auto Backup; если файла нет — Load возвращает пустой seed и ядро создаёт ключ. Каталог данных ядра тоже в noBackupFilesDir (piles.json и БД не восстанавливаются из бэкапа). Адреса для приглашения: NetworkAddresses через ConnectivityManager/LinkProperties (все сети, кроме сотовых, без loopback), ядро фильтрует до глобальных unicast. Упаковка seed покрыта JVM-тестами, фасад — Go-тестами.
+Осталось: проверка на устройстве (AC #1 Android), Keychain ThisDeviceOnly на iOS, экран QR и сканирование (TASK-13 / UI), проверка iPhone↔Android.
 <!-- SECTION:NOTES:END -->

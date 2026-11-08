@@ -5,7 +5,7 @@ status: In Progress
 assignee:
   - '@claude'
 created_date: '2026-11-08T06:49:00Z'
-updated_date: '2026-11-08T12:22:00Z'
+updated_date: '2026-11-08T21:27:00Z'
 labels:
   - core
   - app
@@ -48,6 +48,11 @@ Android-часть (iOS отложена: нет Mac).
 6. Экран App.tsx: при запуске стартует ядро, fetch GET /health с токеном, показ результата.
 7. Замеры: время сборки и размер debug APK шаблона без модуля и с ядром; проверка libgojni.so в APK.
 8. Финальные проверки: gofmt, go vet, go test, make check, tsc --noEmit, полная сборка APK.
+
+Подключение узла к мобильному фасаду и нативные провайдеры Android (TASK-3/6/9/11):
+9. core/mobile: Start(dir, platform, keystore, media, renditions, network) запускает node.Node и httpapi.WithNode на 127.0.0.1 со случайным портом и новым токеном; gomobile-интерфейсы Keystore, MediaProvider, RenditionMaker (методы как у device.Keystore, node.MediaProvider, node.RenditionMaker) и NetworkInfo.Addrs() → JSON-массив IP, ядро оставляет только глобальные unicast-адреса; Stop закрывает и узел → проверка: go test с фейками (API под токеном, перезапуск на том же каталоге, адреса в приглашении, выбор и T1 через провайдеры).
+10. Kotlin: Keystore (seed под AES-GCM ключом AndroidKeyStore, файл в noBackupFilesDir), каталог данных ядра в noBackupFilesDir; MediaStoreProvider (фото+видео, без pending/trashed, JSON node.MediaItem, без GPS); RenditionMaker (T1 256px, T2 JPEG ≤3840px с ориентацией, HEIC → JPEG, постер видео, T3 — чтение диапазонов оригинала); NetworkInfo через ConnectivityManager/LinkProperties; requestMediaPermissions() в JS API; разрешения в config plugin → проверка: JVM unit-тесты чистой логики (JSON, скриншоты, диапазоны, масштаб, разрешения, упаковка seed).
+11. make mobile-android, make android-debug, gradle unit-тесты, tsc, gofmt/vet/go test -race, make check без ANDROID_HOME.
 <!-- SECTION:PLAN:END -->
 
 ## Implementation Notes
@@ -83,4 +88,15 @@ Android-часть (iOS отложена: нет Mac).
 
 Проверка владельцем: go test, make check (без ANDROID_HOME), tsc проходят; debug APK собран. Решение A13 записано.
 Осталось: проверка на реальном Android-устройстве (AC #1–#3), вся iOS-часть (Swift-модуль, gomobile bind -target=ios, podspec vendored_frameworks, Makefile-цель) и замеры iOS (AC #4). Swap /swapfile-gradle 3 ГБ добавлен в /etc/fstab.
+
+## Узел в мобильном фасаде и нативные провайдеры Android (2026-11-08)
+
+Сделано:
+- core/mobile: Start(dir, platform string, keystore Keystore, media MediaProvider, renditions RenditionMaker, network NetworkInfo) error запускает node.Node и httpapi.WithNode(token, node) на 127.0.0.1:0, токен новый на каждый Start; Stop закрывает HTTP-сервер и узел; Port/Token и идемпотентность как в A13. Интерфейсы gomobile повторяют device.Keystore, node.MediaProvider, node.RenditionMaker; NetworkInfo.Addrs() → JSON-массив строк IP, ядро оставляет только глобальные unicast (без loopback, link-local, мусора; IPv4-mapped разворачивается, зона IPv6 отбрасывается) и опрашивает провайдера при каждом приглашении. Go-тесты с фейками: API под токеном, ключ хранится в переданном Keystore, pile переживает перезапуск на том же каталоге, адреса в приглашении, без LAN-адреса — 503 offline, выбор и T1 идут через нативные провайдеры.
+- Kotlin (app/modules/core/android): SeedKeystore, MediaStoreProvider, Renditions, NetworkAddresses, PileupCoreModule; чистая логика в Media.kt, Scale.kt, Permissions.kt, Seed.kt с JVM-тестами (28 тестов, ./gradlew :core:testDebugUnitTest в app/android после prebuild).
+- JS API: start(): Promise<void> (натив сам передаёт каталог и провайдеров), stop(), port(), token(), новый requestMediaPermissions(): Promise<boolean>. Разрешения ACCESS_NETWORK_STATE, READ_EXTERNAL_STORAGE, READ_MEDIA_IMAGES, READ_MEDIA_VIDEO, READ_MEDIA_VISUAL_USER_SELECTED добавляет config plugin модуля.
+- Каталог данных ядра — noBackupFilesDir/core, зашифрованный seed — noBackupFilesDir/device.seed (не попадают в Auto Backup). Решение для журнала (на ревью).
+
+Проверено: gofmt, go vet, go test -race ./..., make check без ANDROID_HOME, tsc --noEmit, Kotlin unit-тесты, make mobile-android, make android-debug (9 мин 26 с, BUILD SUCCESSFUL). Разрешения есть в манифесте APK. libgojni.so вырос с ~6 МБ до ~12,8 МБ на ABI (arm64 12 814 952 байт): теперь в AAR весь узел (SQLite, CRDT, peer). Debug APK 195 914 343 байт.
+Не проверено (нет устройства): запуск узла на телефоне, работа Keystore/MediaStore/рендеринга на реальном Android. iOS — как раньше, ждёт Mac.
 <!-- SECTION:NOTES:END -->
