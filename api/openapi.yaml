@@ -225,6 +225,29 @@ paths:
           $ref: "#/components/responses/Error"
         "501":
           $ref: "#/components/responses/Error"
+  /piles/{id}/timeline:
+    parameters:
+      - $ref: "#/components/parameters/PileID"
+    get:
+      operationId: getTimeline
+      summary: List all pile assets in timeline order
+      description: >-
+        Order is (taken_at, author, asset_id), the same on every member's
+        device. Days are not part of the model; the UI may draw day separators
+        by taken_at + local_offset.
+      responses:
+        "200":
+          description: Assets of all members in timeline order.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/TimelineItem"
+        "401":
+          description: Missing or invalid token.
+        "404":
+          $ref: "#/components/responses/Error"
   /piles/{id}/blob/{asset}/{revision}/{tier}:
     get:
       operationId: getBlob
@@ -334,6 +357,56 @@ components:
                 type: string
               platform:
                 type: string
+    TimelineItem:
+      type: object
+      required:
+        - id
+        - revision
+        - author
+        - author_name
+        - kind
+        - taken_at
+        - width
+        - height
+        - thumbhash
+      properties:
+        id:
+          type: string
+          pattern: "^[0-9a-f]+$"
+          description: asset_id, hex.
+        revision:
+          type: string
+          pattern: "^[0-9a-f]+$"
+          description: Current revision, hex; part of the blob URL.
+        author:
+          type: string
+          pattern: "^[0-9a-f]+$"
+          description: Public key of the asset owner, hex.
+        author_name:
+          type: string
+          description: Member name of the owner.
+        kind:
+          type: string
+          description: photo, video or live_photo; newer versions may add others.
+        taken_at:
+          type: integer
+          format: int64
+          description: UTC ms.
+        local_offset:
+          type: integer
+          format: int32
+          description: Time zone offset at capture in seconds, if known.
+        duration_ms:
+          type: integer
+          format: int64
+        width:
+          type: integer
+        height:
+          type: integer
+        thumbhash:
+          type: string
+          contentEncoding: base64
+          description: ThumbHash placeholder; empty if the owner has none.
     Selection:
       type: object
       required:
