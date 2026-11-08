@@ -1,11 +1,11 @@
 ---
 id: TASK-4
 title: 'Пакет crdt: формат операций и редьюсер'
-status: In Progress
+status: Done
 assignee:
   - '@claude'
 created_date: '2026-11-08T06:49:00Z'
-updated_date: '2026-11-08T10:31:00Z'
+updated_date: '2026-11-08T10:33:00Z'
 labels:
   - core
   - protocol
@@ -27,13 +27,13 @@ crdt — сердце протокола синхронизации, и меня
 
 ## Acceptance Criteria
 <!-- AC:BEGIN -->
-- [ ] #1 Конверт операции содержит pile_id, author, seq, prev, lamport, wall_time, schema, type, payload и подпись ed25519; подпись проверяется над байтами операции как есть
-- [ ] #2 Операция с seq, не равным N+1 для известного префикса автора, отвергается
-- [ ] #3 lamport новой операции равен L+1, при получении чужой L = max(L, lamport); в журнале одного автора lamport строго растёт, иначе операция отвергается
-- [ ] #4 Операция неизвестного типа сохраняется и пересылается, но не влияет на состояние
-- [ ] #5 AssetAdd и AssetRemove принимаются только от владельца файла; Join проверяет proof от секрета pile
-- [ ] #6 Property-тесты: одинаковое состояние при любом чередовании журналов разных авторов и при повторной доставке
-- [ ] #7 Fuzz-тест декодера не находит паник; golden vectors фиксируют формат
+- [x] #1 Конверт операции содержит pile_id, author, seq, prev, lamport, wall_time, schema, type, payload и подпись ed25519; подпись проверяется над байтами операции как есть
+- [x] #2 Операция с seq, не равным N+1 для известного префикса автора, отвергается
+- [x] #3 lamport новой операции равен L+1, при получении чужой L = max(L, lamport); в журнале одного автора lamport строго растёт, иначе операция отвергается
+- [x] #4 Операция неизвестного типа сохраняется и пересылается, но не влияет на состояние
+- [x] #5 AssetAdd и AssetRemove принимаются только от владельца файла; Join проверяет proof от секрета pile
+- [x] #6 Property-тесты: одинаковое состояние при любом чередовании журналов разных авторов и при повторной доставке
+- [x] #7 Fuzz-тест декодера не находит паник; golden vectors фиксируют формат
 <!-- AC:END -->
 
 ## Implementation Plan
@@ -59,4 +59,15 @@ crdt — сердце протокола синхронизации, и меня
 - Golden vectors: core/crdt/op/testdata/*.hex (join, pile_create, member_set, asset_add, asset_remove, unknown_type), пересборка из фиксированных ключей совпадает байт в байт; перегенерация: go test ./crdt/op -run Golden -update.
 - Fuzz (по 60 с): FuzzDecode 2.25M exec, FuzzSignedBody 1.28M exec, FuzzPayload 0.80M exec — паник нет.
 - Property-тесты rapid: 100 прогонов по умолчанию, локально прогнано по 10000 (TestAnyDeliveryOrderGivesSameState, TestNodesConvergeAfterSync) — расхождений нет.
+
+Проверка владельцем: gofmt, go vet, go test -race и make check проходят. Решения A4–A8 записаны в architecture.md.
+Открытые риски для следующих задач: (1) участник может опубликовать lamport = MaxUint64, после чего L+1 переполняется — защиты нет; (2) две разные операции с одним (author, seq) отвергаются как ErrSeq и не сообщаются как форк — нужно в TASK-8; (3) Decode и View разделяют срезы с вызывающим кодом; (4) в View пустые []byte и nil различаются при DeepEqual — учитывать в TASK-5.
 <!-- SECTION:NOTES:END -->
+
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+Реализован чистый пакет core/crdt: op (конверт [body, sig] в детерминированном CBOR, подпись ed25519 над body, id = SHA-256(body), изменения PileCreate/Join/MemberSet/AssetAdd/AssetRemove, Validator.Check со структурными правилами seq/prev/lamport/Join), clock (Lamport), vv (version vectors и Missing), state (эталонная in-memory модель: Apply/Create/Ops/View).
+Проверка: юнит-тесты на каждое правило, property-тесты rapid (сходимость при любом чередовании и дублях, 10 000 прогонов локально), golden-векторы для всех типов, fuzz трёх целей по 60 с без находок; go test -race и make check проходят.
+Решения на ревью: A4–A8. Риски: переполнение lamport, отсутствие явного сигнала о форке, разделяемые срезы.
+<!-- SECTION:FINAL_SUMMARY:END -->
