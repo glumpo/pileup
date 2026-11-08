@@ -52,7 +52,6 @@ type Config struct {
 	Media    MediaProvider
 
 	Renditions RenditionMaker
-	LocalID    func(assetID []byte) (localID string, ok bool)
 }
 
 type Pile struct {
@@ -73,6 +72,7 @@ type pile struct {
 	store   *store.Store
 	replica *replica.Node
 	owners  *http.Client
+	local   map[string]string
 }
 
 type Node struct {
@@ -241,6 +241,10 @@ func (n *Node) add(e entry, changes ...op.Change) (Pile, error) {
 }
 
 func (n *Node) start(e entry, changes ...op.Change) (*pile, error) {
+	c, err := n.load(e.ID)
+	if err != nil {
+		return nil, err
+	}
 	s, err := store.Open(filepath.Join(n.cfg.Dir, "piles", hex.EncodeToString(e.ID)+".db"), e.ID, e.Secret)
 	if err != nil {
 		return nil, err
@@ -257,7 +261,7 @@ func (n *Node) start(e entry, changes ...op.Change) (*pile, error) {
 		return nil, err
 	}
 	e.Port = uint16(ln.Addr().(*net.TCPAddr).Port)
-	p := &pile{entry: e, store: s, replica: replica.New(s, n.key, e.ID, e.Secret)}
+	p := &pile{entry: e, store: s, replica: replica.New(s, n.key, e.ID, e.Secret), local: c.Local}
 	p.owners = n.owners(p)
 	for _, a := range p.Peers {
 		n.pull(p, a)

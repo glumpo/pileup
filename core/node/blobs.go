@@ -92,7 +92,7 @@ func (n *Node) blob(ctx context.Context, p *pile, assetID, revision []byte, tier
 	}
 	var h blob.Hash
 	if a.Owner == n.Author() {
-		h, err = n.render(assetID, tier)
+		h, err = n.render(p, assetID, tier)
 	} else {
 		h, err = n.fetch(ctx, p, a.Owner, assetID, revision, tier)
 	}
@@ -102,10 +102,23 @@ func (n *Node) blob(ctx context.Context, p *pile, assetID, revision []byte, tier
 	return h, err
 }
 
-func (n *Node) render(assetID []byte, tier int) (blob.Hash, error) {
-	local, ok := n.cfg.LocalID(assetID)
+func (n *Node) localID(p *pile, assetID []byte) (string, error) {
+	n.mu.Lock()
+	local, ok := p.local[hex.EncodeToString(assetID)]
+	n.mu.Unlock()
 	if !ok {
-		return blob.Hash{}, ErrUnknownAsset
+		return "", ErrUnknownAsset
+	}
+	if n.cfg.Renditions == nil {
+		return "", ErrUnavailable
+	}
+	return local, nil
+}
+
+func (n *Node) render(p *pile, assetID []byte, tier int) (blob.Hash, error) {
+	local, err := n.localID(p, assetID)
+	if err != nil {
+		return blob.Hash{}, err
 	}
 	b, err := n.cfg.Renditions.Rendition(local, tier)
 	if err != nil {
@@ -180,7 +193,7 @@ func (n *Node) serveBlob(p *pile, w http.ResponseWriter, r *http.Request) {
 	}
 	var content io.ReadSeeker
 	if err == nil && tier == T3 {
-		if content, err = n.original(id); err == nil {
+		if content, err = n.original(p, id); err == nil {
 			w.Header().Set("ETag", `"`+hex.EncodeToString(rev)+`"`)
 			w.Header().Set("Content-Type", a.Meta.MIME)
 		}
@@ -204,10 +217,10 @@ func (n *Node) serveBlob(p *pile, w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func (n *Node) original(assetID []byte) (io.ReadSeeker, error) {
-	local, ok := n.cfg.LocalID(assetID)
-	if !ok {
-		return nil, ErrUnknownAsset
+func (n *Node) original(p *pile, assetID []byte) (io.ReadSeeker, error) {
+	local, err := n.localID(p, assetID)
+	if err != nil {
+		return nil, err
 	}
 	size, err := n.cfg.Renditions.OriginalSize(local)
 	if err != nil {

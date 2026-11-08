@@ -6,6 +6,7 @@ import (
 	"crypto/ed25519"
 	"crypto/sha256"
 	"encoding/hex"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -33,6 +34,7 @@ import (
 
 type media struct {
 	mu         sync.Mutex
+	items      []node.MediaItem
 	originals  map[string][]byte
 	renditions map[int]int
 	reads      int
@@ -42,18 +44,18 @@ func newMedia() *media {
 	return &media{originals: map[string][]byte{}, renditions: map[int]int{}}
 }
 
-func (m *media) add(local string, original []byte) op.AssetMeta {
+func (m *media) add(item node.MediaItem, original []byte) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	m.originals[local] = original
-	return op.AssetMeta{
-		AssetID:      []byte("asset:" + local),
-		Revision:     []byte("rev:" + local),
-		Kind:         op.KindPhoto,
-		MIME:         "image/jpeg",
-		OriginalName: local + ".jpg",
-		SizeBytes:    uint64(len(original)),
-	}
+	item.SizeBytes = uint64(len(original))
+	m.items = append(m.items, item)
+	m.originals[item.LocalID] = original
+}
+
+func (m *media) Media(from, to int64) ([]byte, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	return json.Marshal(m.items)
 }
 
 func rendition(local string, tier int) []byte {
@@ -85,14 +87,6 @@ func (m *media) ReadOriginal(local string, offset, length int64) ([]byte, error)
 	return b[offset:min(offset+length, int64(len(b)))], nil
 }
 
-func (m *media) LocalID(assetID []byte) (string, bool) {
-	m.mu.Lock()
-	defer m.mu.Unlock()
-	local, ok := strings.CutPrefix(string(assetID), "asset:")
-	_, known := m.originals[local]
-	return local, ok && known
-}
-
 func (m *media) calls() (renditions map[int]int, reads int) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
@@ -103,16 +97,15 @@ func (m *media) calls() (renditions map[int]int, reads int) {
 	return out, m.reads
 }
 
-func openSource(t *testing.T, platform string, m *media) *node.Node {
+func openSource(t *testing.T, dir, platform string, m *media) *node.Node {
 	t.Helper()
-	dir := t.TempDir()
 	n, err := node.Open(node.Config{
 		Dir:        dir,
 		Keystore:   device.File(filepath.Join(dir, "device.key")),
 		Platform:   platform,
 		Addrs:      loopback,
+		Media:      m,
 		Renditions: m,
-		LocalID:    m.LocalID,
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -121,11 +114,16 @@ func openSource(t *testing.T, platform string, m *media) *node.Node {
 	return n
 }
 
-func publish(t *testing.T, n *node.Node, p node.Pile, c op.Change) {
+const day = "2026-07-02T10:00:00Z"
+
+func share(t *testing.T, n *node.Node, p node.Pile) map[string]op.AssetMeta {
 	t.Helper()
-	if err := n.Publish(p.ID, c); err != nil {
-		t.Fatal(err)
+	choose(t, n, p.ID, "2026-07-01T00:00:00Z", "2026-07-10T00:00:00Z")
+	out := map[string]op.AssetMeta{}
+	for _, c := range selection(t, n, p.ID).Items {
+		out[c.LocalID] = c.Meta
 	}
+	return out
 }
 
 func eventually(t *testing.T, what string, cond func() bool) {
@@ -194,10 +192,10 @@ func contentETag(b []byte) string {
 
 func TestRenditionsServedImmutableWithContentHashETag(t *testing.T) {
 	m := newMedia()
-	a := openSource(t, "ios", m)
+	a := openSource(t, t.TempDir(), "ios", m)
 	p := create(t, a, "Грузия", "Аня")
-	photo := m.add("IMG_1", []byte("jpeg original"))
-	publish(t, a, p, op.AssetAdd{Assets: []op.AssetMeta{photo}})
+	m.add(photo("IMG_1", day), []byte("jpeg original"))
+	img := share(t, a, p)["IMG_1"]
 	b := memberOf(t, a, p)
 	if r, _ := m.calls(); len(r) != 0 {
 		t.Fatalf("renditions made before any request: %v", r)
@@ -206,7 +204,7 @@ func TestRenditionsServedImmutableWithContentHashETag(t *testing.T) {
 	for _, tier := range []int{node.T1, node.T2} {
 		want := rendition("IMG_1", tier)
 		for range 2 {
-			resp, body := b.get(blobPath(photo, tier))
+			resp, body := b.get(blobPath(img, tier))
 			if resp.StatusCode != http.StatusOK || !bytes.Equal(body, want) {
 				t.Fatalf("T%d: status %d, body %q; want 200, %q", tier, resp.StatusCode, body, want)
 			}
@@ -217,7 +215,7 @@ func TestRenditionsServedImmutableWithContentHashETag(t *testing.T) {
 				t.Fatalf("T%d: ETag = %s, want SHA-256 of content %s", tier, etag, contentETag(want))
 			}
 		}
-		resp, body := b.get(blobPath(photo, tier), "If-None-Match", contentETag(want))
+		resp, body := b.get(blobPath(img, tier), "If-None-Match", contentETag(want))
 		if resp.StatusCode != http.StatusNotModified || len(body) != 0 {
 			t.Fatalf("T%d with matching If-None-Match: status %d, %d bytes", tier, resp.StatusCode, len(body))
 		}
@@ -229,20 +227,22 @@ func TestRenditionsServedImmutableWithContentHashETag(t *testing.T) {
 
 func TestRangeRequestsIncludingVideoOriginal(t *testing.T) {
 	m := newMedia()
-	a := openSource(t, "android", m)
+	a := openSource(t, t.TempDir(), "android", m)
 	p := create(t, a, "Грузия", "Аня")
 	original := make([]byte, 3<<20+12345)
 	rng := rand.New(rand.NewPCG(1, 2))
 	for i := range original {
 		original[i] = byte(rng.Uint32())
 	}
-	video := m.add("VID_1", original)
-	video.Kind, video.MIME = op.KindVideo, "video/quicktime"
-	photo := m.add("IMG_1", []byte("jpeg"))
-	publish(t, a, p, op.AssetAdd{Assets: []op.AssetMeta{video, photo}})
+	clip := video("VID_1", day, 15_000)
+	clip.MIME = "video/quicktime"
+	m.add(clip, original)
+	m.add(photo("IMG_1", day), []byte("jpeg"))
+	shared := share(t, a, p)
+	movie, img := shared["VID_1"], shared["IMG_1"]
 	b := memberOf(t, a, p)
 
-	resp, body := b.get(blobPath(video, node.T3))
+	resp, body := b.get(blobPath(movie, node.T3))
 	if resp.StatusCode != http.StatusOK || !bytes.Equal(body, original) {
 		t.Fatalf("full original: status %d, %d bytes, equal %v", resp.StatusCode, len(body), bytes.Equal(body, original))
 	}
@@ -264,7 +264,7 @@ func TestRangeRequestsIncludingVideoOriginal(t *testing.T) {
 		{"bytes=-4096", size - 4096, size},
 		{fmt.Sprintf("bytes=%d-%d", size-10, size+1000), size - 10, size},
 	} {
-		resp, body := b.get(blobPath(video, node.T3), "Range", c.header)
+		resp, body := b.get(blobPath(movie, node.T3), "Range", c.header)
 		wantRange := fmt.Sprintf("bytes %d-%d/%d", c.start, c.end-1, size)
 		if resp.StatusCode != http.StatusPartialContent || resp.Header.Get("Content-Range") != wantRange || !bytes.Equal(body, original[c.start:c.end]) {
 			t.Fatalf("%s: status %d, Content-Range %q (want %q), %d bytes, equal %v",
@@ -272,7 +272,7 @@ func TestRangeRequestsIncludingVideoOriginal(t *testing.T) {
 		}
 	}
 
-	resp, body = b.get(blobPath(video, node.T3), "Range", "bytes=10-19,3000000-3000009")
+	resp, body = b.get(blobPath(movie, node.T3), "Range", "bytes=10-19,3000000-3000009")
 	mt, params, err := mime.ParseMediaType(resp.Header.Get("Content-Type"))
 	if resp.StatusCode != http.StatusPartialContent || err != nil || mt != "multipart/byteranges" {
 		t.Fatalf("multiple ranges: status %d, Content-Type %q", resp.StatusCode, resp.Header.Get("Content-Type"))
@@ -289,16 +289,16 @@ func TestRangeRequestsIncludingVideoOriginal(t *testing.T) {
 		}
 	}
 
-	resp, body = b.get(blobPath(video, node.T3), "Range", "bytes=100-199", "If-Range", etag)
+	resp, body = b.get(blobPath(movie, node.T3), "Range", "bytes=100-199", "If-Range", etag)
 	if resp.StatusCode != http.StatusPartialContent || !bytes.Equal(body, original[100:200]) {
 		t.Fatalf("If-Range with current ETag: status %d", resp.StatusCode)
 	}
-	if resp, _ := b.get(blobPath(video, node.T3), "Range", fmt.Sprintf("bytes=%d-", size)); resp.StatusCode != http.StatusRequestedRangeNotSatisfiable {
+	if resp, _ := b.get(blobPath(movie, node.T3), "Range", fmt.Sprintf("bytes=%d-", size)); resp.StatusCode != http.StatusRequestedRangeNotSatisfiable {
 		t.Fatalf("range past the end: status %d", resp.StatusCode)
 	}
 
 	thumb := rendition("IMG_1", node.T1)
-	resp, body = b.get(blobPath(photo, node.T1), "Range", "bytes=3-")
+	resp, body = b.get(blobPath(img, node.T1), "Range", "bytes=3-")
 	if resp.StatusCode != http.StatusPartialContent || !bytes.Equal(body, thumb[3:]) {
 		t.Fatalf("T1 range: status %d, body %q", resp.StatusCode, body)
 	}
@@ -306,17 +306,16 @@ func TestRangeRequestsIncludingVideoOriginal(t *testing.T) {
 
 func TestOnlyOwnPublishedAssetsAreServed(t *testing.T) {
 	ma, mb := newMedia(), newMedia()
-	a, bn := openSource(t, "ios", ma), openSource(t, "android", mb)
+	a, bn := openSource(t, t.TempDir(), "ios", ma), openSource(t, t.TempDir(), "android", mb)
 	p := create(t, a, "Грузия", "Аня")
 	join(t, bn, inviteTo(t, a, p), "Боря")
-	mine := ma.add("IMG_1", []byte("jpeg"))
-	removed := ma.add("IMG_2", []byte("jpeg"))
-	forgotten := mine
-	forgotten.AssetID = []byte("asset:deleted from the phone")
-	publish(t, a, p, op.AssetAdd{Assets: []op.AssetMeta{mine, removed, forgotten}})
-	publish(t, a, p, op.AssetRemove{AssetIDs: [][]byte{removed.AssetID}})
-	theirs := mb.add("PXL_1", []byte("jpeg"))
-	publish(t, bn, p, op.AssetAdd{Assets: []op.AssetMeta{theirs}})
+	ma.add(photo("IMG_1", day), []byte("jpeg"))
+	ma.add(photo("IMG_2", day), []byte("jpeg"))
+	shared := share(t, a, p)
+	mine, removed := shared["IMG_1"], shared["IMG_2"]
+	decide(t, a, p.ID, removed.AssetID, false)
+	mb.add(photo("PXL_1", day), []byte("jpeg"))
+	theirs := share(t, bn, p)["PXL_1"]
 	eventually(t, "a learns the asset of b", func() bool { return a.Stored(p.ID, theirs.AssetID, theirs.Revision, node.T1) })
 
 	c := memberOf(t, a, p)
@@ -326,14 +325,12 @@ func TestOnlyOwnPublishedAssetsAreServed(t *testing.T) {
 	oldRevision := mine
 	oldRevision.Revision = []byte("rev:before edit")
 	unknown := mine
-	unknown.AssetID = []byte("asset:never published")
+	unknown.AssetID = []byte("never published")
 	for name, path := range map[string]string{
 		"unknown asset":        blobPath(unknown, node.T1),
 		"other revision":       blobPath(oldRevision, node.T1),
 		"removed asset":        blobPath(removed, node.T1),
 		"asset of other owner": blobPath(theirs, node.T1),
-		"no local file":        blobPath(forgotten, node.T1),
-		"no local original":    blobPath(forgotten, node.T3),
 		"tier 0":               blobPath(mine, 0),
 		"tier 4":               blobPath(mine, 4),
 		"tier name":            fmt.Sprintf("/blob/%x/%x/T1", mine.AssetID, mine.Revision),
@@ -348,16 +345,18 @@ func TestOnlyOwnPublishedAssetsAreServed(t *testing.T) {
 
 func TestMembersFetchThumbnailsInBackground(t *testing.T) {
 	ma, mb := newMedia(), newMedia()
-	a, b := openSource(t, "ios", ma), openSource(t, "android", mb)
+	a, b := openSource(t, t.TempDir(), "ios", ma), openSource(t, t.TempDir(), "android", mb)
 	p := create(t, a, "Грузия", "Аня")
-	var ofA []op.AssetMeta
 	for i := range 12 {
-		ofA = append(ofA, ma.add(fmt.Sprintf("IMG_%d", i), []byte("jpeg")))
+		ma.add(photo(fmt.Sprintf("IMG_%d", i), day), []byte("jpeg"))
 	}
-	publish(t, a, p, op.AssetAdd{Assets: ofA})
+	var ofA []op.AssetMeta
+	for _, m := range share(t, a, p) {
+		ofA = append(ofA, m)
+	}
 	join(t, b, inviteTo(t, a, p), "Боря")
-	ofB := mb.add("PXL_1", []byte("jpeg"))
-	publish(t, b, p, op.AssetAdd{Assets: []op.AssetMeta{ofB}})
+	mb.add(photo("PXL_1", day), []byte("jpeg"))
+	ofB := share(t, b, p)["PXL_1"]
 
 	stored := func(n *node.Node, assets ...op.AssetMeta) func() bool {
 		return func() bool {
@@ -372,8 +371,8 @@ func TestMembersFetchThumbnailsInBackground(t *testing.T) {
 	eventually(t, "b stores T1 of all assets of a", stored(b, ofA...))
 	eventually(t, "a stores T1 of the asset of b", stored(a, ofB))
 
-	later := ma.add("IMG_later", []byte("jpeg"))
-	publish(t, a, p, op.AssetAdd{Assets: []op.AssetMeta{later}})
+	ma.add(photo("IMG_later", day), []byte("jpeg"))
+	later := share(t, a, p)["IMG_later"]
 	eventually(t, "b stores T1 of an asset added later", stored(b, later))
 
 	if r, reads := ma.calls(); r[node.T1] != len(ofA)+1 || len(r) != 1 || reads != 0 {
@@ -405,16 +404,16 @@ func TestMembersFetchThumbnailsInBackground(t *testing.T) {
 
 func TestBlobForUIFromLocalStoreOrOwner(t *testing.T) {
 	ma := newMedia()
-	a, b := openSource(t, "ios", ma), open(t, t.TempDir(), "android")
+	a, b := openSource(t, t.TempDir(), "ios", ma), open(t, t.TempDir(), "android")
 	p := create(t, a, "Грузия", "Аня")
-	photo := ma.add("IMG_1", []byte("jpeg"))
-	publish(t, a, p, op.AssetAdd{Assets: []op.AssetMeta{photo}})
+	ma.add(photo("IMG_1", day), []byte("jpeg"))
+	img := share(t, a, p)["IMG_1"]
 	join(t, b, inviteTo(t, a, p), "Боря")
-	eventually(t, "b learns the asset", func() bool { return b.Stored(p.ID, photo.AssetID, photo.Revision, node.T1) })
+	eventually(t, "b learns the asset", func() bool { return b.Stored(p.ID, img.AssetID, img.Revision, node.T1) })
 
 	read := func(n *node.Node, tier int) {
 		t.Helper()
-		f, h, err := n.Blob(context.Background(), p.ID, photo.AssetID, photo.Revision, tier)
+		f, h, err := n.Blob(context.Background(), p.ID, img.AssetID, img.Revision, tier)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -434,16 +433,16 @@ func TestBlobForUIFromLocalStoreOrOwner(t *testing.T) {
 		t.Fatalf("a made renditions %v, want each tier once", r)
 	}
 
-	unknown := photo
-	unknown.Revision = []byte("rev:other")
+	unknown := img
+	unknown.Revision = []byte("other revision")
 	for name, c := range map[string]struct {
 		pile, asset, revision []byte
 		tier                  int
 		want                  error
 	}{
-		"unknown pile":     {[]byte("no such pile"), photo.AssetID, photo.Revision, node.T1, node.ErrUnknownPile},
+		"unknown pile":     {[]byte("no such pile"), img.AssetID, img.Revision, node.T1, node.ErrUnknownPile},
 		"unknown revision": {p.ID, unknown.AssetID, unknown.Revision, node.T1, node.ErrUnknownAsset},
-		"original":         {p.ID, photo.AssetID, photo.Revision, node.T3, node.ErrUnknownAsset},
+		"original":         {p.ID, img.AssetID, img.Revision, node.T3, node.ErrUnknownAsset},
 	} {
 		if _, _, err := b.Blob(context.Background(), c.pile, c.asset, c.revision, c.tier); !errors.Is(err, c.want) {
 			t.Errorf("%s: err = %v, want %v", name, err, c.want)
@@ -481,13 +480,12 @@ func (r *recorder) seen() []string {
 
 func TestSourceSendsBlobsOnlyInResponseToRequests(t *testing.T) {
 	m := newMedia()
-	a := openSource(t, "ios", m)
+	a := openSource(t, t.TempDir(), "ios", m)
 	p := create(t, a, "Грузия", "Аня")
-	var assets []op.AssetMeta
 	for i := range 5 {
-		assets = append(assets, m.add(fmt.Sprintf("IMG_%d", i), []byte("jpeg")))
+		m.add(photo(fmt.Sprintf("IMG_%d", i), day), []byte("jpeg"))
 	}
-	publish(t, a, p, op.AssetAdd{Assets: assets})
+	first := share(t, a, p)["IMG_0"]
 
 	i, err := invite.Parse(inviteTo(t, a, p))
 	if err != nil {
@@ -529,11 +527,50 @@ func TestSourceSendsBlobsOnlyInResponseToRequests(t *testing.T) {
 		t.Fatalf("a made renditions %v and read originals %d times while nobody asked", r, reads)
 	}
 
-	resp2, body := c.get(blobPath(assets[0], node.T1))
+	resp2, body := c.get(blobPath(first, node.T1))
 	if resp2.StatusCode != http.StatusOK || !bytes.Equal(body, rendition("IMG_0", node.T1)) {
 		t.Fatalf("requested T1: status %d, %q", resp2.StatusCode, body)
 	}
 	if r, _ := m.calls(); r[node.T1] != 1 || len(r) != 1 {
 		t.Fatalf("a made renditions %v after one request, want one T1", r)
+	}
+}
+
+func TestOwnAssetsAreServedAfterRestart(t *testing.T) {
+	m := newMedia()
+	dir := t.TempDir()
+	a := openSource(t, dir, "ios", m)
+	p := create(t, a, "Грузия", "Аня")
+	m.add(photo("IMG_1", day), []byte("jpeg"))
+	img := share(t, a, p)["IMG_1"]
+	if err := a.Close(); err != nil {
+		t.Fatal(err)
+	}
+
+	a = openSource(t, dir, "ios", m)
+	resp, body := memberOf(t, a, p).get(blobPath(img, node.T1))
+	if resp.StatusCode != http.StatusOK || !bytes.Equal(body, rendition("IMG_1", node.T1)) {
+		t.Fatalf("T1 after restart: status %d, body %q", resp.StatusCode, body)
+	}
+}
+
+func TestOwnAssetWithoutRenditionMakerIsUnavailable(t *testing.T) {
+	a := openWith(t, t.TempDir(), "ios", shelf(photo("IMG_1", day)))
+	b := open(t, t.TempDir(), "android")
+	p := create(t, a, "Грузия", "Аня")
+	img := share(t, a, p)["IMG_1"]
+	join(t, b, inviteTo(t, a, p), "Боря")
+	waitAssets(t, p.ID, idSet(img.AssetID), b)
+
+	if _, _, err := a.Blob(context.Background(), p.ID, img.AssetID, img.Revision, node.T1); !errors.Is(err, node.ErrUnavailable) {
+		t.Fatalf("own T1 without a rendition maker: err = %v, want ErrUnavailable", err)
+	}
+	if resp, _ := memberOf(t, a, p).get(blobPath(img, node.T1)); resp.StatusCode == http.StatusOK || resp.StatusCode == http.StatusNotFound {
+		t.Fatalf("member asked for T1: status %d, want a server error", resp.StatusCode)
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	if _, _, err := b.Blob(ctx, p.ID, img.AssetID, img.Revision, node.T1); !errors.Is(err, node.ErrUnavailable) {
+		t.Fatalf("T1 from an owner without a rendition maker: err = %v, want ErrUnavailable", err)
 	}
 }

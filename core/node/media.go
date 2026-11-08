@@ -61,9 +61,10 @@ type Selection struct {
 }
 
 type choice struct {
-	From   int64           `json:"from"`
-	To     int64           `json:"to"`
-	Manual map[string]bool `json:"manual"`
+	From   int64             `json:"from"`
+	To     int64             `json:"to"`
+	Manual map[string]bool   `json:"manual"`
+	Local  map[string]string `json:"local"`
 }
 
 var kinds = map[string]op.Kind{"photo": op.KindPhoto, "video": op.KindVideo, "live_photo": op.KindLivePhoto}
@@ -145,23 +146,28 @@ func (n *Node) Assets(id []byte) (map[string]state.Asset, error) {
 }
 
 func (n *Node) choice(id []byte) (*pile, choice, error) {
-	c := choice{Manual: map[string]bool{}}
 	p, err := n.find(id)
 	if err != nil {
-		return nil, c, err
+		return nil, choice{}, err
 	}
-	b, err := os.ReadFile(n.choicePath(p))
+	c, err := n.load(p.ID)
+	return p, c, err
+}
+
+func (n *Node) load(id []byte) (choice, error) {
+	c := choice{Manual: map[string]bool{}}
+	b, err := os.ReadFile(n.choicePath(id))
 	if errors.Is(err, fs.ErrNotExist) {
-		return p, c, nil
+		return c, nil
 	}
 	if err == nil {
 		err = json.Unmarshal(b, &c)
 	}
-	return p, c, err
+	return c, err
 }
 
-func (n *Node) choicePath(p *pile) string {
-	return filepath.Join(n.cfg.Dir, "piles", hex.EncodeToString(p.ID)+".selection.json")
+func (n *Node) choicePath(id []byte) string {
+	return filepath.Join(n.cfg.Dir, "piles", hex.EncodeToString(id)+".selection.json")
 }
 
 func (n *Node) candidates(c choice) ([]Candidate, error) {
@@ -223,13 +229,22 @@ func (c choice) wants(x Candidate) bool {
 }
 
 func (n *Node) commit(ctx context.Context, p *pile, c choice, cs []Candidate) error {
+	c.Local = map[string]string{}
+	for _, x := range cs {
+		if c.wants(x) {
+			c.Local[hex.EncodeToString(x.Meta.AssetID)] = x.LocalID
+		}
+	}
 	b, err := json.Marshal(c)
 	if err != nil {
 		return err
 	}
-	if err := device.WriteFile(n.choicePath(p), b); err != nil {
+	if err := device.WriteFile(n.choicePath(p.ID), b); err != nil {
 		return err
 	}
+	n.mu.Lock()
+	p.local = c.Local
+	n.mu.Unlock()
 	have, err := n.published(p)
 	if err != nil {
 		return err
