@@ -89,11 +89,14 @@ func (s *Store) inTx(f func(*sql.Tx) (op.Op, error)) (op.Op, error) {
 		return op.Op{}, err
 	}
 	o, err := f(tx)
+	if err == nil {
+		err = tx.Commit()
+	}
 	if err != nil {
 		tx.Rollback()
 		return op.Op{}, err
 	}
-	return o, tx.Commit()
+	return o, nil
 }
 
 func headOf(tx *sql.Tx, a op.Author) (op.Head, error) {
