@@ -6,3 +6,7 @@ web-build/
 *.out
 .DS_Store
 testdata/rapid/
+/build/
+/app/android/
+/app/ios/
+/app/modules/core/android/libs/
