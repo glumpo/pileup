@@ -10,7 +10,7 @@ export type Request = { method: string; path: string; body: unknown; headers: Re
 
 export function fakeCore(routes: Record<string, Reply | ((body: any) => Reply)>): Request[] {
   const requests: Request[] = [];
-  global.fetch = jest.fn(async (url: string, init: RequestInit = {}) => {
+  globalThis.fetch = jest.fn(async (url: string, init: RequestInit = {}) => {
     const method = init.method ?? 'GET';
     const path = url.slice(BASE.length);
     const body = typeof init.body === 'string' ? JSON.parse(init.body) : undefined;
