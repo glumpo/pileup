@@ -5,7 +5,7 @@ status: In Progress
 assignee:
   - '@claude'
 created_date: '2026-11-08T06:49:00Z'
-updated_date: '2026-11-08T10:13:00Z'
+updated_date: '2026-11-08T10:18:00Z'
 labels:
   - core
   - protocol
@@ -35,3 +35,16 @@ crdt — сердце протокола синхронизации, и меня
 - [ ] #6 Property-тесты: одинаковое состояние при любом чередовании журналов разных авторов и при повторной доставке
 - [ ] #7 Fuzz-тест декодера не находит паник; golden vectors фиксируют формат
 <!-- AC:END -->
+
+## Implementation Plan
+
+<!-- SECTION:PLAN:BEGIN -->
+1. Зависимости: fxamacker/cbor/v2 (MIT), pgregory.net/rapid (MPL-2.0, только тесты) → verify: make check (лицензии)
+2. crdt/op: конверт [body, sig] в детерминированном CBOR с целыми ключами; Body{pile_id, author, seq, prev, lamport, wall_time, schema, type, payload bstr}; id = SHA-256(body); Decode (конверт, тело, подпись над байтами body как есть, разбор payload известных типов); Sign/New для создания; Validator(pile_id, S): pile_id, seq = N+1, prev, строгий рост lamport, seq 1 = Join с proof = HMAC(HKDF(S, "pileup-auth"), pubkey), Join только на seq 1 → verify: unit-тесты на каждую причину отказа
+3. Типы изменений PileCreate, Join, MemberSet, AssetAdd{[]AssetMeta}, AssetRemove{[]asset_id}; AssetMeta по 5.3 без GPS
+4. crdt/clock: L, Next = L+1, Observe = max; crdt/vv: {author → N}, вычисление недостающего у пира → verify: unit-тесты
+5. crdt/state: эталонная in-memory модель: Apply(raw) с валидацией, Create (seq, prev, lamport = L+1), хранение и пересылка байт-в-байт, View для сравнения с другой реализацией (TASK-5); LWW имени по (lamport, author); владелец файла = автор первого AssetAdd по (lamport, author), действует последняя операция владельца; неизвестные типы хранятся без эффекта → verify: unit-тесты по правилам
+6. Property-тесты rapid: сходимость при любом чередовании журналов и повторной/преждевременной доставке → verify: go test
+7. Golden vectors в testdata, fuzz декодера (≥60 с на цель) → verify: go test -fuzz
+8. gofmt, go vet, go test -race, make check
+<!-- SECTION:PLAN:END -->
