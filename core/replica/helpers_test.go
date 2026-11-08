@@ -11,6 +11,7 @@ import (
 	"net/http/httptest"
 	"path/filepath"
 	"reflect"
+	"slices"
 	"sync"
 	"testing"
 	"time"
@@ -136,15 +137,29 @@ type session struct {
 	cancel context.CancelFunc
 	done   chan struct{}
 	err    error
+
+	mu     sync.Mutex
+	rounds []int
 }
 
 func (n *node) pull(t *testing.T, addr string) *session {
 	t.Helper()
 	ctx, cancel := context.WithCancel(context.Background())
 	s := &session{cancel: cancel, done: make(chan struct{})}
-	go func() { s.err = n.Pull(ctx, addr); close(s.done) }()
+	synced := func(ops int) {
+		s.mu.Lock()
+		s.rounds = append(s.rounds, ops)
+		s.mu.Unlock()
+	}
+	go func() { s.err = n.Pull(ctx, addr, synced); close(s.done) }()
 	t.Cleanup(func() { cancel(); <-s.done })
 	return s
+}
+
+func (s *session) synced() []int {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return slices.Clone(s.rounds)
 }
 
 func (s *session) stop(t *testing.T) {

@@ -337,7 +337,7 @@ func (n *Node) pull(p *pile, addr string) {
 		defer n.wg.Done()
 		for {
 			n.announce(p, addr)
-			p.replica.Pull(n.ctx, addr)
+			p.replica.Pull(n.ctx, addr, func(int) {})
 			select {
 			case <-n.ctx.Done():
 				return

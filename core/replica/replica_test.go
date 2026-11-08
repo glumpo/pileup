@@ -309,3 +309,32 @@ func TestChangedSignalsLocalAndPulledOps(t *testing.T) {
 	closedSoon(t, "pulled op", ch)
 	waitFor(t, "pulled op applied", converged(t, vv.VV{author(ka): 3, author(kb): 1}, a, b), live...)
 }
+
+func TestEachRoundReportsReceivedOps(t *testing.T) {
+	ka, kb, kc := key(1), key(2), key(3)
+	a, b := newNode(t, ka, "Аня"), newNode(t, kb, "Боря")
+	for i := range 19 {
+		a.create(t, assets(string(rune('a'+i))))
+	}
+	a.apply(t, history(t, kc, 2)...)
+	s := b.pull(t, a.serve(t, nil))
+	waitFor(t, "first round", func() bool { return len(s.synced()) > 0 }, s)
+	if got := s.synced(); !reflect.DeepEqual(got, []int{22}) {
+		t.Fatalf("first round reported %v, want 22 ops", got)
+	}
+
+	for _, id := range []string{"x", "y", "z"} {
+		a.create(t, assets(id))
+	}
+	waitFor(t, "new ops", func() bool { return b.vv(t)[author(ka)] == 23 }, s)
+	waitFor(t, "rounds with new ops", func() bool {
+		sum := 0
+		for _, ops := range s.synced()[1:] {
+			if ops == 0 {
+				t.Fatalf("rounds %v include one without ops", s.synced())
+			}
+			sum += ops
+		}
+		return sum == 3
+	}, s)
+}
