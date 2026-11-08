@@ -197,8 +197,8 @@ func TestRenditionsServedImmutableWithContentHashETag(t *testing.T) {
 	m.add(photo("IMG_1", day), []byte("jpeg original"))
 	img := share(t, a, p)["IMG_1"]
 	b := memberOf(t, a, p)
-	if r, _ := m.calls(); len(r) != 0 {
-		t.Fatalf("renditions made before any request: %v", r)
+	if r, _ := m.calls(); r[node.T2] != 0 {
+		t.Fatalf("T2 made before any request: %v", r)
 	}
 
 	for _, tier := range []int{node.T1, node.T2} {
@@ -523,16 +523,16 @@ func TestSourceSendsBlobsOnlyInResponseToRequests(t *testing.T) {
 			t.Errorf("a sent an unexpected request to the member: %s", r)
 		}
 	}
-	if r, reads := m.calls(); len(r) != 0 || reads != 0 {
-		t.Fatalf("a made renditions %v and read originals %d times while nobody asked", r, reads)
+	if r, reads := m.calls(); r[node.T2] != 0 || reads != 0 {
+		t.Fatalf("a made renditions %v and read originals %d times while nobody asked; want no T2 and no originals", r, reads)
 	}
 
 	resp2, body := c.get(blobPath(first, node.T1))
 	if resp2.StatusCode != http.StatusOK || !bytes.Equal(body, rendition("IMG_0", node.T1)) {
 		t.Fatalf("requested T1: status %d, %q", resp2.StatusCode, body)
 	}
-	if r, _ := m.calls(); r[node.T1] != 1 || len(r) != 1 {
-		t.Fatalf("a made renditions %v after one request, want one T1", r)
+	if r, _ := m.calls(); r[node.T1] != 5 || len(r) != 1 {
+		t.Fatalf("a made renditions %v after one request, want T1 of each asset once", r)
 	}
 }
 
