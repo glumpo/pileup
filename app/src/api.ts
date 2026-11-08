@@ -49,6 +49,8 @@ export type Screen = {
 
 export type ShowItem = { id: string; revision: string; author: string; kind: string; taken_at: number };
 
+export type Hint = { author: string; name: string; platform: string; reason: string };
+
 export type ShowState = {
   pile: string;
   screen: Screen;
@@ -56,8 +58,29 @@ export type ShowState = {
   total: number;
   current: ShowItem;
   playing: boolean;
+  video_unavailable: boolean;
   renderer_error?: { code: string; message: string };
   waiting: ShowItem[];
+  hints: Hint[];
+};
+
+export type PinProgress = {
+  author: string;
+  name: string;
+  platform: string;
+  total: number;
+  done: number;
+  failed: number;
+  reason?: string;
+};
+
+export type PinEstimate = {
+  files: number;
+  missing: number;
+  estimated_bytes: number;
+  budget_bytes: number;
+  free_bytes: number | null;
+  over_budget: boolean;
 };
 
 export type ImageSource = { uri: string; headers: Record<string, string> };
@@ -114,6 +137,12 @@ export function connect(port: number, token: string) {
     show: () => call<ShowState>('GET', '/show'),
     showCommand: (command: 'next' | 'prev' | 'play' | 'pause') => call<ShowState>('POST', `/show/${command}`),
     stopShow: () => call<void>('DELETE', '/show'),
+    pins: (pile: string) => call<PinProgress[]>('GET', `/piles/${pile}/pins`),
+    pinEstimate: (pile: string, member?: string) =>
+      call<PinEstimate>('GET', `/piles/${pile}/pins/estimate${member ? `?member=${member}` : ''}`),
+    pin: (pile: string, member?: string) => call<PinProgress[]>('POST', `/piles/${pile}/pins`, member ? { member } : {}),
+    unpin: (pile: string, member?: string) =>
+      call<PinProgress[]>('DELETE', `/piles/${pile}/pins${member ? `?member=${member}` : ''}`),
     blob: (pile: string, item: { id: string; revision: string }, tier: 1 | 2): ImageSource => ({
       uri: `${base}/piles/${pile}/blob/${item.id}/${item.revision}/${tier}`,
       headers: auth,

@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useState } from 'react';
-import { RefreshControl, ScrollView, Share, Text, useWindowDimensions } from 'react-native';
+import { RefreshControl, ScrollView, Share, Text, useWindowDimensions, View } from 'react-native';
 
 import { Api, Pile } from '../api';
+import { PinsPanel, Source, usePins } from '../Pins';
 import { QR } from '../QR';
 import { Button, describe, ErrorText, Screen, styles } from '../ui';
 
@@ -24,10 +25,16 @@ export function PileScreen({
   const [invite, setInvite] = useState<string>();
   const [error, setError] = useState<string>();
   const [refreshing, setRefreshing] = useState(false);
+  const [sources, setSources] = useState<Source[]>([]);
+  const pins = usePins(api, initial.id);
   const { width } = useWindowDimensions();
 
   const load = useCallback(async () => {
     setError(undefined);
+    api.timeline(initial.id).then((items) => {
+      const names = new Map(items.map((i) => [i.author, i.author_name]));
+      setSources([...names].map(([author, name]) => ({ author, name })));
+    }, (e) => setError(describe(e)));
     try {
       const [piles, inv] = await Promise.all([api.piles(), api.invite(initial.id)]);
       setPile(piles.find((p) => p.id === initial.id) ?? initial);
@@ -58,6 +65,19 @@ export function PileScreen({
         <Button title="Мои файлы" onPress={() => onSelection(pile)} />
         <Button title="Показать на экране" onPress={() => onShow(pile)} />
         <ErrorText error={error} />
+        <Text style={{ fontSize: 17, fontWeight: '600' }}>Загрузка на это устройство</Text>
+        {sources.map((s) => (
+          <View key={s.author} style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
+            <Text style={{ flex: 1 }}>{s.name}</Text>
+            <Button
+              title="Загрузить всё с участника"
+              label={`Загрузить всё с участника: ${s.name}`}
+              onPress={() => pins.ask(s)}
+            />
+          </View>
+        ))}
+        <Button title="Загрузить вообще всё" onPress={() => pins.ask()} />
+        <PinsPanel pins={pins} />
         {invite && (
           <>
             <Text style={{ fontSize: 17, fontWeight: '600' }}>Пригласить</Text>

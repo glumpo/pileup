@@ -1,7 +1,7 @@
 import { act, render, screen, userEvent, within } from '@testing-library/react-native';
 
 import App from '../App';
-import { Screen, ShowState, TimelineItem } from '../src/api';
+import { Hint, PinEstimate, PinProgress, Screen, ShowState, TimelineItem } from '../src/api';
 import { asset, AUTH, BASE, fakeCore, georgia, INVITE } from './fakeCore';
 
 const july1 = Date.UTC(2026, 6, 1, 6, 0);
@@ -34,12 +34,23 @@ const bedroom: Screen = {
 
 const showItem = ({ id, revision, author, kind, taken_at }: TimelineItem) => ({ id, revision, author, kind, taken_at });
 
+const estimate: PinEstimate = {
+  files: 2,
+  missing: 1,
+  estimated_bytes: 400 * 1024,
+  budget_bytes: 1024 ** 3,
+  free_bytes: 12 * 1024 ** 3,
+  over_budget: false,
+};
+
 function core(screens: Screen[] = [livingRoom, bedroom], start?: [number, unknown]) {
   const show = {
     index: 0,
     playing: false,
     renderer_error: undefined as ShowState['renderer_error'],
     waiting: [] as TimelineItem[],
+    hints: [] as Hint[],
+    videoUnavailable: false,
   };
   const state = (): ShowState => ({
     pile: 'aa01',
@@ -48,8 +59,10 @@ function core(screens: Screen[] = [livingRoom, bedroom], start?: [number, unknow
     total: items.length,
     current: showItem(items[show.index]),
     playing: show.playing,
+    video_unavailable: show.videoUnavailable && items[show.index].kind === 'video',
     renderer_error: show.renderer_error,
     waiting: show.waiting.map(showItem),
+    hints: show.hints,
   });
   const requests = fakeCore({
     'GET /piles': [200, [georgia]],
@@ -88,6 +101,10 @@ function core(screens: Screen[] = [livingRoom, bedroom], start?: [number, unknow
       return [200, state()];
     },
     'DELETE /show': [204],
+    'GET /piles/aa01/pins': [200, [] as PinProgress[]],
+    'GET /piles/aa01/pins/estimate?member=01': [200, estimate],
+    'GET /piles/aa01/pins/estimate': [200, { ...estimate, files: 3, missing: 2, estimated_bytes: 800 * 1024 }],
+    'POST /piles/aa01/pins': [200, [{ author: '01', name: 'Аня', platform: 'ios', total: 2, done: 0, failed: 0 }]],
   });
   return { requests, show };
 }
@@ -222,19 +239,79 @@ test('a screen that does not answer is reported', async () => {
   expect(await screen.findByText(/Экран не ответил/)).toBeOnTheScreen();
 });
 
-test('files waiting for an offline member are announced with the member and the phone', async () => {
+const advice = 'Возможно, погас экран — попросите разблокировать телефон и открыть Pileup.';
+const anyaAway: Hint = { author: '01', name: 'Аня', platform: 'ios', reason: 'unreachable' };
+
+test('members the show waits for are named with their phone and why', async () => {
   const { show } = core();
   await startShow();
   expect(screen.queryByTestId('waiting')).toBeNull();
 
   show.waiting = [items[2], items[1]];
+  show.hints = [anyaAway, { author: '02', name: 'Боря', platform: 'android', reason: 'timeout' }];
   const banner = await screen.findByTestId('waiting', {}, { timeout: 3000 });
-  expect(within(banner).getByText('Ждём iPhone: Аня')).toBeOnTheScreen();
-  expect(within(banner).getByText('Ждём телефон: Боря')).toBeOnTheScreen();
+  expect(within(banner).getByText(`Нет ответа от iPhone: Аня. ${advice}`)).toBeOnTheScreen();
+  expect(within(banner).getByText(`Медленно отвечает телефон: Боря. ${advice}`)).toBeOnTheScreen();
+  expect(within(banner).getByRole('button', { name: 'Загрузить всё с участника: Аня' })).toBeOnTheScreen();
+  expect(within(banner).getByRole('button', { name: 'Загрузить всё с участника: Боря' })).toBeOnTheScreen();
 
   show.waiting = [];
+  show.hints = [];
   await act(() => new Promise((r) => setTimeout(r, 1500)));
   expect(screen.queryByTestId('waiting')).toBeNull();
+});
+
+test('all files of a member who does not answer are loaded from the remote after the estimate is confirmed', async () => {
+  const { requests, show } = core();
+  const user = await startShow();
+  show.hints = [anyaAway];
+  const banner = await screen.findByTestId('waiting', {}, { timeout: 3000 });
+
+  await user.press(within(banner).getByRole('button', { name: 'Загрузить всё с участника: Аня' }));
+  const offer = await screen.findByTestId('pin-offer');
+  expect(within(offer).getByText('Загрузить всё с участника: Аня')).toBeOnTheScreen();
+  expect(within(offer).getByText('Файлов: 2, ещё не загружено: 1 (примерно 400 КБ).')).toBeOnTheScreen();
+  expect(within(offer).getByText('Свободно на устройстве: 12 ГБ.')).toBeOnTheScreen();
+  expect(requests).toContainEqual(expect.objectContaining({ method: 'GET', path: '/piles/aa01/pins/estimate?member=01' }));
+  expect(commands(requests)).not.toContain('POST /piles/aa01/pins');
+
+  await user.press(within(offer).getByRole('button', { name: 'Начать загрузку' }));
+  expect(await screen.findByText('Аня: 0/2')).toBeOnTheScreen();
+  expect(screen.queryByTestId('pin-offer')).toBeNull();
+  expect(requests).toContainEqual(
+    expect.objectContaining({ method: 'POST', path: '/piles/aa01/pins', body: { member: '01' } }),
+  );
+});
+
+test('everything in the pile can be loaded from the remote', async () => {
+  const { requests } = core();
+  const user = await startShow();
+
+  await user.press(screen.getByRole('button', { name: 'Загрузить вообще всё' }));
+  const offer = await screen.findByTestId('pin-offer');
+  expect(within(offer).getByText('Файлов: 3, ещё не загружено: 2 (примерно 800 КБ).')).toBeOnTheScreen();
+  await user.press(within(offer).getByRole('button', { name: 'Начать загрузку' }));
+
+  expect(await screen.findByText('Аня: 0/2')).toBeOnTheScreen();
+  expect(requests).toContainEqual(expect.objectContaining({ method: 'GET', path: '/piles/aa01/pins/estimate' }));
+  expect(requests).toContainEqual(expect.objectContaining({ method: 'POST', path: '/piles/aa01/pins', body: {} }));
+});
+
+test('an unavailable video is explained over its poster and the show goes on', async () => {
+  const { requests, show } = core();
+  const user = await startShow();
+  show.videoUnavailable = true;
+  expect(screen.queryByText(/Видео недоступно/)).toBeNull();
+
+  await user.press(screen.getByRole('button', { name: 'Следующий' }));
+  expect(await screen.findByText(/Видео недоступно/)).toBeOnTheScreen();
+  expect(screen.getByText('2 / 3')).toBeOnTheScreen();
+  expect(screen.getByTestId('image').props.source.uri).toBe(`${BASE}/piles/aa01/blob/a1/ra1/2`);
+
+  await user.press(screen.getByRole('button', { name: 'Следующий' }));
+  expect(await screen.findByText('3 / 3')).toBeOnTheScreen();
+  expect(screen.queryByText(/Видео недоступно/)).toBeNull();
+  expect(commands(requests)).toEqual(['POST /show', 'POST /show/next', 'POST /show/next']);
 });
 
 test('screen errors are explained in Russian by their code', async () => {

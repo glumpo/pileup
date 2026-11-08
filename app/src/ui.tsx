@@ -15,6 +15,7 @@ const messages: Record<string, string> = {
   empty_pile: 'В pile пока нет файлов для показа',
   no_show: 'Показ уже остановлен',
   not_video: 'Сейчас на экране не видео',
+  unknown_member: 'Участник не найден в pile',
 };
 
 export function describe(error: unknown): string {
@@ -41,10 +42,21 @@ export function Screen({ title, onBack, children }: { title: string; onBack?: ()
   );
 }
 
-export function Button({ title, onPress, disabled }: { title: string; onPress: () => void; disabled?: boolean }) {
+export function Button({
+  title,
+  label,
+  onPress,
+  disabled,
+}: {
+  title: string;
+  label?: string;
+  onPress: () => void;
+  disabled?: boolean;
+}) {
   return (
     <Pressable
       accessibilityRole="button"
+      accessibilityLabel={label}
       accessibilityState={{ disabled }}
       disabled={disabled}
       onPress={onPress}
