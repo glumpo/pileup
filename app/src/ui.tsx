@@ -10,9 +10,15 @@ const messages: Record<string, string> = {
   inviter_unreachable: 'Не удалось связаться с пригласившим: телефоны должны быть в одной сети',
   offline: 'Нет сети: подключитесь к Wi-Fi, чтобы пригласить',
   no_media: 'Медиатека недоступна',
+  screen_unreachable: 'Экран не ответил: проверьте, что он включён и подключён к той же сети Wi-Fi',
+  unknown_screen: 'Экран больше не найден в сети: обновите список',
+  empty_pile: 'В pile пока нет файлов для показа',
+  no_show: 'Показ уже остановлен',
+  not_video: 'Сейчас на экране не видео',
 };
 
 export function describe(error: unknown): string {
+  if (error instanceof ApiError && error.code === 'screen_unavailable' && error.reason) return error.reason;
   if (error instanceof ApiError) return messages[error.code] ?? `Ошибка ядра: ${error.code}`;
   return String(error);
 }

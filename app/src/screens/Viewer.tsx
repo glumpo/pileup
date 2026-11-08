@@ -11,12 +11,14 @@ export function Viewer({
   items,
   index,
   onBack,
+  onShow,
 }: {
   api: Api;
   pile: Pile;
   items: TimelineItem[];
   index: number;
   onBack: () => void;
+  onShow: (item: TimelineItem) => void;
 }) {
   const { width, height } = useWindowDimensions();
   const [current, setCurrent] = useState(index);
@@ -64,6 +66,14 @@ export function Viewer({
         <Text style={styles.text}>
           {current + 1} / {items.length}
         </Text>
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel="Показать на экране"
+          onPress={() => onShow(item)}
+          hitSlop={12}
+        >
+          <Text style={styles.text}>На экран</Text>
+        </Pressable>
       </View>
     </View>
   );
