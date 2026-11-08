@@ -574,3 +574,40 @@ func TestOwnAssetWithoutRenditionMakerIsUnavailable(t *testing.T) {
 		t.Fatalf("T1 from an owner without a rendition maker: err = %v, want ErrUnavailable", err)
 	}
 }
+
+func TestMembersJoinedThroughOneInviterFetchEachOthersThumbnails(t *testing.T) {
+	mb, mc := newMedia(), newMedia()
+	dirA := t.TempDir()
+	a := open(t, dirA, "ios")
+	b, c := openSource(t, t.TempDir(), "android", mb), openSource(t, t.TempDir(), "ios", mc)
+	p := create(t, a, "Грузия", "Аня")
+	inv := inviteTo(t, a, p)
+	join(t, b, inv, "Боря")
+	join(t, c, inv, "Вера")
+	mb.add(photo("PXL_B", day), []byte("jpeg"))
+	mc.add(photo("IMG_C", day), []byte("jpeg"))
+	ofB, ofC := share(t, b, p)["PXL_B"], share(t, c, p)["IMG_C"]
+
+	eventually(t, "c stores T1 of the asset of b", func() bool { return c.Stored(p.ID, ofB.AssetID, ofB.Revision, node.T1) })
+	eventually(t, "b stores T1 of the asset of c", func() bool { return b.Stored(p.ID, ofC.AssetID, ofC.Revision, node.T1) })
+
+	var addrs [][]byte
+	for _, n := range []*node.Node{b, c} {
+		i, err := invite.Parse(inviteTo(t, n, p))
+		if err != nil {
+			t.Fatal(err)
+		}
+		addrs = append(addrs, []byte(i.Addrs[0].String()))
+	}
+	secret := secretOf(t, a, p)
+	if err := a.Close(); err != nil {
+		t.Fatal(err)
+	}
+	for _, raw := range logOf(t, dirA, p, secret) {
+		for _, addr := range addrs {
+			if bytes.Contains(raw, addr) {
+				t.Fatalf("member address %s leaked into an op", addr)
+			}
+		}
+	}
+}

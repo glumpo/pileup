@@ -306,11 +306,16 @@ func (n *Node) announced(p *pile, w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "bad announce", http.StatusBadRequest)
 		return
 	}
-	if err := n.addPeer(p, netip.AddrPortFrom(from.Addr().Unmap(), uint16(port)).String()); err != nil {
+	addr := netip.AddrPortFrom(from.Addr().Unmap(), uint16(port)).String()
+	if err := n.addPeer(p, addr); err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
-	w.WriteHeader(http.StatusNoContent)
+	n.mu.Lock()
+	others := slices.DeleteFunc(slices.Clone(p.Peers), func(a string) bool { return a == addr })
+	n.mu.Unlock()
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(others)
 }
 
 func (n *Node) addPeer(p *pile, addr string) error {
@@ -352,8 +357,17 @@ func (n *Node) announce(p *pile, addr string) {
 	if err != nil {
 		return
 	}
-	if resp, err := c.Do(req); err == nil {
-		resp.Body.Close()
+	resp, err := c.Do(req)
+	if err != nil {
+		return
+	}
+	defer resp.Body.Close()
+	var others []string
+	if resp.StatusCode != http.StatusOK || json.NewDecoder(resp.Body).Decode(&others) != nil {
+		return
+	}
+	for _, a := range others {
+		n.addPeer(p, a)
 	}
 }
 
