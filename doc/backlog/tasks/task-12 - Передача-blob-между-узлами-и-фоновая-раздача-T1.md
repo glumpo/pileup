@@ -5,7 +5,7 @@ status: In Progress
 assignee:
   - '@claude'
 created_date: '2026-11-08T06:49:00Z'
-updated_date: '2026-11-08T12:39:00Z'
+updated_date: '2026-11-08T12:45:00Z'
 labels:
   - core
   - network
@@ -33,6 +33,17 @@ ordinal: 12000
 - [ ] #3 Каждый участник фоном загружает T1 всех файлов pile
 - [ ] #4 Источник никогда не отправляет данные по своей инициативе
 <!-- AC:END -->
+
+## Implementation Plan
+
+<!-- SECTION:PLAN:BEGIN -->
+1. Пакет blob: ссылки имя → хеш (refs) — состояние кеша, отображение (владелец, asset, revision, tier) → blob, вне CRDT. Тест: ссылка переживает переоткрытие, перезапись.
+2. Пакет store: Asset(id) — один файл из проекции без чтения всего View. Тест: совпадает с View, включая удалённые и чужие.
+3. core/node/blobs.go: интерфейс RenditionMaker (gomobile-типы: Rendition(localID, tier) []byte, OriginalSize, ReadOriginal(offset, length)), Config.Renditions и Config.LocalID; отдача GET /blob/{asset}/{revision}/{tier} участникам pile по peer: только свои файлы, T1/T2 лениво генерируются и кладутся в blob-хранилище, T3 стримится с Range без сохранения; Cache-Control immutable, ETag. Неизвестное → 404.
+4. Потребитель: фоновый цикл на pile — T1 всех чужих файлов pile у владельца (до 5 параллельно, повтор при ошибке, по сигналу изменений реплики), в локальное blob-хранилище. Источник ничего не шлёт сам.
+5. Node.Blob и GET /piles/{id}/blob/{asset}/{revision}/{tier} (T1/T2) для UI: из локального хранилища или загрузка у владельца; openapi.yaml.
+6. Тесты по критериям: заголовки и ETag = хеш, Range (частичные и полное чтение оригинала), многоузловой тест фоновой загрузки T1, тест «источник не шлёт без запроса». gofmt, go vet, go test -race, make check.
+<!-- SECTION:PLAN:END -->
 
 ## Implementation Notes
 

@@ -20,6 +20,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/glumpo/pileup/core/blob"
 	"github.com/glumpo/pileup/core/crdt/op"
 	"github.com/glumpo/pileup/core/crdt/state"
 	"github.com/glumpo/pileup/core/device"
@@ -48,6 +49,9 @@ type Config struct {
 	Keystore device.Keystore
 	Platform string
 	Addrs    func() []netip.Addr
+
+	Renditions RenditionMaker
+	LocalID    func(assetID []byte) (localID string, ok bool)
 }
 
 type Pile struct {
@@ -67,6 +71,7 @@ type pile struct {
 	entry
 	store   *store.Store
 	replica *replica.Node
+	owners  *http.Client
 }
 
 type Node struct {
@@ -75,6 +80,7 @@ type Node struct {
 	ctx    context.Context
 	cancel context.CancelFunc
 	wg     sync.WaitGroup
+	blobs  *blob.Store
 
 	mu    sync.Mutex
 	piles []*pile
@@ -98,8 +104,12 @@ func Open(cfg Config) (*Node, error) {
 	if err != nil {
 		return nil, err
 	}
+	blobs, err := blob.Open(filepath.Join(cfg.Dir, "blobs"))
+	if err != nil {
+		return nil, err
+	}
 	ctx, cancel := context.WithCancel(context.Background())
-	n := &Node{cfg: cfg, key: key, ctx: ctx, cancel: cancel}
+	n := &Node{cfg: cfg, key: key, ctx: ctx, cancel: cancel, blobs: blobs}
 	n.mu.Lock()
 	for _, e := range entries {
 		var p *pile
@@ -245,10 +255,12 @@ func (n *Node) start(e entry, changes ...op.Change) (*pile, error) {
 	}
 	e.Port = uint16(ln.Addr().(*net.TCPAddr).Port)
 	p := &pile{entry: e, store: s, replica: replica.New(s, n.key, e.ID, e.Secret)}
+	p.owners = n.owners(p)
 	for _, a := range p.Peers {
 		n.pull(p, a)
 	}
 	n.serve(p, ln)
+	n.thumbnails(p)
 	return p, nil
 }
 
@@ -264,6 +276,7 @@ func (n *Node) serve(p *pile, ln net.Listener) {
 	mux := http.NewServeMux()
 	mux.Handle("/", p.replica.Handler())
 	mux.HandleFunc("POST /announce", func(w http.ResponseWriter, r *http.Request) { n.announced(p, w, r) })
+	mux.HandleFunc("GET /blob/{asset}/{revision}/{tier}", func(w http.ResponseWriter, r *http.Request) { n.serveBlob(p, w, r) })
 	srv := &http.Server{Handler: mux, ReadHeaderTimeout: timeout, IdleTimeout: timeout}
 	l := peer.NewListener(ln, n.key, func(id []byte) ([]byte, bool) {
 		return p.Secret, bytes.Equal(id, p.ID)
