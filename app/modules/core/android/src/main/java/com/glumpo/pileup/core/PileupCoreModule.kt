@@ -1,7 +1,13 @@
 package com.glumpo.pileup.core
 
+import android.net.ConnectivityManager
+import android.os.Build
+import expo.modules.interfaces.permissions.PermissionsStatus
+import expo.modules.kotlin.Promise
+import expo.modules.kotlin.exception.Exceptions
 import expo.modules.kotlin.modules.Module
 import expo.modules.kotlin.modules.ModuleDefinition
+import java.io.File
 import mobile.Mobile
 
 class PileupCoreModule : Module() {
@@ -9,7 +15,16 @@ class PileupCoreModule : Module() {
     Name("PileupCore")
 
     AsyncFunction("start") {
-      Mobile.start()
+      val context = appContext.reactContext?.applicationContext ?: throw Exceptions.ReactContextLost()
+      val dir = context.noBackupFilesDir
+      Mobile.start(
+        File(dir, "core").path,
+        "android",
+        SeedKeystore(File(dir, "device.seed")),
+        MediaStoreProvider(context.contentResolver),
+        Renditions(context),
+        NetworkAddresses(context.getSystemService(ConnectivityManager::class.java)),
+      )
     }
 
     AsyncFunction("stop") {
@@ -22,6 +37,15 @@ class PileupCoreModule : Module() {
 
     Function("token") {
       Mobile.token()
+    }
+
+    AsyncFunction("requestMediaPermissions") { promise: Promise ->
+      val permissions = appContext.permissions ?: throw Exceptions.PermissionsModuleNotFound()
+      val sdk = Build.VERSION.SDK_INT
+      permissions.askForPermissions(
+        { result -> promise.resolve(mediaGranted(sdk, result.filterValues { it.status == PermissionsStatus.GRANTED }.keys)) },
+        *mediaPermissions(sdk).toTypedArray(),
+      )
     }
 
     OnActivityDestroys {

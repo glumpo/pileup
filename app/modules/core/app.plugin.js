@@ -13,6 +13,13 @@ const networkSecurityConfig = `<?xml version="1.0" encoding="utf-8"?>
 `;
 
 module.exports = (config) => {
+  config = AndroidConfig.Permissions.withPermissions(config, [
+    'android.permission.ACCESS_NETWORK_STATE',
+    'android.permission.READ_EXTERNAL_STORAGE',
+    'android.permission.READ_MEDIA_IMAGES',
+    'android.permission.READ_MEDIA_VIDEO',
+    'android.permission.READ_MEDIA_VISUAL_USER_SELECTED',
+  ]);
   config = withDangerousMod(config, [
     'android',
     (config) => {
