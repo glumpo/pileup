@@ -189,6 +189,35 @@ func (s *Store) Ops(a op.Author, from uint64) ([][]byte, error) {
 	return raws, rows.Err()
 }
 
+func (s *Store) VV() (vv.VV, error) {
+	rows, err := s.db.Query(`SELECT author, max(seq) FROM ops GROUP BY author`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	v := vv.VV{}
+	for rows.Next() {
+		var a []byte
+		var n uint64
+		if err := rows.Scan(&a, &n); err != nil {
+			return nil, err
+		}
+		v[op.Author(a)] = n
+	}
+	return v, rows.Err()
+}
+
+func (s *Store) ID(a op.Author, seq uint64) (op.ID, bool, error) {
+	var id op.ID
+	var b []byte
+	err := s.db.QueryRow(`SELECT id FROM ops WHERE author = ? AND seq = ?`, a[:], seq).Scan(&b)
+	if errors.Is(err, sql.ErrNoRows) {
+		return id, false, nil
+	}
+	copy(id[:], b)
+	return id, err == nil, err
+}
+
 func (s *Store) View() (state.View, error) {
 	tx, err := s.db.Begin()
 	if err != nil {

@@ -133,6 +133,30 @@ func TestStoreBehavesLikeReferenceState(t *testing.T) {
 			if got, want := view(t, s), ref.View(); !reflect.DeepEqual(got, want) {
 				t.Fatalf("view differs from reference:\n got %+v\nwant %+v", got, want)
 			}
+			if got, err := s.VV(); err != nil || !reflect.DeepEqual(got, ref.View().VV) {
+				t.Fatalf("VV %v, %v; want %v", got, err, ref.View().VV)
+			}
+		}
+		for a, n := range ref.View().VV {
+			for seq := uint64(0); seq <= n+1; seq++ {
+				id, ok, err := s.ID(a, seq)
+				if err != nil {
+					t.Fatal(err)
+				}
+				if seq == 0 || seq > n {
+					if ok {
+						t.Fatalf("ID(%x, %d) found for missing op", a[:4], seq)
+					}
+					continue
+				}
+				o, err := op.Decode(ref.Ops(a, seq)[0])
+				if err != nil {
+					t.Fatal(err)
+				}
+				if !ok || id != o.ID {
+					t.Fatalf("ID(%x, %d) = %x, %v; want %x", a[:4], seq, id[:4], ok, o.ID[:4])
+				}
+			}
 		}
 		for a := range ref.View().VV {
 			for from := uint64(0); from <= ref.View().VV[a]+1; from++ {
