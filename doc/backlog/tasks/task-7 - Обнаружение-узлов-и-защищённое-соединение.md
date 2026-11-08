@@ -5,7 +5,7 @@ status: In Progress
 assignee:
   - '@claude'
 created_date: '2026-11-08T06:49:00Z'
-updated_date: '2026-11-08T21:52:00Z'
+updated_date: '2026-11-08T22:29:00Z'
 labels:
   - core
   - network
@@ -79,4 +79,6 @@ Android: NsdDiscovery (NsdManager): resolve строго по одному (до
 iOS: NSLocalNetworkUsageDescription и NSBonjourServices (_pileup._tcp, _googlecast._tcp, _airplay._tcp) задаёт config plugin; проверено expo prebuild --platform ios во временную копию. Swift-провайдера нет: iOS-модуль пока заглушка (TASK-3), поэтому AC #1 для iPhone и проверка на устройствах остаются.
 Решения на ревью: порт только в SRV-записи, в TXT не дублируется (отступление от формулировки 7.1); хеш — 16 байт SHA-256 без доменного разделителя; найденные адреса копятся в piles.json так же, как от /announce, без удаления устаревших; ошибки провайдера игнорируются (обнаружение — необязательный путь).
 Риски: _airplay._tcp объявляют и HomePod/Mac/ТВ с AirPlay 2 — фильтр по TXT features/model не сделан; resolveService и NsdServiceInfo.host устарели в API 34 (работают); в будущих Android может понадобиться разрешение на локальную сеть; на реальных устройствах не проверено.
+
+Проверено: gofmt -l пусто, go vet ./..., go test -race ./... (все пакеты), make check без ANDROID_HOME (Go, лицензии, tsc, jest 14/14), :core:testDebugUnitTest (DiscoveryTest 10/10 и прежние), make android-debug — BUILD SUCCESSFUL, в собранном манифесте есть CHANGE_WIFI_MULTICAST_STATE.
 <!-- SECTION:NOTES:END -->
