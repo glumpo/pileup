@@ -5,7 +5,7 @@ status: In Progress
 assignee:
   - '@claude'
 created_date: '2026-11-08T06:49:00Z'
-updated_date: '2026-11-08T10:53:00Z'
+updated_date: '2026-11-08T10:59:00Z'
 labels:
   - core
   - app
@@ -35,6 +35,20 @@ ordinal: 3000
 - [ ] #3 Ядро корректно останавливается при выходе из приложения и запускается снова
 - [ ] #4 В задаче записаны время сборки и размер приложения с ядром и без него на обеих платформах
 <!-- AC:END -->
+
+## Implementation Plan
+
+<!-- SECTION:PLAN:BEGIN -->
+Android-часть (iOS отложена: нет Mac).
+1. core/mobile: gomobile-фасад Start() → порт и токен через геттеры, Stop(); сервер core/httpapi на 127.0.0.1 со случайным портом и токеном → проверка: go test (health 200 с токеном / 401 без, после Stop порт закрыт, повторный Start работает).
+2. Тулчейн: JDK 17, Android SDK (cmdline-tools, platform/build-tools/NDK — версии из prebuild-проекта Expo 58 / RN 0.88), gomobile/gobind → проверка: gomobile bind -target=android собирает AAR.
+3. Makefile: mobile-android (AAR в app/modules/core/android/libs, gitignored) и android-debug (AAR → expo prebuild → gradlew assembleDebug); make check не требует Android.
+4. app/modules/core: локальный Expo-модуль, сгенерированный create-expo-module --local; Kotlin-реализация start/stop/port/token поверх AAR; iOS — как сгенерировано, без ядра.
+5. Config plugin: cleartext HTTP только к 127.0.0.1/localhost через network_security_config; android/ и ios/ не коммитятся (CNG).
+6. Экран App.tsx: при запуске стартует ядро, fetch GET /health с токеном, показ результата.
+7. Замеры: время сборки и размер debug APK шаблона без модуля и с ядром; проверка libgojni.so в APK.
+8. Финальные проверки: gofmt, go vet, go test, make check, tsc --noEmit, полная сборка APK.
+<!-- SECTION:PLAN:END -->
 
 ## Implementation Notes
 
