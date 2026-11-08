@@ -1,9 +1,11 @@
 ---
 id: TASK-12
 title: Передача blob между узлами и фоновая раздача T1
-status: To Do
-assignee: []
+status: In Progress
+assignee:
+  - '@claude'
 created_date: '2026-11-08T06:49:00Z'
+updated_date: '2026-11-08T12:39:00Z'
 labels:
   - core
   - network
@@ -31,3 +33,9 @@ ordinal: 12000
 - [ ] #3 Каждый участник фоном загружает T1 всех файлов pile
 - [ ] #4 Источник никогда не отправляет данные по своей инициативе
 <!-- AC:END -->
+
+## Implementation Notes
+
+<!-- SECTION:NOTES:BEGIN -->
+Начата Go-часть: реестр превью, отдача blob по /blob/{asset}/{rev}/{tier} с Range поверх peer, фоновая загрузка T1 потребителем. Нативная генерация превью (TASK-11) — через интерфейс.
+<!-- SECTION:NOTES:END -->

@@ -1,9 +1,11 @@
 ---
 id: TASK-9
 title: Медиатека и выбор файлов в pile
-status: To Do
-assignee: []
+status: In Progress
+assignee:
+  - '@claude'
 created_date: '2026-11-08T06:49:00Z'
+updated_date: '2026-11-08T12:39:00Z'
 labels:
   - app
   - media
@@ -34,3 +36,9 @@ ordinal: 9000
 - [ ] #4 GPS и прочие данные вне AssetMeta не покидают устройство
 - [ ] #5 Работает на iPhone и на Android, включая фото из iCloud без локального оригинала
 <!-- AC:END -->
+
+## Implementation Notes
+
+<!-- SECTION:NOTES:BEGIN -->
+Начата Go-часть: интерфейс MediaProvider для нативного слоя, выбор по датам, исключения, публикация AssetAdd/AssetRemove, API для UI. Нативные PhotoKit/MediaStore — позже.
+<!-- SECTION:NOTES:END -->
