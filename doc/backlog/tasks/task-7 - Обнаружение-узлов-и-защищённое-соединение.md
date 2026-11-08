@@ -5,7 +5,7 @@ status: In Progress
 assignee:
   - '@claude'
 created_date: '2026-11-08T06:49:00Z'
-updated_date: '2026-11-08T21:31:00Z'
+updated_date: '2026-11-08T21:34:00Z'
 labels:
   - core
   - network
@@ -46,6 +46,15 @@ ordinal: 7000
 3. Handshake членства внутри TLS: клиент называет pile, обе стороны шлют HMAC(K_auth, tls_exporter ‖ own_pubkey) (метка экспортёра RFC 9266), при ошибке соединение закрывается. Результат — net.Conn / net.Listener для будущего HTTP.
 4. Тесты по спецификации: успех (pubkey и pile id у обеих сторон), чужой секрет у клиента и у сервера, неизвестный pile, MITM-ретрансляция (свой ключ и украденный ключ без S), сертификат с несовпадающей подписью, отказ от TLS 1.2.
 5. gofmt, go vet, go test -race, make check.
+
+Обнаружение (AC #1, #2, #5):
+1. core/node: интерфейс DiscoveryProvider (Advertise(service, name, port, txt), Browse(service, handler), Stop) и DiscoveryHandler (Found(name, host, port, txt), Lost(name)), реализуемый в Go; TXT — проводной формат DNS-SD (RFC 6763). Поле Config.Discovery, nil — обнаружения нет → verify: существующие тесты node проходят без изменений.
+2. Каждый pile объявляется как _pileup._tcp со случайным именем и TXT pile=<hex первых 16 байт SHA-256(pile_id)>; узел ищет _pileup._tcp, свои объявления (по имени) игнорирует, найденные адреса с хешем своего pile добавляет в пиры; Join пробует адреса из приглашения, затем найденные по хешу → verify: тесты с фейковой шиной в памяти (вход по устаревшему адресу из QR, чужой pile, своё объявление, TXT без id и секрета).
+3. Экраны: поиск _googlecast._tcp и _airplay._tcp, GET /screens (id, name, kind, address, available, reason); AirPlay доступен только на платформе ios, иначе причина по architecture.md 2.2; openapi.yaml → verify: тесты httpapi для android и ios.
+4. core/mobile.Start принимает DiscoveryProvider → verify: тест mobile, экраны из нативного провайдера.
+5. Android: NSD-провайдер в Kotlin с MulticastLock (CHANGE_WIFI_MULTICAST_STATE через config plugin); чистая логика (TXT, очередь resolve, удержание lock) — JVM-тесты → verify: :core:testDebugUnitTest, make android-debug.
+6. iOS: NSLocalNetworkUsageDescription и NSBonjourServices в app.json (ios.infoPlist) → verify: expo prebuild в временную копию, ключи в Info.plist.
+7. gofmt, go vet, go test -race, make check без ANDROID_HOME.
 <!-- SECTION:PLAN:END -->
 
 ## Implementation Notes

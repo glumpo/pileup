@@ -65,20 +65,48 @@ func (n network) Addrs() (string, error) {
 	return string(b), err
 }
 
+type lan struct {
+	mu      sync.Mutex
+	adverts []string
+	stopped bool
+}
+
+func (l *lan) Advertise(service, name string, port int, txt []byte) error {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	l.adverts = append(l.adverts, service)
+	return nil
+}
+
+func (l *lan) Browse(service string, h mobile.DiscoveryHandler) error {
+	if service == "_googlecast._tcp" {
+		h.Found("Google-TV-4f1a9c", "192.168.1.30", 8009, append([]byte{byte(len("fn=Гостиная"))}, "fn=Гостиная"...))
+	}
+	return nil
+}
+
+func (l *lan) Stop() error {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	l.stopped = true
+	return nil
+}
+
 type device struct {
 	dir     string
 	keys    *keystore
 	media   library
 	network network
+	lan     *lan
 }
 
 func newDevice(t *testing.T) *device {
-	return &device{dir: t.TempDir(), keys: &keystore{}, media: library{items: "[]"}, network: network{"192.168.1.20"}}
+	return &device{dir: t.TempDir(), keys: &keystore{}, media: library{items: "[]"}, network: network{"192.168.1.20"}, lan: &lan{}}
 }
 
 func start(t *testing.T, d *device) {
 	t.Helper()
-	if err := mobile.Start(d.dir, "android", d.keys, d.media, d.media, d.network); err != nil {
+	if err := mobile.Start(d.dir, "android", d.keys, d.media, d.media, d.network, d.lan); err != nil {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { mobile.Stop() })
@@ -321,5 +349,32 @@ func TestSelectionAndRenditionsComeFromNativeProviders(t *testing.T) {
 	code, body = call(t, http.MethodGet, "/piles/"+p.ID+"/blob/"+sel.Assets[0].ID+"/"+hex.EncodeToString(rev[:])+"/1", mobile.Token(), nil)
 	if code != http.StatusOK || string(body) != "T1 of image:42" {
 		t.Fatalf("GET T1: status = %d, body %q, want the native rendition", code, body)
+	}
+}
+
+func TestDiscoveryGoesThroughNativeProvider(t *testing.T) {
+	d := newDevice(t)
+	start(t, d)
+	createPile(t, "Поездка")
+	code, body := call(t, http.MethodGet, "/screens", mobile.Token(), nil)
+	var screens []struct {
+		Name      string `json:"name"`
+		Kind      string `json:"kind"`
+		Address   string `json:"address"`
+		Available bool   `json:"available"`
+	}
+	if err := json.Unmarshal(body, &screens); code != http.StatusOK || err != nil {
+		t.Fatalf("GET /screens: status = %d, body %s", code, body)
+	}
+	if len(screens) != 1 || screens[0].Name != "Гостиная" || screens[0].Kind != "cast" || screens[0].Address != "192.168.1.30:8009" || !screens[0].Available {
+		t.Fatalf("screens = %s, want the Cast device found by the native provider", body)
+	}
+	if err := mobile.Stop(); err != nil {
+		t.Fatal(err)
+	}
+	d.lan.mu.Lock()
+	defer d.lan.mu.Unlock()
+	if !slices.Equal(d.lan.adverts, []string{"_pileup._tcp"}) || !d.lan.stopped {
+		t.Fatalf("advertised %v, stopped %v; want the pile advertised and discovery stopped", d.lan.adverts, d.lan.stopped)
 	}
 }

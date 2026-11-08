@@ -32,6 +32,23 @@ type NetworkInfo interface {
 	Addrs() (string, error)
 }
 
+type DiscoveryProvider interface {
+	Advertise(service, name string, port int, txt []byte) error
+	Browse(service string, handler DiscoveryHandler) error
+	Stop() error
+}
+
+type DiscoveryHandler interface {
+	Found(name, host string, port int, txt []byte)
+	Lost(name string)
+}
+
+type nativeDiscovery struct{ DiscoveryProvider }
+
+func (d nativeDiscovery) Browse(service string, handler node.DiscoveryHandler) error {
+	return d.DiscoveryProvider.Browse(service, handler)
+}
+
 var (
 	mu       sync.Mutex
 	core     *node.Node
@@ -41,7 +58,7 @@ var (
 	token    string
 )
 
-func Start(dir, platform string, keystore Keystore, media MediaProvider, renditions RenditionMaker, network NetworkInfo) error {
+func Start(dir, platform string, keystore Keystore, media MediaProvider, renditions RenditionMaker, network NetworkInfo, discovery DiscoveryProvider) error {
 	mu.Lock()
 	defer mu.Unlock()
 	if server != nil {
@@ -54,6 +71,7 @@ func Start(dir, platform string, keystore Keystore, media MediaProvider, renditi
 		Addrs:      addrs(network),
 		Media:      media,
 		Renditions: renditions,
+		Discovery:  nativeDiscovery{discovery},
 	})
 	if err != nil {
 		return err

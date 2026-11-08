@@ -319,6 +319,25 @@ paths:
           description: Range not satisfiable.
         "502":
           $ref: "#/components/responses/Error"
+  /screens:
+    get:
+      operationId: listScreens
+      summary: List screens found in the local network
+      description: >-
+        Google Cast (_googlecast._tcp) and AirPlay (_airplay._tcp) receivers
+        currently seen by mDNS, ordered by name. A screen this device cannot
+        show on is still listed, with the reason.
+      responses:
+        "200":
+          description: Screens in the local network.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Screen"
+        "401":
+          description: Missing or invalid token.
 components:
   parameters:
     PileID:
@@ -407,6 +426,37 @@ components:
           type: string
           contentEncoding: base64
           description: ThumbHash placeholder; empty if the owner has none.
+    Screen:
+      type: object
+      required:
+        - id
+        - name
+        - kind
+        - address
+        - available
+      properties:
+        id:
+          type: string
+          description: Opaque, unique among listed screens.
+        name:
+          type: string
+          description: Name shown to the user.
+        kind:
+          type: string
+          enum:
+            - cast
+            - airplay
+        address:
+          type: string
+          description: host:port of the receiver.
+        available:
+          type: boolean
+          description: Whether this device can show on the screen.
+        reason:
+          type: string
+          description: >-
+            Present when not available: why and what to do, in Russian, for
+            the UI to show as is. AirPlay is available only on an iPhone host.
     Selection:
       type: object
       required:

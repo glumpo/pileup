@@ -67,6 +67,7 @@ func WithNode(token string, n *node.Node) http.Handler {
 	media(mux, n)
 	blobs(mux, n)
 	timeline(mux, n)
+	screens(mux, n)
 	return authorized(token, mux)
 }
 
