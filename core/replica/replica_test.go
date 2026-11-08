@@ -285,3 +285,27 @@ func TestIdleConnectionWaitsForNewOps(t *testing.T) {
 	a.create(t, assets("x"))
 	waitFor(t, "new op", func() bool { return b.vv(t)[author(ka)] == 2 }, s)
 }
+
+func closedSoon(t *testing.T, what string, ch <-chan struct{}) {
+	t.Helper()
+	select {
+	case <-ch:
+	case <-time.After(10 * time.Second):
+		t.Fatalf("%s: change was not signalled", what)
+	}
+}
+
+func TestChangedSignalsLocalAndPulledOps(t *testing.T) {
+	ka, kb := key(1), key(2)
+	a, b := newNode(t, ka, "Аня"), newNode(t, kb, "Боря")
+	ch := a.Changed()
+	a.create(t, assets("x"))
+	closedSoon(t, "local op", ch)
+
+	live := []*session{b.pull(t, a.serve(t, nil)), a.pull(t, b.serve(t, nil))}
+	waitFor(t, "initial sync", converged(t, vv.VV{author(ka): 2, author(kb): 1}, a, b), live...)
+	ch = b.Changed()
+	a.create(t, assets("y"))
+	closedSoon(t, "pulled op", ch)
+	waitFor(t, "pulled op applied", converged(t, vv.VV{author(ka): 3, author(kb): 1}, a, b), live...)
+}

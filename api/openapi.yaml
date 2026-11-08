@@ -225,6 +225,77 @@ paths:
           $ref: "#/components/responses/Error"
         "501":
           $ref: "#/components/responses/Error"
+  /piles/{id}/blob/{asset}/{revision}/{tier}:
+    get:
+      operationId: getBlob
+      summary: Get a thumbnail (T1) or display version (T2) of a pile asset
+      description: >-
+        Served from this device's blob store; a missing blob is generated
+        (own asset) or fetched from the asset owner on demand. T1 of all pile
+        assets is fetched in the background. Supports Range, If-None-Match.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            pattern: "^[0-9a-f]+$"
+        - name: asset
+          in: path
+          required: true
+          description: asset_id, hex.
+          schema:
+            type: string
+            pattern: "^[0-9a-f]+$"
+        - name: revision
+          in: path
+          required: true
+          description: Current revision of the asset, hex.
+          schema:
+            type: string
+            pattern: "^[0-9a-f]+$"
+        - name: tier
+          in: path
+          required: true
+          schema:
+            type: integer
+            enum:
+              - 1
+              - 2
+        - name: Range
+          in: header
+          required: false
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Blob content.
+          headers:
+            ETag:
+              description: Quoted SHA-256 of the content, hex.
+              schema:
+                type: string
+            Cache-Control:
+              schema:
+                type: string
+                const: max-age=31536000, immutable
+          content:
+            image/*:
+              schema:
+                type: string
+                format: binary
+        "206":
+          description: Requested range of the blob.
+        "304":
+          description: Not modified (If-None-Match matched the ETag).
+        "401":
+          description: Missing or invalid token.
+        "404":
+          $ref: "#/components/responses/Error"
+        "416":
+          description: Range not satisfiable.
+        "502":
+          $ref: "#/components/responses/Error"
 components:
   parameters:
     PileID:
@@ -337,4 +408,5 @@ components:
                   - offline
                   - unknown_asset
                   - no_media
+                  - source_unavailable
                   - internal

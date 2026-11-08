@@ -22,7 +22,7 @@ import (
 
 var (
 	ErrNoMedia      = errors.New("node: no media library on this device")
-	ErrUnknownAsset = errors.New("node: asset is not in the selected range")
+	ErrUnknownAsset = errors.New("node: unknown asset")
 )
 
 type MediaProvider interface {

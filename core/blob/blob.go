@@ -26,6 +26,9 @@ func Open(dir string) (*Store, error) {
 	if err := os.MkdirAll(tmp, 0o700); err != nil {
 		return nil, err
 	}
+	if err := os.MkdirAll(filepath.Join(dir, "refs"), 0o700); err != nil {
+		return nil, err
+	}
 	return &Store{dir: dir}, nil
 }
 

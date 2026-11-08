@@ -133,6 +133,12 @@ func TestStoreBehavesLikeReferenceState(t *testing.T) {
 			if got, want := view(t, s), ref.View(); !reflect.DeepEqual(got, want) {
 				t.Fatalf("view differs from reference:\n got %+v\nwant %+v", got, want)
 			}
+			for _, id := range []string{"a", "b", "c", "d", "never added"} {
+				want, wantOK := ref.View().Assets[id]
+				if got, ok, err := s.Asset([]byte(id)); err != nil || ok != wantOK || !reflect.DeepEqual(got, want) {
+					t.Fatalf("Asset(%q) = %+v, %v, %v; want %+v, %v", id, got, ok, err, want, wantOK)
+				}
+			}
 			if got, err := s.VV(); err != nil || !reflect.DeepEqual(got, ref.View().VV) {
 				t.Fatalf("VV %v, %v; want %v", got, err, ref.View().VV)
 			}

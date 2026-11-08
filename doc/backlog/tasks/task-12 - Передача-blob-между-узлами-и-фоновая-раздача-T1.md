@@ -5,7 +5,7 @@ status: In Progress
 assignee:
   - '@claude'
 created_date: '2026-11-08T06:49:00Z'
-updated_date: '2026-11-08T12:39:00Z'
+updated_date: '2026-11-08T12:57:00Z'
 labels:
   - core
   - network
@@ -34,8 +34,27 @@ ordinal: 12000
 - [ ] #4 Источник никогда не отправляет данные по своей инициативе
 <!-- AC:END -->
 
+## Implementation Plan
+
+<!-- SECTION:PLAN:BEGIN -->
+1. Пакет blob: ссылки имя → хеш (refs) — состояние кеша, отображение (владелец, asset, revision, tier) → blob, вне CRDT. Тест: ссылка переживает переоткрытие, перезапись.
+2. Пакет store: Asset(id) — один файл из проекции без чтения всего View. Тест: совпадает с View, включая удалённые и чужие.
+3. core/node/blobs.go: интерфейс RenditionMaker (gomobile-типы: Rendition(localID, tier) []byte, OriginalSize, ReadOriginal(offset, length)), Config.Renditions и Config.LocalID; отдача GET /blob/{asset}/{revision}/{tier} участникам pile по peer: только свои файлы, T1/T2 лениво генерируются и кладутся в blob-хранилище, T3 стримится с Range без сохранения; Cache-Control immutable, ETag. Неизвестное → 404.
+4. Потребитель: фоновый цикл на pile — T1 всех чужих файлов pile у владельца (до 5 параллельно, повтор при ошибке, по сигналу изменений реплики), в локальное blob-хранилище. Источник ничего не шлёт сам.
+5. Node.Blob и GET /piles/{id}/blob/{asset}/{revision}/{tier} (T1/T2) для UI: из локального хранилища или загрузка у владельца; openapi.yaml.
+6. Тесты по критериям: заголовки и ETag = хеш, Range (частичные и полное чтение оригинала), многоузловой тест фоновой загрузки T1, тест «источник не шлёт без запроса». gofmt, go vet, go test -race, make check.
+<!-- SECTION:PLAN:END -->
+
 ## Implementation Notes
 
 <!-- SECTION:NOTES:BEGIN -->
 Начата Go-часть: реестр превью, отдача blob по /blob/{asset}/{rev}/{tier} с Range поверх peer, фоновая загрузка T1 потребителем. Нативная генерация превью (TASK-11) — через интерфейс.
+
+Go-часть сделана (ветка task-12).
+Интерфейс node.RenditionMaker (gomobile-типы): Rendition(localID, tier) ([]byte, error) для T1/T2; OriginalSize(localID) и ReadOriginal(localID, offset, length) для T3. Config.Renditions и Config.LocalID(assetID) → (localID, ok): отображение asset_id → platform local id ведёт медиатека (TASK-9), здесь только шов. Константы node.T1/T2/T3.
+Кеш: blob-хранилище одно на узел (<Dir>/blobs), отображение (владелец, asset_id, revision, tier) → хеш — файлы-ссылки blob.Store.SetRef/Ref (<Dir>/blobs/refs/sha256(имени)), вне CRDT и SQLite.
+Peer: GET /blob/{asset_hex}/{revision_hex}/{1|2|3} на listener pile. Отдаются только свои текущие файлы (владелец по проекции = я, revision совпадает, LocalID знает файл), иначе 404. T1/T2 создаются при первом запросе и сохраняются; T3 стримится через ReadOriginal кусками по 1 МиБ, не сохраняется. Cache-Control: max-age=31536000, immutable; ETag T1/T2 = SHA-256 содержимого, T3 = revision (хешировать оригинал на каждый запрос нельзя). Range, multipart, If-None-Match, If-Range — http.ServeContent.
+Потребитель: цикл на pile — T1 всех чужих файлов из проекции, до 5 загрузок параллельно, по сигналу replica.Changed и повтор через 1 с при ошибке; сетевая ошибка владельца пропускает его остальные файлы до следующего прохода. Владельца ищем перебором известных адресов пиров с проверкой его ключа в peer-рукопожатии.
+UI: GET /piles/{id}/blob/{asset}/{revision}/{1|2} — из локального хранилища, иначе генерация (свой файл) или загрузка у владельца с сохранением; ошибки unknown_asset (404), source_unavailable (502). store.Asset(id) — один файл из проекции.
+Риски: без discovery (TASK-7) участники, вошедшие по одному приглашению, не знают адресов друг друга и не получат T1 друг друга (только через пригласившего — он отдаёт лишь свои); T2, загруженные для UI, не вытесняются, пока не встроен prefetch; файл с постоянной ошибкой у владельца повторяется раз в секунду.
 <!-- SECTION:NOTES:END -->

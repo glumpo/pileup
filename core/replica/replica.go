@@ -51,6 +51,10 @@ func (n *Node) watch() <-chan struct{} {
 	return n.changed
 }
 
+func (n *Node) Changed() <-chan struct{} {
+	return n.watch()
+}
+
 func (n *Node) notify() {
 	n.mu.Lock()
 	defer n.mu.Unlock()
