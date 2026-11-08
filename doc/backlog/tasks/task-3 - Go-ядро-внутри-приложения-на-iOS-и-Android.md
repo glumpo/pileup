@@ -5,7 +5,7 @@ status: In Progress
 assignee:
   - '@claude'
 created_date: '2026-11-08T06:49:00Z'
-updated_date: '2026-11-08T12:20:00Z'
+updated_date: '2026-11-08T12:22:00Z'
 labels:
   - core
   - app
@@ -80,4 +80,7 @@ Android-часть (iOS отложена: нет Mac).
 - `gomobile bind` (4 ABI): 75 с с пустым GOCACHE, 12 с повторно. Полный `make android-debug` первый раз (npm ci + prebuild + сборка): 14 мин 49 с. Самая первая сборка с загрузкой зависимостей Gradle: ~23 мин.
 
 Не проверено (нет устройства/эмулятора): AC2 (ответ ядра на устройстве, отказ без токена), AC3 на устройстве (остановка при выходе и повторный старт). iOS — ждёт Mac.
+
+Проверка владельцем: go test, make check (без ANDROID_HOME), tsc проходят; debug APK собран. Решение A13 записано.
+Осталось: проверка на реальном Android-устройстве (AC #1–#3), вся iOS-часть (Swift-модуль, gomobile bind -target=ios, podspec vendored_frameworks, Makefile-цель) и замеры iOS (AC #4). Swap /swapfile-gradle 3 ГБ добавлен в /etc/fstab.
 <!-- SECTION:NOTES:END -->
