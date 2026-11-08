@@ -24,6 +24,7 @@ class PileupCoreModule : Module() {
         MediaStoreProvider(context.contentResolver),
         Renditions(context),
         NetworkAddresses(context.getSystemService(ConnectivityManager::class.java)),
+        NsdDiscovery(context),
       )
     }
 
