@@ -5,7 +5,7 @@ status: In Progress
 assignee:
   - '@claude'
 created_date: '2026-11-08T06:49:00Z'
-updated_date: '2026-11-08T21:34:00Z'
+updated_date: '2026-11-08T21:52:00Z'
 labels:
   - core
   - network
@@ -69,4 +69,14 @@ Go-часть соединения: пакет core/peer (Dial, NewListener, Con
 Go-часть влита в master (adf193d), решение A11 записано. Остаются AC #1, #2, #5: нативное обнаружение (NWBrowser/NSD), адрес из QR, Info.plist и MulticastLock.
 
 Начата оставшаяся часть: интерфейс DiscoveryProvider в ядре, объявление и поиск _pileup._tcp, список экранов (_googlecast._tcp, _airplay._tcp), Android NSD с MulticastLock, ключи Info.plist через конфиг.
+
+Обнаружение сделано в ядре и на Android (коммиты 94fdc08, f004a93, 6f0c663).
+Ядро: node.DiscoveryProvider {Advertise(service, name, port, txt), Browse(service, handler), Stop}, обработчик реализует Go: DiscoveryHandler {Found(name, host, port, txt), Lost(name)}; TXT — проводной формат DNS-SD (RFC 6763) байтами. Config.Discovery = nil — обнаружения нет, всё работает по адресам из QR (существующие тесты без изменений). mobile.Start получил последний параметр discovery.
+Поведение: каждый pile объявляется как _pileup._tcp на своём порту, TXT ровно pile=<hex первых 16 байт SHA-256(pile_id)>; имя экземпляра pileup-<hex первых 8 байт SHA-256(pubkey ‖ pile_id)> — стабильно и по нему узел узнаёт свои объявления, в том числе оставшиеся в кеше сети после перезапуска. Найденный узел с хешем моего pile добавляется в пиры (как после /announce, аутентификация — core/peer); вход по QR сначала пробует найденные по хешу адреса, затем адреса из приглашения. При Close провайдер останавливается.
+Экраны: поиск _googlecast._tcp и _airplay._tcp, GET /screens (id, name, kind cast|airplay, address, available, reason). Имя Cast — из TXT fn, иначе имя экземпляра; AirPlay — имя экземпляра. AirPlay доступен только при platform=ios, иначе reason «Показ на Apple TV доступен только с iPhone. Запустите показ с iPhone участника.». Lost убирает экран. openapi.yaml обновлён.
+Тесты Go с фейковой шиной в памяти: вход при устаревшем адресе в QR, переподключение после смены портов у обоих, чужой pile и своё объявление не становятся пирами, своё объявление из кеша после перезапуска игнорируется, TXT только с хешем и снят после Close; httpapi — Cast доступен, Apple TV на android недоступен с пояснением, на ios доступен, ушедший экран пропадает; mobile — провайдер подключён. Мутационная проверка: каждое условие ловится тестом.
+Android: NsdDiscovery (NsdManager): resolve строго по одному (до API 34 параллельный resolve запрещён), имя берётся из onServiceFound, а не из resolve; MulticastLock без счётчика ссылок захватывается при первом объявлении или поиске и отпускается в stop; разрешение CHANGE_WIFI_MULTICAST_STATE в config plugin. Чистая логика (TXT, Session, SerialQueue) — JVM-тесты DiscoveryTest.
+iOS: NSLocalNetworkUsageDescription и NSBonjourServices (_pileup._tcp, _googlecast._tcp, _airplay._tcp) задаёт config plugin; проверено expo prebuild --platform ios во временную копию. Swift-провайдера нет: iOS-модуль пока заглушка (TASK-3), поэтому AC #1 для iPhone и проверка на устройствах остаются.
+Решения на ревью: порт только в SRV-записи, в TXT не дублируется (отступление от формулировки 7.1); хеш — 16 байт SHA-256 без доменного разделителя; найденные адреса копятся в piles.json так же, как от /announce, без удаления устаревших; ошибки провайдера игнорируются (обнаружение — необязательный путь).
+Риски: _airplay._tcp объявляют и HomePod/Mac/ТВ с AirPlay 2 — фильтр по TXT features/model не сделан; resolveService и NsdServiceInfo.host устарели в API 34 (работают); в будущих Android может понадобиться разрешение на локальную сеть; на реальных устройствах не проверено.
 <!-- SECTION:NOTES:END -->

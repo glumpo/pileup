@@ -4,6 +4,7 @@ title: Показ на Apple TV через AirPlay с iPhone-хоста
 status: To Do
 assignee: []
 created_date: '2026-11-08T06:49:00Z'
+updated_date: '2026-11-08T21:52:00Z'
 labels:
   - app
   - ios
@@ -33,3 +34,9 @@ ordinal: 18000
 - [ ] #4 Во время показа включён keep-awake и подсказка не блокировать телефон
 - [ ] #5 На Android-хосте Apple TV виден в списке экранов (_airplay._tcp) с текстом, что показ на Apple TV доступен только с iPhone
 <!-- AC:END -->
+
+## Implementation Notes
+
+<!-- SECTION:NOTES:BEGIN -->
+Android-сторона AC #5 в ядре (TASK-7): узел ищет _airplay._tcp, GET /screens отдаёт Apple TV на не-iOS хосте с available=false и reason «Показ на Apple TV доступен только с iPhone. Запустите показ с iPhone участника.» (имя экрана — отдельным полем name, как в architecture.md 2.2); на ios — available=true. Показ этого списка в UI — TASK-14. Риск: _airplay._tcp объявляют и HomePod/Mac, фильтра пока нет.
+<!-- SECTION:NOTES:END -->
