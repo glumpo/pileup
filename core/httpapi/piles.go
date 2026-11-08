@@ -64,6 +64,7 @@ func WithNode(token string, n *node.Node) http.Handler {
 		}
 		reply(w, http.StatusCreated, toJSON(p))
 	})
+	blobs(mux, n)
 	return authorized(token, mux)
 }
 
