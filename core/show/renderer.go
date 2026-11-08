@@ -63,10 +63,24 @@ func (s *session) serve(w http.ResponseWriter, r *http.Request) {
 	case ok && tier == "2":
 		s.display(w, r, a)
 	case ok && tier == "3" && a.Meta.Kind == op.KindVideo:
-		s.n.ServeOriginal(w, r, s.pile, a.Meta.AssetID, a.Meta.Revision)
+		sw := &statusWriter{ResponseWriter: w, status: http.StatusOK}
+		s.n.ServeOriginal(sw, r, s.pile, a.Meta.AssetID, a.Meta.Revision)
+		if sw.status == http.StatusBadGateway && a.Owner != s.self {
+			s.unavailable(a)
+		}
 	default:
 		http.NotFound(w, r)
 	}
+}
+
+type statusWriter struct {
+	http.ResponseWriter
+	status int
+}
+
+func (w *statusWriter) WriteHeader(code int) {
+	w.status = code
+	w.ResponseWriter.WriteHeader(code)
 }
 
 func (s *session) display(w http.ResponseWriter, r *http.Request, a state.Asset) {
@@ -91,7 +105,7 @@ func (s *session) display(w http.ResponseWriter, r *http.Request, a state.Asset)
 
 func (s *session) media(a state.Asset) (string, string) {
 	u := fmt.Sprintf("%s/%x/%x/", s.base, a.Meta.AssetID, a.Meta.Revision)
-	if a.Meta.Kind == op.KindVideo {
+	if a.Meta.Kind == op.KindVideo && !s.videoDown {
 		return u + "3", a.Meta.MIME
 	}
 	return u + "2", "image/jpeg"
@@ -103,15 +117,15 @@ func (s *session) drive() {
 	for {
 		s.mu.Lock()
 		cur := s.items[s.cursor]
+		url, contentType := s.media(cur)
 		command := ""
-		if key(cur) == loaded {
+		if url == loaded {
 			command, s.command = s.command, ""
 		}
 		s.mu.Unlock()
 		switch {
-		case key(cur) != loaded:
-			loaded = key(cur)
-			url, contentType := s.media(cur)
+		case url != loaded:
+			loaded = url
 			s.request("load_failed", fmt.Sprintf("load %x", cur.Meta.AssetID), func(ctx context.Context) (cast.Media, error) {
 				return s.cast.Load(ctx, url, contentType)
 			})

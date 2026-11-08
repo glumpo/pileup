@@ -124,7 +124,7 @@ func Stop() error {
 	if errors.Is(err, net.ErrClosed) {
 		err = nil
 	}
-	shows.Stop()
+	shows.Close()
 	err = errors.Join(err, core.Close())
 	core, shows, listener, server, port, token = nil, nil, nil, nil, 0, ""
 	return err

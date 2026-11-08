@@ -27,10 +27,13 @@ type library struct {
 	items     []node.MediaItem
 	originals map[string][]byte
 	displays  map[string]int
+	reads     map[string]int
+	broken    map[string]bool
+	gate      chan struct{}
 }
 
 func newLibrary() *library {
-	return &library{originals: map[string][]byte{}, displays: map[string]int{}}
+	return &library{originals: map[string][]byte{}, displays: map[string]int{}, reads: map[string]int{}, broken: map[string]bool{}}
 }
 
 func (l *library) add(local, kind, mime string, minute int, original []byte) {
@@ -65,8 +68,14 @@ func display(local string) string { return "T2 of " + local }
 
 func (l *library) Rendition(local string, tier int) ([]byte, error) {
 	l.mu.Lock()
+	gate := l.gate
+	l.mu.Unlock()
+	if gate != nil && tier == node.T2 {
+		<-gate
+	}
+	l.mu.Lock()
 	defer l.mu.Unlock()
-	if _, ok := l.originals[local]; !ok {
+	if _, ok := l.originals[local]; !ok || tier == node.T2 && l.broken[local] {
 		return nil, errors.New("no such file")
 	}
 	if tier == node.T2 {
@@ -85,8 +94,15 @@ func (l *library) OriginalSize(local string) (int64, error) {
 func (l *library) ReadOriginal(local string, offset, length int64) ([]byte, error) {
 	l.mu.Lock()
 	defer l.mu.Unlock()
+	l.reads[local]++
 	b := l.originals[local]
 	return b[offset:min(offset+length, int64(len(b)))], nil
+}
+
+func (l *library) read(local string) int {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	return l.reads[local]
 }
 
 func (l *library) displayed(local string) int {
@@ -142,7 +158,7 @@ func openPhone(t *testing.T, dir, platform string, lib *library, budget int64) *
 	}
 	h := show.New(n, budget)
 	t.Cleanup(func() {
-		h.Stop()
+		h.Close()
 		n.Close()
 	})
 	return &phone{Node: n, t: t, dir: dir, lib: lib, lan: l, show: h}

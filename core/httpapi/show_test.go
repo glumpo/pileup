@@ -52,7 +52,7 @@ func hostIn(t *testing.T, platform string) (client, *room, pile, []item) {
 	}
 	h := show.New(n, show.DefaultBudget)
 	t.Cleanup(func() {
-		h.Stop()
+		h.Close()
 		n.Close()
 	})
 	srv := httptest.NewServer(httpapi.WithNode("secret", n, h))

@@ -36,7 +36,7 @@ const (
 
 var (
 	ErrUnavailable = errors.New("node: asset owner is unavailable")
-	errStatus      = errors.New("node: owner refused")
+	ErrRefused     = errors.New("node: owner refused")
 	errNoOwner     = errors.New("node: owner is not among known peers")
 )
 
@@ -205,7 +205,7 @@ func (n *Node) fetch(ctx context.Context, p *pile, owner op.Author, assetID, rev
 	case http.StatusNotFound:
 		return blob.Hash{}, ErrUnknownAsset
 	}
-	return blob.Hash{}, fmt.Errorf("%w: %w: %s", ErrUnavailable, errStatus, resp.Status)
+	return blob.Hash{}, fmt.Errorf("%w: %w: %s", ErrUnavailable, ErrRefused, resp.Status)
 }
 
 func (n *Node) owners(p *pile) *http.Client {
@@ -426,7 +426,7 @@ func (n *Node) fetchThumbnails(p *pile) bool {
 				if err != nil {
 					done = false
 				}
-				if errors.Is(err, ErrUnavailable) && !errors.Is(err, errStatus) {
+				if errors.Is(err, ErrUnavailable) && !errors.Is(err, ErrRefused) {
 					offline[a.Owner] = true
 				}
 				mu.Unlock()

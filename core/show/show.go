@@ -8,6 +8,7 @@ import (
 	"slices"
 	"sync"
 
+	"github.com/glumpo/pileup/core/crdt/op"
 	"github.com/glumpo/pileup/core/crdt/state"
 	"github.com/glumpo/pileup/core/node"
 	"github.com/glumpo/pileup/core/prefetch"
@@ -21,6 +22,7 @@ var (
 	ErrEmpty         = errors.New("show: pile has no files")
 	ErrNotVideo      = errors.New("show: current file is not a video")
 	ErrUnreachable   = errors.New("show: screen is unreachable")
+	ErrUnknownMember = errors.New("show: unknown member")
 )
 
 type UnavailableError struct{ Reason string }
@@ -33,25 +35,132 @@ type RendererError struct {
 }
 
 type State struct {
-	Pile    []byte
-	Screen  node.Screen
-	Index   int
-	Total   int
-	Current state.Asset
-	Playing bool
-	Error   *RendererError
-	Waiting []state.Asset
+	Pile             []byte
+	Screen           node.Screen
+	Index            int
+	Total            int
+	Current          state.Asset
+	Playing          bool
+	VideoUnavailable bool
+	Error            *RendererError
+	Waiting          []state.Asset
+	Hints            []Hint
 }
 
 type Host struct {
-	n      *node.Node
-	budget int64
-	mu     sync.Mutex
-	cur    *session
+	n       *node.Node
+	budget  int64
+	ctx     context.Context
+	cancel  context.CancelFunc
+	wg      sync.WaitGroup
+	mu      sync.Mutex
+	cur     *session
+	loaders map[string]*loader
 }
 
 func New(n *node.Node, budget int64) *Host {
-	return &Host{n: n, budget: budget}
+	ctx, cancel := context.WithCancel(context.Background())
+	return &Host{n: n, budget: budget, ctx: ctx, cancel: cancel, loaders: map[string]*loader{}}
+}
+
+func (h *Host) loader(pileID []byte) (*loader, error) {
+	if l, ok := h.loaders[string(pileID)]; ok {
+		return l, nil
+	}
+	pins, err := h.n.Pins(pileID)
+	if err != nil {
+		return nil, err
+	}
+	l := &loader{
+		n:       h.n,
+		pile:    pileID,
+		self:    h.n.Author(),
+		budget:  h.budget,
+		ctx:     h.ctx,
+		wg:      &h.wg,
+		checked: map[string]bool{},
+		pins:    map[string]bool{},
+		cache:   prefetch.New(h.budget),
+	}
+	for _, a := range pins {
+		l.pins[a] = true
+	}
+	h.loaders[string(pileID)] = l
+	h.wg.Add(1)
+	go l.tick()
+	return l, nil
+}
+
+func (h *Host) pile(pileID, member []byte) (*loader, error) {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	p, items, err := h.n.Timeline(pileID)
+	if err != nil {
+		return nil, err
+	}
+	if member != nil && !isMember(p, member) {
+		return nil, ErrUnknownMember
+	}
+	l, err := h.loader(pileID)
+	if err != nil {
+		return nil, err
+	}
+	l.setItems(p, items)
+	return l, nil
+}
+
+func isMember(p node.Pile, member []byte) bool {
+	var a op.Author
+	if len(member) != len(a) {
+		return false
+	}
+	copy(a[:], member)
+	_, ok := p.Members[a]
+	return ok
+}
+
+func (h *Host) Pin(pileID, member []byte) ([]Progress, error) {
+	l, err := h.pile(pileID, member)
+	if err != nil {
+		return nil, err
+	}
+	return l.setPins(member, true)
+}
+
+func (h *Host) Unpin(pileID, member []byte) ([]Progress, error) {
+	l, err := h.pile(pileID, member)
+	if err != nil {
+		return nil, err
+	}
+	return l.setPins(member, false)
+}
+
+func (h *Host) Pins(pileID []byte) ([]Progress, error) {
+	l, err := h.pile(pileID, nil)
+	if err != nil {
+		return nil, err
+	}
+	return l.pinProgress(), nil
+}
+
+func (h *Host) Estimate(pileID, member []byte) (Estimate, error) {
+	l, err := h.pile(pileID, member)
+	if err != nil {
+		return Estimate{}, err
+	}
+	return l.estimate(member), nil
+}
+
+func (h *Host) Close() {
+	h.mu.Lock()
+	h.stop()
+	h.cancel()
+	for _, l := range h.loaders {
+		l.mu.Lock()
+		l.mu.Unlock()
+	}
+	h.mu.Unlock()
+	h.wg.Wait()
 }
 
 func (h *Host) Start(pileID []byte, screenID string, assetID []byte) (State, error) {
@@ -62,7 +171,7 @@ func (h *Host) Start(pileID []byte, screenID string, assetID []byte) (State, err
 	if err != nil {
 		return State{}, err
 	}
-	_, items, err := h.n.Timeline(pileID)
+	p, items, err := h.n.Timeline(pileID)
 	if err != nil {
 		return State{}, err
 	}
@@ -76,18 +185,21 @@ func (h *Host) Start(pileID []byte, screenID string, assetID []byte) (State, err
 			return State{}, node.ErrUnknownAsset
 		}
 	}
-	ctx, cancel := context.WithCancel(context.Background())
+	l, err := h.loader(pileID)
+	if err != nil {
+		return State{}, err
+	}
+	ctx, cancel := context.WithCancel(h.ctx)
 	s := &session{
-		n:       h.n,
-		pile:    pileID,
-		self:    h.n.Author(),
-		screen:  screen,
-		token:   rand.Text(),
-		ctx:     ctx,
-		cancel:  cancel,
-		wake:    make(chan struct{}, 1),
-		checked: map[string]bool{},
-		cache:   prefetch.New(h.budget),
+		n:      h.n,
+		pile:   pileID,
+		self:   h.n.Author(),
+		screen: screen,
+		token:  rand.Text(),
+		ctx:    ctx,
+		cancel: cancel,
+		wake:   make(chan struct{}, 1),
+		l:      l,
 	}
 	if screen.Kind == "cast" {
 		if err := s.connect(); err != nil {
@@ -95,7 +207,7 @@ func (h *Host) Start(pileID []byte, screenID string, assetID []byte) (State, err
 			return State{}, err
 		}
 	}
-	s.begin(items, cursor)
+	s.begin(p, items, cursor)
 	h.cur = s
 	return s.state(), nil
 }
