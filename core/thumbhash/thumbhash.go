@@ -2,7 +2,7 @@ package thumbhash
 
 import (
 	"image"
-	"image/color"
+	"image/draw"
 	"math"
 )
 
@@ -57,7 +57,7 @@ func channel(c []float64, w, h, nx, ny int) (dc float64, ac []float64, scale flo
 			for y := range h {
 				fy := math.Cos(math.Pi / float64(h) * float64(cy) * (float64(y) + 0.5))
 				for x := range w {
-					f += float64(c[x+y*w] * fx[x] * fy)
+					f += c[x+y*w] * fx[x] * fy
 				}
 			}
 			f /= float64(w * h)
@@ -71,7 +71,7 @@ func channel(c []float64, w, h, nx, ny int) (dc float64, ac []float64, scale flo
 	}
 	if scale > 0 {
 		for i := range ac {
-			ac[i] = 0.5 + float64(0.5/scale*ac[i])
+			ac[i] = 0.5 + 0.5/scale*ac[i]
 		}
 	}
 	return dc, ac, scale
@@ -84,14 +84,16 @@ func pixels(img image.Image) (int, int, []float64) {
 	if m := max(w, h); m > maxSide {
 		tw, th = max(1, w*maxSide/m), max(1, h*maxSide/m)
 	}
+	src := image.NewRGBA(image.Rect(0, 0, w, h))
+	draw.Draw(src, src.Bounds(), img, b.Min, draw.Src)
 	rgb := make([]float64, 0, 3*tw*th)
 	for ty := range th {
 		for tx := range tw {
 			var r, g, bl, k float64
 			for y := ty * h / th; y < (ty+1)*h/th; y++ {
 				for x := tx * w / tw; x < (tx+1)*w/tw; x++ {
-					c := color.RGBAModel.Convert(img.At(b.Min.X+x, b.Min.Y+y)).(color.RGBA)
-					r, g, bl, k = r+float64(c.R), g+float64(c.G), bl+float64(c.B), k+1
+					c := src.Pix[y*src.Stride+4*x:]
+					r, g, bl, k = r+float64(c[0]), g+float64(c[1]), bl+float64(c[2]), k+1
 				}
 			}
 			rgb = append(rgb, r/k, g/k, bl/k)
