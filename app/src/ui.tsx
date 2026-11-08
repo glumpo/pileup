@@ -1,0 +1,81 @@
+import { ReactNode } from 'react';
+import { Pressable, StyleSheet, Text, TextInput, TextInputProps, View } from 'react-native';
+
+import { ApiError } from './api';
+
+const messages: Record<string, string> = {
+  bad_invite: 'Это не приглашение Pileup',
+  unknown_invite_version: 'Приглашение из более новой версии приложения',
+  already_joined: 'Вы уже участник этого pile',
+  inviter_unreachable: 'Не удалось связаться с пригласившим: телефоны должны быть в одной сети',
+  offline: 'Нет сети: подключитесь к Wi-Fi, чтобы пригласить',
+  no_media: 'Медиатека недоступна',
+};
+
+export function describe(error: unknown): string {
+  if (error instanceof ApiError) return messages[error.code] ?? `Ошибка ядра: ${error.code}`;
+  return String(error);
+}
+
+export function Screen({ title, onBack, children }: { title: string; onBack?: () => void; children: ReactNode }) {
+  return (
+    <View style={styles.screen}>
+      <View style={styles.header}>
+        {onBack && (
+          <Pressable accessibilityRole="button" onPress={onBack} hitSlop={12}>
+            <Text style={styles.back}>‹ Назад</Text>
+          </Pressable>
+        )}
+        <Text style={styles.title} numberOfLines={1}>
+          {title}
+        </Text>
+      </View>
+      {children}
+    </View>
+  );
+}
+
+export function Button({ title, onPress, disabled }: { title: string; onPress: () => void; disabled?: boolean }) {
+  return (
+    <Pressable
+      accessibilityRole="button"
+      accessibilityState={{ disabled }}
+      disabled={disabled}
+      onPress={onPress}
+      style={[styles.button, disabled && styles.disabled]}
+    >
+      <Text style={styles.buttonText}>{title}</Text>
+    </Pressable>
+  );
+}
+
+export function Field(props: TextInputProps & { label: string }) {
+  return (
+    <TextInput
+      accessibilityLabel={props.label}
+      placeholder={props.label}
+      autoCorrect={false}
+      style={styles.field}
+      {...props}
+    />
+  );
+}
+
+export function ErrorText({ error }: { error?: string }) {
+  return error ? <Text style={styles.error}>{error}</Text> : null;
+}
+
+export const styles = StyleSheet.create({
+  screen: { flex: 1, backgroundColor: '#fff', paddingTop: 48 },
+  header: { flexDirection: 'row', alignItems: 'center', gap: 16, paddingHorizontal: 16, paddingBottom: 12 },
+  back: { fontSize: 17, color: '#0a64d8' },
+  title: { flex: 1, fontSize: 20, fontWeight: '600' },
+  body: { padding: 16, gap: 12 },
+  button: { backgroundColor: '#0a64d8', borderRadius: 8, padding: 12, alignItems: 'center' },
+  disabled: { opacity: 0.4 },
+  buttonText: { color: '#fff', fontSize: 16 },
+  field: { borderWidth: 1, borderColor: '#ccc', borderRadius: 8, padding: 10, fontSize: 16 },
+  error: { color: '#c62828' },
+  muted: { color: '#777' },
+  row: { flexDirection: 'row', alignItems: 'center', paddingVertical: 12, paddingHorizontal: 16, gap: 12 },
+});

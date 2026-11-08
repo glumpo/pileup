@@ -1,0 +1,32 @@
+package node
+
+import (
+	"bytes"
+	"cmp"
+	"slices"
+
+	"github.com/glumpo/pileup/core/crdt/state"
+)
+
+func (n *Node) Timeline(id []byte) (Pile, []state.Asset, error) {
+	p, err := n.find(id)
+	if err != nil {
+		return Pile{}, nil, err
+	}
+	v, err := p.store.View()
+	if err != nil {
+		return Pile{}, nil, err
+	}
+	out := make([]state.Asset, 0, len(v.Assets))
+	for _, a := range v.Assets {
+		out = append(out, a)
+	}
+	slices.SortFunc(out, func(x, y state.Asset) int {
+		return cmp.Or(
+			cmp.Compare(x.Meta.TakenAt, y.Meta.TakenAt),
+			bytes.Compare(x.Owner[:], y.Owner[:]),
+			bytes.Compare(x.Meta.AssetID, y.Meta.AssetID),
+		)
+	})
+	return Pile{ID: p.ID, Name: v.PileName, Members: v.Members}, out, nil
+}

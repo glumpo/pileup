@@ -23,7 +23,15 @@
       "favicon": "./assets/favicon.png"
     },
     "plugins": [
-      "./modules/core/app.plugin.js"
+      "./modules/core/app.plugin.js",
+      [
+        "expo-camera",
+        {
+          "cameraPermission": "Камера нужна, чтобы отсканировать QR-код приглашения в pile.",
+          "microphonePermission": false,
+          "recordAudioAndroid": false
+        }
+      ]
     ]
   }
 }
