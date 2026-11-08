@@ -18,6 +18,7 @@ import (
 	"github.com/glumpo/pileup/core/blob"
 	"github.com/glumpo/pileup/core/crdt/op"
 	"github.com/glumpo/pileup/core/crdt/state"
+	"github.com/glumpo/pileup/core/diag"
 	"github.com/glumpo/pileup/core/peer"
 )
 
@@ -98,8 +99,10 @@ func (n *Node) blob(ctx context.Context, p *pile, assetID, revision []byte, tier
 			return h, err
 		}
 		h, err = n.render(p, assetID, tier)
+		n.report(diag.Media, p.ID, "", fmt.Sprintf("render %x T%d", assetID, tier), err)
 	} else {
 		h, err = n.fetch(ctx, p, a.Owner, assetID, revision, tier)
+		n.report(diag.Media, p.ID, hex.EncodeToString(a.Owner[:]), fmt.Sprintf("fetch %x T%d", assetID, tier), err)
 	}
 	if err == nil {
 		err = n.blobs.SetRef(key, h)
@@ -202,6 +205,7 @@ func (n *Node) serveBlob(p *pile, w http.ResponseWriter, r *http.Request) {
 			w.Header().Set("ETag", `"`+hex.EncodeToString(rev)+`"`)
 			w.Header().Set("Content-Type", a.Meta.MIME)
 		}
+		n.report(diag.Media, p.ID, "", fmt.Sprintf("original %x", id), err)
 	} else if err == nil {
 		var f *os.File
 		var h blob.Hash

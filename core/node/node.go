@@ -24,6 +24,7 @@ import (
 	"github.com/glumpo/pileup/core/crdt/op"
 	"github.com/glumpo/pileup/core/crdt/state"
 	"github.com/glumpo/pileup/core/device"
+	"github.com/glumpo/pileup/core/diag"
 	"github.com/glumpo/pileup/core/invite"
 	"github.com/glumpo/pileup/core/peer"
 	"github.com/glumpo/pileup/core/replica"
@@ -82,6 +83,7 @@ type Node struct {
 	cancel context.CancelFunc
 	wg     sync.WaitGroup
 	blobs  *blob.Store
+	diag   *diag.Log
 
 	mu    sync.Mutex
 	piles []*pile
@@ -113,7 +115,7 @@ func Open(cfg Config) (*Node, error) {
 		return nil, err
 	}
 	ctx, cancel := context.WithCancel(context.Background())
-	n := &Node{cfg: cfg, key: key, ctx: ctx, cancel: cancel, blobs: blobs}
+	n := &Node{cfg: cfg, key: key, ctx: ctx, cancel: cancel, blobs: blobs, diag: diag.New(diagSize)}
 	n.mu.Lock()
 	for _, e := range entries {
 		var p *pile
@@ -221,6 +223,7 @@ func (n *Node) reach(ctx context.Context, i invite.Invite) (string, error) {
 			c.Close()
 			return a.String(), nil
 		}
+		n.report(diag.Connection, i.PileID, a.String(), "join", err)
 		errs = append(errs, err)
 	}
 	return "", fmt.Errorf("%w: %w", ErrUnreachable, errors.Join(errs...))
@@ -262,6 +265,7 @@ func (n *Node) start(e entry, changes ...op.Change) (*pile, error) {
 		return nil, err
 	}
 	e.Port = uint16(ln.Addr().(*net.TCPAddr).Port)
+	n.diag.Add(diag.Connection, e.ID, "", fmt.Sprintf("listening on port %d", e.Port))
 	p := &pile{entry: e, store: s, replica: replica.New(s, n.key, e.ID, e.Secret), local: c.Local}
 	p.owners = n.owners(p)
 	for _, a := range p.Peers {
@@ -286,7 +290,7 @@ func (n *Node) serve(p *pile, ln net.Listener) {
 	mux.Handle("/", p.replica.Handler())
 	mux.HandleFunc("POST /announce", func(w http.ResponseWriter, r *http.Request) { n.announced(p, w, r) })
 	mux.HandleFunc("GET /blob/{asset}/{revision}/{tier}", func(w http.ResponseWriter, r *http.Request) { n.serveBlob(p, w, r) })
-	srv := &http.Server{Handler: mux, ReadHeaderTimeout: timeout, IdleTimeout: timeout}
+	srv := &http.Server{Handler: mux, ReadHeaderTimeout: timeout, IdleTimeout: timeout, ConnState: n.handshakes(p)}
 	l := peer.NewListener(ln, n.key, func(id []byte) ([]byte, bool) {
 		return p.Secret, bytes.Equal(id, p.ID)
 	})
@@ -309,6 +313,7 @@ func (n *Node) announced(p *pile, w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	addr := netip.AddrPortFrom(from.Addr().Unmap(), uint16(port)).String()
+	n.diag.Add(diag.Connection, p.ID, addr, "announce received")
 	if err := n.addPeer(p, addr); err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
@@ -327,6 +332,7 @@ func (n *Node) addPeer(p *pile, addr string) error {
 		return nil
 	}
 	p.Peers = append(p.Peers, addr)
+	n.diag.Add(diag.Discovery, p.ID, addr, "new peer address")
 	n.pull(p, addr)
 	return n.save()
 }
@@ -336,8 +342,8 @@ func (n *Node) pull(p *pile, addr string) {
 	go func() {
 		defer n.wg.Done()
 		for {
-			n.announce(p, addr)
-			p.replica.Pull(n.ctx, addr, func(int) {})
+			n.report(diag.Connection, p.ID, addr, "announce", n.announce(p, addr))
+			n.report(diag.Sync, p.ID, addr, "sync", p.replica.Pull(n.ctx, addr, n.synced(p, addr)))
 			select {
 			case <-n.ctx.Done():
 				return
@@ -347,7 +353,7 @@ func (n *Node) pull(p *pile, addr string) {
 	}()
 }
 
-func (n *Node) announce(p *pile, addr string) {
+func (n *Node) announce(p *pile, addr string) error {
 	c := http.Client{Timeout: timeout, Transport: &http.Transport{
 		DisableKeepAlives: true,
 		DialContext: func(ctx context.Context, _, a string) (net.Conn, error) {
@@ -357,20 +363,24 @@ func (n *Node) announce(p *pile, addr string) {
 	u := "http://" + addr + "/announce?port=" + strconv.Itoa(int(p.Port))
 	req, err := http.NewRequestWithContext(n.ctx, http.MethodPost, u, nil)
 	if err != nil {
-		return
+		return err
 	}
 	resp, err := c.Do(req)
 	if err != nil {
-		return
+		return err
 	}
 	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		return errors.New(resp.Status)
+	}
 	var others []string
-	if resp.StatusCode != http.StatusOK || json.NewDecoder(resp.Body).Decode(&others) != nil {
-		return
+	if err := json.NewDecoder(resp.Body).Decode(&others); err != nil {
+		return err
 	}
 	for _, a := range others {
-		n.addPeer(p, a)
+		n.report(diag.Discovery, p.ID, a, "add peer", n.addPeer(p, a))
 	}
+	return nil
 }
 
 func (n *Node) save() error {

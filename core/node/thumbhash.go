@@ -2,9 +2,11 @@ package node
 
 import (
 	"bytes"
+	"fmt"
 	"image/jpeg"
 
 	"github.com/glumpo/pileup/core/crdt/op"
+	"github.com/glumpo/pileup/core/diag"
 	"github.com/glumpo/pileup/core/thumbhash"
 )
 
@@ -47,6 +49,7 @@ func (n *Node) thumbhashBatch(p *pile, failed map[string]bool) bool {
 	for _, m := range todo[:min(len(todo), ThumbhashBatch)] {
 		h, err := n.thumbhash(p, m)
 		if err != nil {
+			n.report(diag.Media, p.ID, "", fmt.Sprintf("thumbhash %x", m.AssetID), err)
 			failed[string(m.AssetID)+string(m.Revision)] = true
 			continue
 		}
