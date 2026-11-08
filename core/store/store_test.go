@@ -1,6 +1,7 @@
 package store_test
 
 import (
+	"os"
 	"path/filepath"
 	"reflect"
 	"testing"
@@ -36,5 +37,18 @@ func TestStateSurvivesReopen(t *testing.T) {
 	o := create(t, s, a, op.MemberSet{Name: "А"})
 	if o.Seq != 5 || o.Lamport != 11 {
 		t.Fatalf("op after reopen: seq %d lamport %d, want 5 and 11", o.Seq, o.Lamport)
+	}
+}
+
+func TestPathIsUsedVerbatim(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "Application Support", "pile 100%20.db")
+	if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	s := open(t, path)
+	defer s.Close()
+	create(t, s, key(1), join(key(1), "Аня"))
+	if _, err := os.Stat(path); err != nil {
+		t.Fatal(err)
 	}
 }
