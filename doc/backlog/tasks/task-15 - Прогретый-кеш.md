@@ -1,9 +1,11 @@
 ---
 id: TASK-15
 title: Прогретый кеш
-status: To Do
-assignee: []
+status: In Progress
+assignee:
+  - '@claude'
 created_date: '2026-11-08T06:49:00Z'
+updated_date: '2026-11-08T12:23:00Z'
 labels:
   - core
   - show
@@ -32,3 +34,9 @@ ordinal: 15000
 - [ ] #4 Файлы недоступного источника помечаются ожидающими, остальные файлы окна грузятся дальше, к ожидающим загрузка возвращается с повторами
 - [ ] #5 Логика покрыта тестами, включая прыжки вперёд и назад
 <!-- AC:END -->
+
+## Implementation Notes
+
+<!-- SECTION:NOTES:BEGIN -->
+Начата чистая логика планировщика кеша; встраивание в показ — после TASK-12 и TASK-14.
+<!-- SECTION:NOTES:END -->

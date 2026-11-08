@@ -1,9 +1,11 @@
 ---
 id: TASK-6
 title: Ключ устройства, создание pile и вход по QR
-status: To Do
-assignee: []
+status: In Progress
+assignee:
+  - '@claude'
 created_date: '2026-11-08T06:49:00Z'
+updated_date: '2026-11-08T12:23:00Z'
 labels:
   - core
   - app
@@ -32,3 +34,9 @@ ordinal: 6000
 - [ ] #3 Сканирование QR на другом телефоне создаёт операцию Join, proof которой проверяется у всех участников, в том числе у тех, кто не присутствовал при входе
 - [ ] #4 Работает в обе стороны: iPhone приглашает Android и Android приглашает iPhone
 <!-- AC:END -->
+
+## Implementation Notes
+
+<!-- SECTION:NOTES:BEGIN -->
+Начата Go-часть: формат приглашения, создание pile и вход в ядре, HTTP API для UI. Нативное хранение ключа (Keychain/Keystore) и экран QR — позже.
+<!-- SECTION:NOTES:END -->

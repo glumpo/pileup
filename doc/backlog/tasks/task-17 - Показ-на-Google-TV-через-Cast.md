@@ -1,9 +1,11 @@
 ---
 id: TASK-17
 title: Показ на Google TV через Cast
-status: To Do
-assignee: []
+status: In Progress
+assignee:
+  - '@claude'
 created_date: '2026-11-08T06:49:00Z'
+updated_date: '2026-11-08T12:23:00Z'
 labels:
   - core
   - cast
@@ -31,3 +33,9 @@ ordinal: 17000
 - [ ] #3 Видео с обоих источников проигрывается на Google TV, включая HEVC с iPhone; результат по кодекам записан в задаче
 - [ ] #4 Если receiver не загружает медиа по http из LAN, это зафиксировано в задаче вместе с вариантами обхода
 <!-- AC:END -->
+
+## Implementation Notes
+
+<!-- SECTION:NOTES:BEGIN -->
+Начата Go-часть: клиент CASTV2 для Default Media Receiver с тестами против фейкового receiver. Обнаружение (mDNS) и проверка на Google TV — позже.
+<!-- SECTION:NOTES:END -->
