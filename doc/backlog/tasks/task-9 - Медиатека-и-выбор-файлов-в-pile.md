@@ -5,7 +5,7 @@ status: In Progress
 assignee:
   - '@claude'
 created_date: '2026-11-08T06:49:00Z'
-updated_date: '2026-11-08T12:42:00Z'
+updated_date: '2026-11-08T12:52:00Z'
 labels:
   - app
   - media
@@ -53,4 +53,12 @@ Go-часть (нативные PhotoKit/MediaStore — позже):
 
 <!-- SECTION:NOTES:BEGIN -->
 Начата Go-часть: интерфейс MediaProvider для нативного слоя, выбор по датам, исключения, публикация AssetAdd/AssetRemove, API для UI. Нативные PhotoKit/MediaStore — позже.
+
+Go-часть сделана (ветка task-9):
+- node.MediaProvider: Media(from, to int64) ([]byte, error) — JSON-массив node.MediaItem (local_id, kind photo|video|live_photo, platform_time, exif_date_time, exif_offset, video_creation_time, file_time, width, height, duration_ms, size_bytes, mime, codec, original_name, modified, screenshot, hidden). Провайдер может вернуть больше диапазона; ядро само фильтрует по taken_at в [from, to). Неизвестные поля (GPS, путь, альбом) отбрасываются при разборе. gobind проверен: Java byte[] media(long, long) throws Exception, ObjC media:to:error: → NSData. В mobile интерфейс ещё не проброшен: фасад пока без node (A13).
+- Node: Select(ctx, pile, from, to), Decide(ctx, pile, asset, selected), Selection(pile), Assets(pile); Config.Media.
+- asset_id = SHA-256(pubkey устройства ‖ local_id), revision = SHA-256(modified, int64 BE), thumbhash пустой до TASK-11.
+- Публикуется разница с моими файлами в проекции: одна AssetRemove и одна AssetAdd (новые и изменившиеся, например после правки — новый revision). Диапазон и ручные решения — piles/<id>.selection.json, пишутся до публикации. Ручное решение перекрывает умолчание (скриншот можно вернуть).
+- HTTP: GET/PUT /piles/{id}/selection, PUT /piles/{id}/selection/{asset}; ошибки unknown_asset (404), no_media (501).
+- Файл без локального оригинала (iCloud) выбирается как обычный: метаданные от провайдера, отдельного поля нет; превью — TASK-11/12.
 <!-- SECTION:NOTES:END -->
