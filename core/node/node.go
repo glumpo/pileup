@@ -81,6 +81,7 @@ type pile struct {
 	owners  *http.Client
 	stream  *http.Client
 	online  map[op.Author]int
+	addrs   map[op.Author]string
 	loops   map[string]*loop
 }
 
@@ -290,7 +291,7 @@ func (n *Node) start(e entry, changes ...op.Change) (*pile, error) {
 	}
 	e.Port = uint16(ln.Addr().(*net.TCPAddr).Port)
 	n.diag.Add(diag.Connection, e.ID, "", fmt.Sprintf("listening on port %d", e.Port))
-	p := &pile{entry: e, store: s, replica: replica.New(s, n.key, e.ID, e.Secret), online: map[op.Author]int{}, loops: map[string]*loop{}}
+	p := &pile{entry: e, store: s, replica: replica.New(s, n.key, e.ID, e.Secret), online: map[op.Author]int{}, addrs: map[op.Author]string{}, loops: map[string]*loop{}}
 	p.owners = n.owners(p)
 	p.stream = &http.Client{Transport: p.owners.Transport}
 	for _, a := range p.Peers {
@@ -321,6 +322,7 @@ func (n *Node) serve(p *pile, ln net.Listener) {
 		IdleTimeout:       timeout,
 		ConnState:         n.handshakes(p),
 		BaseContext:       func(net.Listener) context.Context { return n.ctx },
+		ConnContext:       func(ctx context.Context, c net.Conn) context.Context { return context.WithValue(ctx, connKey{}, c) },
 	}
 	l := peer.NewListener(ln, n.key, func(id []byte) ([]byte, bool) {
 		return p.Secret, bytes.Equal(id, p.ID)
@@ -359,6 +361,7 @@ func (n *Node) announced(p *pile, w http.ResponseWriter, r *http.Request) {
 	}
 	addr := netip.AddrPortFrom(from.Addr().Unmap(), uint16(port)).String()
 	n.diag.Add(diag.Connection, p.ID, addr, "announce received")
+	n.learn(p, op.Author(r.Context().Value(connKey{}).(*peer.Conn).Peer()), addr)
 	if err := n.addPeer(p, addr); err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
@@ -369,6 +372,18 @@ func (n *Node) announced(p *pile, w http.ResponseWriter, r *http.Request) {
 	n.mu.Unlock()
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(others)
+}
+
+type connKey struct{}
+
+func (n *Node) learn(p *pile, who op.Author, addr string) {
+	n.mu.Lock()
+	moved := p.addrs[who] != addr
+	p.addrs[who] = addr
+	n.mu.Unlock()
+	if moved {
+		p.owners.Transport.(*http.Transport).CloseIdleConnections()
+	}
 }
 
 func (n *Node) addPeer(p *pile, addr string) error {
@@ -427,6 +442,7 @@ func (n *Node) attempt(ctx context.Context, p *pile, addr string, release func()
 		return false, err
 	}
 	n.report(diag.Discovery, p.ID, addr, "add peer", n.addPeer(p, addr))
+	n.learn(p, who, addr)
 	n.connected(p, who, 1)
 	defer n.connected(p, who, -1)
 	synced, report := false, n.synced(p, addr)

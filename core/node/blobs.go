@@ -10,7 +10,6 @@ import (
 	"net"
 	"net/http"
 	"os"
-	"slices"
 	"strconv"
 	"sync"
 	"time"
@@ -38,7 +37,8 @@ const (
 var (
 	ErrUnavailable = errors.New("node: asset owner is unavailable")
 	ErrRefused     = errors.New("node: owner refused")
-	errNoOwner     = errors.New("node: owner is not among known peers")
+	errNoOwner     = errors.New("node: owner address is unknown")
+	errNotOwner    = errors.New("node: another device answers at the owner address")
 )
 
 var headerTimeout, readIdle = timeout, 10 * time.Second
@@ -195,6 +195,10 @@ func (n *Node) fetch(p *pile, owner op.Author, assetID, revision []byte, tier in
 }
 
 func (n *Node) download(ctx context.Context, p *pile, owner op.Author, assetID, revision []byte, tier int, w io.Writer) error {
+	ctx, cancel := context.WithCancel(ctx)
+	defer cancel()
+	deadline := time.AfterFunc(headerTimeout, cancel)
+	defer deadline.Stop()
 	u := fmt.Sprintf("http://%x/blob/%x/%x/%d", owner[:], assetID, revision, tier)
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, u, nil)
 	if err != nil {
@@ -207,7 +211,7 @@ func (n *Node) download(ctx context.Context, p *pile, owner op.Author, assetID, 
 	defer resp.Body.Close()
 	switch resp.StatusCode {
 	case http.StatusOK:
-		_, err = io.Copy(w, resp.Body)
+		_, err = io.Copy(w, idle{r: resp.Body, deadline: deadline})
 		return err
 	case http.StatusNotFound:
 		return ErrUnknownAsset
@@ -215,12 +219,26 @@ func (n *Node) download(ctx context.Context, p *pile, owner op.Author, assetID, 
 	return fmt.Errorf("%w: %w: %s", ErrUnavailable, ErrRefused, resp.Status)
 }
 
+type idle struct {
+	r        io.Reader
+	deadline *time.Timer
+}
+
+func (i idle) Read(b []byte) (int, error) {
+	i.deadline.Reset(readIdle)
+	n, err := i.r.Read(b)
+	if err != nil && err != io.EOF {
+		err = fmt.Errorf("%w: %w", ErrUnavailable, err)
+	}
+	return n, err
+}
+
 func (n *Node) owners(p *pile) *http.Client {
 	tr := &http.Transport{DialContext: func(ctx context.Context, _, addr string) (net.Conn, error) {
 		return n.dialOwner(ctx, p, addr)
 	}}
 	context.AfterFunc(n.ctx, tr.CloseIdleConnections)
-	return &http.Client{Transport: tr, Timeout: headerTimeout}
+	return &http.Client{Transport: tr}
 }
 
 func (n *Node) dialOwner(ctx context.Context, p *pile, addr string) (net.Conn, error) {
@@ -233,22 +251,22 @@ func (n *Node) dialOwner(ctx context.Context, p *pile, addr string) (net.Conn, e
 		return nil, err
 	}
 	n.mu.Lock()
-	peers := slices.Clone(p.Peers)
+	at, ok := p.addrs[op.Author(want)]
 	n.mu.Unlock()
-	errs := []error{errNoOwner}
-	for _, a := range peers {
-		dctx, cancel := context.WithTimeout(ctx, dialTimeout)
-		c, err := peer.Dial(dctx, a, n.key, p.ID, p.Secret)
-		cancel()
-		if err == nil && bytes.Equal(c.Peer(), want) {
-			return c, nil
-		}
-		if err == nil {
-			c.Close()
-		}
-		errs = append(errs, err)
+	if !ok {
+		return nil, errNoOwner
 	}
-	return nil, errors.Join(errs...)
+	ctx, cancel := context.WithTimeout(ctx, dialTimeout)
+	defer cancel()
+	c, err := peer.Dial(ctx, at, n.key, p.ID, p.Secret)
+	if err != nil {
+		return nil, err
+	}
+	if !bytes.Equal(c.Peer(), want) {
+		c.Close()
+		return nil, errNotOwner
+	}
+	return c, nil
 }
 
 func (n *Node) serveBlob(p *pile, w http.ResponseWriter, r *http.Request) {
