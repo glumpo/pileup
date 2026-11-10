@@ -207,6 +207,12 @@ func (c *Cache) window() []Item {
 			w = append(w, it)
 		}
 	}
+	ahead := len(w)
+	for j := i - 1; j >= 0 && len(w) < ahead+Behind; j-- {
+		if !c.items[j].Skip {
+			w = append(w, c.items[j])
+		}
+	}
 	return w
 }
 
