@@ -1,3 +1,4 @@
+import { useKeepAwake } from 'expo-keep-awake';
 import { useEffect, useMemo, useState } from 'react';
 import { ScrollView, Text, View } from 'react-native';
 
@@ -36,6 +37,7 @@ export function Remote({
   const [timeline, setTimeline] = useState<TimelineItem[]>([]);
   const [error, setError] = useState<string>();
   const pins = usePins(api, pile.id);
+  useKeepAwake();
 
   useEffect(() => {
     const fail = (e: unknown) => setError(describe(e));
