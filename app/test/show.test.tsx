@@ -34,6 +34,8 @@ const bedroom: Screen = {
 
 const showItem = ({ id, revision, author, kind, taken_at }: TimelineItem) => ({ id, revision, author, kind, taken_at });
 
+const nothing = { id: '', revision: '', author: '0'.repeat(64), kind: '', taken_at: 0 };
+
 const estimate: PinEstimate = {
   files: 2,
   missing: 1,
@@ -45,6 +47,7 @@ const estimate: PinEstimate = {
 
 function core(screens: Screen[] = [livingRoom, bedroom], start?: [number, unknown]) {
   const show = {
+    files: items,
     index: 0,
     playing: false,
     renderer_error: undefined as ShowState['renderer_error'],
@@ -56,10 +59,10 @@ function core(screens: Screen[] = [livingRoom, bedroom], start?: [number, unknow
     pile: 'aa01',
     screen: livingRoom,
     index: show.index,
-    total: items.length,
-    current: showItem(items[show.index]),
+    total: show.files.length,
+    current: show.files.length ? showItem(show.files[show.index]) : nothing,
     playing: show.playing,
-    video_unavailable: show.videoUnavailable && items[show.index].kind === 'video',
+    video_unavailable: show.videoUnavailable && show.files[show.index]?.kind === 'video',
     renderer_error: show.renderer_error,
     waiting: show.waiting.map(showItem),
     hints: show.hints,
@@ -351,5 +354,37 @@ test('stopping the show returns to the pile', async () => {
 
   expect(await screen.findByRole('button', { name: 'Хронология' })).toBeOnTheScreen();
   expect(screen.queryByText('На экране «Гостиная»')).toBeNull();
+  expect(commands(requests)).toEqual(['POST /show', 'DELETE /show']);
+});
+
+test('a show left without files says so with only stop offered, and the remote returns when files come back', async () => {
+  const { show } = core();
+  await startShow();
+
+  show.files = [];
+  expect(await screen.findByText('В pile не осталось файлов', {}, { timeout: 3000 })).toBeOnTheScreen();
+  expect(screen.queryByText(/\/ 0/)).toBeNull();
+  expect(screen.queryByTestId('image')).toBeNull();
+  for (const name of ['Предыдущий', 'Следующий', 'Пауза', 'Воспроизвести']) {
+    expect(screen.queryByRole('button', { name })).toBeNull();
+  }
+  expect(screen.getByRole('button', { name: 'Остановить показ' })).toBeOnTheScreen();
+
+  show.files = items;
+  expect(await screen.findByText('1 / 3', {}, { timeout: 3000 })).toBeOnTheScreen();
+  expect(screen.queryByText('В pile не осталось файлов')).toBeNull();
+  expect(screen.getByTestId('image').props.source.uri).toBe(`${BASE}/piles/aa01/blob/f3/rf3/2`);
+  expect(screen.getByRole('button', { name: 'Следующий' })).toBeOnTheScreen();
+});
+
+test('a show left without files can be stopped', async () => {
+  const { requests, show } = core();
+  const user = await startShow();
+  show.files = [];
+  await screen.findByText('В pile не осталось файлов', {}, { timeout: 3000 });
+
+  await user.press(screen.getByRole('button', { name: 'Остановить показ' }));
+
+  expect(await screen.findByRole('button', { name: 'Хронология' })).toBeOnTheScreen();
   expect(commands(requests)).toEqual(['POST /show', 'DELETE /show']);
 });
