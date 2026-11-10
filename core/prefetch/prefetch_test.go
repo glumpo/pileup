@@ -240,6 +240,13 @@ func TestRetryWithBackoffAndSingleProbe(t *testing.T) {
 	equal(t, "load after recovery", load, ids(1, 6))
 }
 
+func TestWaitingItemsAreInTimelineOrder(t *testing.T) {
+	c := newCache(chronology(40, oneSource))
+	c.SetOnline("ann", false)
+	c.SetCursor(id(10))
+	equal(t, "waiting", c.Waiting(), ids(5, 31))
+}
+
 func TestOfflineSourceWaitsUntilOnline(t *testing.T) {
 	items := chronology(100, func(i int) string {
 		if i < 3 {

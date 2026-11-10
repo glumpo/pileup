@@ -246,9 +246,13 @@ func (m *model) plan(t *rapid.T) {
 		}
 	}
 
+	inWindow := map[string]bool{}
+	for _, x := range windowIDs {
+		inWindow[x] = true
+	}
 	var waiting []string
-	for _, it := range window {
-		if _, ok := m.cached[it.ID]; !ok && !m.broken[it.ID] && m.unavailable(it.Source) {
+	for _, it := range m.items {
+		if _, ok := m.cached[it.ID]; inWindow[it.ID] && !ok && !m.broken[it.ID] && m.unavailable(it.Source) {
 			waiting = append(waiting, it.ID)
 		}
 	}
