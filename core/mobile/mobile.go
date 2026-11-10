@@ -86,7 +86,7 @@ func Start(dir, platform, appVersion string, keystore Keystore, media MediaProvi
 	}
 	t := rand.Text()
 	core = n
-	shows = show.New(n, show.DefaultBudget)
+	shows = show.New(n)
 	listener = ln
 	server = &http.Server{Handler: httpapi.WithNode(t, n, shows)}
 	port = ln.Addr().(*net.TCPAddr).Port

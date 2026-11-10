@@ -16,7 +16,6 @@ type model struct {
 	c        *prefetch.Cache
 	items    []prefetch.Item
 	cursor   string
-	budget   int64
 	now      time.Time
 	cached   map[string]int64
 	loading  map[string]string
@@ -82,32 +81,6 @@ func (m *model) inFlight(src string) int {
 	return n
 }
 
-func (m *model) known(x string) (int64, bool) {
-	for _, it := range m.items {
-		if it.ID == x {
-			return it.TakenAt, true
-		}
-	}
-	return 0, false
-}
-
-func (m *model) before(a, b string) bool {
-	ta, oka := m.known(a)
-	tb, okb := m.known(b)
-	if oka != okb {
-		return okb
-	}
-	return ta < tb
-}
-
-func (m *model) total() int64 {
-	var sum int64
-	for _, size := range m.cached {
-		sum += size
-	}
-	return sum
-}
-
 func (m *model) unavailable(src string) bool { return m.offline[src] || m.failed[src] }
 
 func (m *model) pickLoading(t *rapid.T) (string, bool) {
@@ -127,8 +100,9 @@ func (m *model) step(t *rapid.T) {
 	case 2:
 		if x, ok := m.pickLoading(t); ok {
 			size := rapid.Int64Range(1, 50).Draw(t, "size")
-			m.c.Loaded(x, size)
+			m.c.Loaded(x)
 			m.cached[x] = size
+			m.c.SetCached(maps.Clone(m.cached))
 			m.failed[m.loading[x]] = false
 			delete(m.loading, x)
 		}
@@ -141,8 +115,10 @@ func (m *model) step(t *rapid.T) {
 			delete(m.loading, x)
 		}
 	case 4:
-		m.budget = rapid.Int64Range(0, 600).Draw(t, "budget")
-		m.c.SetBudget(m.budget)
+		if len(m.cached) > 0 {
+			delete(m.cached, rapid.SampledFrom(slices.Sorted(maps.Keys(m.cached))).Draw(t, "dropped"))
+			m.c.SetCached(maps.Clone(m.cached))
+		}
 	case 5:
 		if len(m.items) > 0 {
 			x := rapid.SampledFrom(m.items).Draw(t, "pin").ID
@@ -185,9 +161,12 @@ func (m *model) step(t *rapid.T) {
 
 func (m *model) plan(t *rapid.T) {
 	window := m.window()
-	inWindow := map[string]int{}
-	for i, it := range window {
-		inWindow[it.ID] = i
+	var windowIDs []string
+	for _, it := range window {
+		windowIDs = append(windowIDs, it.ID)
+	}
+	if got := m.c.Window(); !slices.Equal(got, windowIDs) {
+		t.Fatalf("window %v, want %v", got, windowIDs)
 	}
 	wanted := m.wanted()
 	inWanted := map[string]int{}
@@ -198,9 +177,8 @@ func (m *model) plan(t *rapid.T) {
 	for _, src := range sources {
 		before[src] = m.inFlight(src)
 	}
-	totalBefore := m.total()
 
-	load, evict := m.c.Plan(m.now)
+	load := m.c.Plan(m.now)
 
 	last := -1
 	dispatched := map[string]int{}
@@ -262,41 +240,6 @@ func (m *model) plan(t *rapid.T) {
 		}
 	}
 
-	if len(evict) > 0 && totalBefore <= m.budget {
-		t.Fatalf("evicts %v within budget %d (total %d)", evict, m.budget, totalBefore)
-	}
-	for i, x := range evict {
-		if _, ok := m.cached[x]; !ok {
-			t.Fatalf("evicts %s that is not cached", x)
-		}
-		if _, ok := inWindow[x]; ok || m.pinned[x] {
-			t.Fatalf("evicts protected %s", x)
-		}
-		if i > 0 && m.before(x, evict[i-1]) {
-			t.Fatalf("evicts %v not in taken_at order", evict)
-		}
-		if i == len(evict)-1 && m.total() <= m.budget {
-			t.Fatalf("evicts %s already within budget", x)
-		}
-		delete(m.cached, x)
-	}
-	var rest []string
-	for x := range m.cached {
-		if _, ok := inWindow[x]; !ok && !m.pinned[x] {
-			rest = append(rest, x)
-		}
-	}
-	if m.total() > m.budget && len(rest) > 0 {
-		t.Fatalf("over budget %d with %d while %v evictable", m.budget, m.total(), rest)
-	}
-	for _, x := range evict {
-		for _, y := range rest {
-			if m.before(y, x) {
-				t.Fatalf("evicts %s but keeps earlier %s", x, y)
-			}
-		}
-	}
-
 	var waiting []string
 	for _, it := range window {
 		if _, ok := m.cached[it.ID]; !ok && !m.broken[it.ID] && m.unavailable(it.Source) {
@@ -329,11 +272,9 @@ func (m *model) plan(t *rapid.T) {
 func TestInvariantsOverRandomEvents(t *testing.T) {
 	rapid.Check(t, func(t *rapid.T) {
 		items := drawItems(t)
-		budget := rapid.Int64Range(0, 600).Draw(t, "budget")
 		m := &model{
-			c:        prefetch.New(budget),
+			c:        prefetch.New(),
 			items:    items,
-			budget:   budget,
 			now:      t0,
 			cached:   map[string]int64{},
 			loading:  map[string]string{},

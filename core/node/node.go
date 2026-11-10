@@ -2,6 +2,7 @@ package node
 
 import (
 	"bytes"
+	"cmp"
 	"context"
 	"crypto/ed25519"
 	"crypto/rand"
@@ -53,6 +54,7 @@ type Config struct {
 	Platform string
 	Addrs    func() []netip.Addr
 	Media    MediaProvider
+	Budget   int64
 
 	AppVersion string
 	Renditions RenditionMaker
@@ -105,6 +107,7 @@ type Node struct {
 }
 
 func Open(cfg Config) (*Node, error) {
+	cfg.Budget = cmp.Or(cfg.Budget, DefaultBudget)
 	key, err := device.Key(cfg.Keystore)
 	if err != nil {
 		return nil, err
@@ -122,7 +125,7 @@ func Open(cfg Config) (*Node, error) {
 	if err != nil {
 		return nil, err
 	}
-	blobs, err := blob.Open(filepath.Join(cfg.Dir, "blobs"))
+	blobs, err := blob.Open(filepath.Join(cfg.Dir, "blobs"), cfg.Budget)
 	if err != nil {
 		return nil, err
 	}
@@ -154,7 +157,7 @@ func (n *Node) Close() error {
 	n.cancel()
 	n.mu.Unlock()
 	n.wg.Wait()
-	var errs []error
+	errs := []error{n.blobs.Close()}
 	for _, p := range n.piles {
 		errs = append(errs, p.store.Close())
 	}
@@ -264,6 +267,9 @@ func (n *Node) add(e entry, changes ...op.Change) (Pile, error) {
 }
 
 func (n *Node) start(e entry, changes ...op.Change) (*pile, error) {
+	if err := n.importPins(e.ID); err != nil {
+		return nil, err
+	}
 	c, err := n.load(e.ID)
 	if err != nil {
 		return nil, err

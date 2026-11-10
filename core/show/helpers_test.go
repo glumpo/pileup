@@ -29,11 +29,12 @@ type library struct {
 	displays  map[string]int
 	reads     map[string]int
 	broken    map[string]bool
+	content   map[string]string
 	gate      chan struct{}
 }
 
 func newLibrary() *library {
-	return &library{originals: map[string][]byte{}, displays: map[string]int{}, reads: map[string]int{}, broken: map[string]bool{}}
+	return &library{originals: map[string][]byte{}, displays: map[string]int{}, reads: map[string]int{}, broken: map[string]bool{}, content: map[string]string{}}
 }
 
 func (l *library) add(local, kind, mime string, minute int, original []byte) {
@@ -77,6 +78,9 @@ func (l *library) Rendition(local string, tier int) ([]byte, error) {
 	defer l.mu.Unlock()
 	if _, ok := l.originals[local]; !ok || tier == node.T2 && l.broken[local] {
 		return nil, errors.New("no such file")
+	}
+	if c, ok := l.content[local]; ok {
+		return []byte(c), nil
 	}
 	if tier == node.T2 {
 		l.displays[local]++
@@ -152,11 +156,12 @@ func openPhone(t *testing.T, dir, platform string, lib *library, budget int64) *
 		Media:      lib,
 		Renditions: lib,
 		Discovery:  l,
+		Budget:     budget,
 	})
 	if err != nil {
 		t.Fatal(err)
 	}
-	h := show.New(n, budget)
+	h := show.New(n)
 	t.Cleanup(func() {
 		h.Close()
 		n.Close()

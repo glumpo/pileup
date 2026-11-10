@@ -5,7 +5,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/glumpo/pileup/core/show"
+	"github.com/glumpo/pileup/core/node"
 )
 
 type pinProgress struct {
@@ -59,7 +59,7 @@ func TestPinLoadAndUnpinThroughAPI(t *testing.T) {
 		t.Fatalf("pins of a new pile: %+v", got)
 	}
 	est := c.estimate(pins + "/estimate?member=" + me)
-	if est.Files != 3 || est.Missing != 3 || est.Bytes <= 0 || est.Budget != show.DefaultBudget || est.Free == nil || *est.Free <= 0 || est.OverBudget {
+	if est.Files != 3 || est.Missing != 3 || est.Bytes <= 0 || est.Budget != node.DefaultBudget || est.Free == nil || *est.Free <= 0 || est.OverBudget {
 		t.Fatalf("estimate before loading: %+v", est)
 	}
 	if all := c.estimate(pins + "/estimate"); all.Files != est.Files || all.Missing != est.Missing || all.Bytes != est.Bytes {

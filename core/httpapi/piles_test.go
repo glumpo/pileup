@@ -51,7 +51,7 @@ func start(t *testing.T, platform string) client {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { n.Close() })
-	srv := httptest.NewServer(httpapi.WithNode("secret", n, show.New(n, show.DefaultBudget)))
+	srv := httptest.NewServer(httpapi.WithNode("secret", n, show.New(n)))
 	t.Cleanup(srv.Close)
 	return client{t: t, url: srv.URL}
 }

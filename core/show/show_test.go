@@ -20,7 +20,7 @@ import (
 
 func twoPhones(t *testing.T) (*phone, *phone, node.Pile) {
 	t.Helper()
-	a, b := newPhone(t, "ios", show.DefaultBudget), newPhone(t, "android", show.DefaultBudget)
+	a, b := newPhone(t, "ios", node.DefaultBudget), newPhone(t, "android", node.DefaultBudget)
 	p := pileOf(t, a, b)
 	a.lib.photo("A1", 0)
 	a.lib.photo("A2", 2)
@@ -212,7 +212,7 @@ func randomBytes(n int, seed uint64) []byte {
 }
 
 func TestVideoStreamsFromSourceThroughHostWithRange(t *testing.T) {
-	a, b := newPhone(t, "ios", show.DefaultBudget), newPhone(t, "android", show.DefaultBudget)
+	a, b := newPhone(t, "ios", node.DefaultBudget), newPhone(t, "android", node.DefaultBudget)
 	p := pileOf(t, a, b)
 	theirs, own := randomBytes(1<<20+333, 1), randomBytes(200_000, 2)
 	a.lib.add("VID_A", "video", "video/quicktime", 0, theirs)
@@ -275,7 +275,7 @@ func TestVideoStreamsFromSourceThroughHostWithRange(t *testing.T) {
 }
 
 func TestNextWindowIsCachedBeforeRendererAsks(t *testing.T) {
-	a, b := newPhone(t, "ios", show.DefaultBudget), newPhone(t, "android", show.DefaultBudget)
+	a, b := newPhone(t, "ios", node.DefaultBudget), newPhone(t, "android", node.DefaultBudget)
 	p := pileOf(t, a, b)
 	var locals []string
 	for i := range 30 {
@@ -335,7 +335,7 @@ func TestNextWindowIsCachedBeforeRendererAsks(t *testing.T) {
 
 func TestCacheEvictsEarliestFilesOverBudget(t *testing.T) {
 	size := int64(len(display("P00")))
-	a, b := newPhone(t, "ios", show.DefaultBudget), newPhone(t, "android", 25*size)
+	a, b := newPhone(t, "ios", node.DefaultBudget), newPhone(t, "android", 25*size)
 	p := pileOf(t, a, b)
 	var locals []string
 	for i := range 30 {
@@ -368,7 +368,7 @@ func TestCacheEvictsEarliestFilesOverBudget(t *testing.T) {
 }
 
 func TestFilesOfOfflineSourceWaitWhileOthersLoad(t *testing.T) {
-	a, b, c := newPhone(t, "ios", show.DefaultBudget), newPhone(t, "android", show.DefaultBudget), newPhone(t, "ios", show.DefaultBudget)
+	a, b, c := newPhone(t, "ios", node.DefaultBudget), newPhone(t, "android", node.DefaultBudget), newPhone(t, "ios", node.DefaultBudget)
 	p := pileOf(t, a, b, c)
 	var ofA, ofC []string
 	for i := range 6 {
@@ -411,7 +411,7 @@ func TestFilesOfOfflineSourceWaitWhileOthersLoad(t *testing.T) {
 		t.Fatalf("cursor on a waiting file: %+v", st)
 	}
 
-	openPhone(t, c.dir, "ios", c.lib, show.DefaultBudget)
+	openPhone(t, c.dir, "ios", c.lib, node.DefaultBudget)
 	eventually(t, "files of c are cached after c is back", func() bool {
 		for _, l := range ofC {
 			if !b.cached(p, l) {
@@ -424,7 +424,7 @@ func TestFilesOfOfflineSourceWaitWhileOthersLoad(t *testing.T) {
 }
 
 func TestCastErrorsAndDisconnectAreReported(t *testing.T) {
-	a := newPhone(t, "android", show.DefaultBudget)
+	a := newPhone(t, "android", node.DefaultBudget)
 	p := pileOf(t, a)
 	for i := range 4 {
 		a.lib.photo(fmt.Sprintf("P%d", i), i)

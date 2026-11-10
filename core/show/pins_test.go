@@ -12,11 +12,12 @@ import (
 
 	"github.com/glumpo/pileup/core/diag"
 	"github.com/glumpo/pileup/core/httpapi"
+	"github.com/glumpo/pileup/core/node"
 	"github.com/glumpo/pileup/core/show"
 )
 
 func TestHintNamesMemberWhoseFilesWait(t *testing.T) {
-	a, b, c := newPhone(t, "android", show.DefaultBudget), newPhone(t, "android", show.DefaultBudget), newPhone(t, "ios", show.DefaultBudget)
+	a, b, c := newPhone(t, "android", node.DefaultBudget), newPhone(t, "android", node.DefaultBudget), newPhone(t, "ios", node.DefaultBudget)
 	p := pileOf(t, a, b, c)
 	for i := range 3 {
 		a.lib.photo(fmt.Sprintf("A%d", i), 2*i)
@@ -54,7 +55,7 @@ func TestHintNamesMemberWhoseFilesWait(t *testing.T) {
 		return false
 	})
 
-	openPhone(t, c.dir, "ios", c.lib, show.DefaultBudget)
+	openPhone(t, c.dir, "ios", c.lib, node.DefaultBudget)
 	eventually(t, "no hints after c is back", func() bool { return len(must(t)(b.show.State()).Hints) == 0 })
 }
 
@@ -74,7 +75,7 @@ func progressOf(t *testing.T, ph *phone, pileID []byte) map[string]show.Progress
 func counts(p show.Progress) [3]int { return [3]int{p.Total, p.Done, p.Failed} }
 
 func TestLoadAllFromMemberThenEverythingWithoutVideos(t *testing.T) {
-	a, b, c := newPhone(t, "ios", show.DefaultBudget), newPhone(t, "android", show.DefaultBudget), newPhone(t, "android", show.DefaultBudget)
+	a, b, c := newPhone(t, "ios", node.DefaultBudget), newPhone(t, "android", node.DefaultBudget), newPhone(t, "android", node.DefaultBudget)
 	p := pileOf(t, a, b, c)
 	var ofA, ofC []string
 	for i := range 6 {
@@ -99,7 +100,7 @@ func TestLoadAllFromMemberThenEverythingWithoutVideos(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if est.Files != 7 || est.Missing != 7 || est.Bytes <= 0 || est.Budget != show.DefaultBudget || est.Free == nil || *est.Free <= 0 || est.OverBudget {
+	if est.Files != 7 || est.Missing != 7 || est.Bytes <= 0 || est.Budget != node.DefaultBudget || est.Free == nil || *est.Free <= 0 || est.OverBudget {
 		t.Fatalf("estimate before loading from a: %+v", est)
 	}
 	if est, err := b.show.Estimate(p.ID, nil); err != nil || est.Files != 13 || est.Missing != 13 {
@@ -154,7 +155,7 @@ func TestLoadAllFromMemberThenEverythingWithoutVideos(t *testing.T) {
 
 func TestPinnedFilesAreNotEvictedUntilUnpinned(t *testing.T) {
 	size := int64(len(display("A00")))
-	a, c := newPhone(t, "ios", show.DefaultBudget), newPhone(t, "ios", show.DefaultBudget)
+	a, c := newPhone(t, "ios", node.DefaultBudget), newPhone(t, "ios", node.DefaultBudget)
 	dir, lib := t.TempDir(), newLibrary()
 	b := openPhone(t, dir, "android", lib, 5*size)
 	p := pileOf(t, a, b, c)
@@ -222,7 +223,7 @@ func TestPinnedFilesAreNotEvictedUntilUnpinned(t *testing.T) {
 }
 
 func TestPermanentlyFailingFileDoesNotBlockItsSource(t *testing.T) {
-	a, b := newPhone(t, "ios", show.DefaultBudget), newPhone(t, "android", show.DefaultBudget)
+	a, b := newPhone(t, "ios", node.DefaultBudget), newPhone(t, "android", node.DefaultBudget)
 	p := pileOf(t, a, b)
 	var locals []string
 	for i := range 30 {
@@ -261,7 +262,7 @@ func TestPermanentlyFailingFileDoesNotBlockItsSource(t *testing.T) {
 }
 
 func TestVideoOfUnavailableSourceShowsPosterAndShowGoesOn(t *testing.T) {
-	a, b := newPhone(t, "ios", show.DefaultBudget), newPhone(t, "android", show.DefaultBudget)
+	a, b := newPhone(t, "ios", node.DefaultBudget), newPhone(t, "android", node.DefaultBudget)
 	p := pileOf(t, a, b)
 	original := randomBytes(50_000, 4)
 	a.lib.photo("A0", 0)
@@ -319,7 +320,7 @@ func TestVideoOfUnavailableSourceShowsPosterAndShowGoesOn(t *testing.T) {
 		t.Fatalf("play while the source is offline: %+v", st)
 	}
 
-	openPhone(t, a.dir, "ios", a.lib, show.DefaultBudget)
+	openPhone(t, a.dir, "ios", a.lib, node.DefaultBudget)
 	eventually(t, "play after the source is back", func() bool { return !must(t)(b.show.Play()).VideoUnavailable })
 	again := rx.waitLoad(t, 5)
 	if resp, body := get(t, again.url); again.url != video.url || resp.StatusCode != http.StatusOK || string(body) != string(original) {

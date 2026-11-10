@@ -1,7 +1,6 @@
 package prefetch
 
 import (
-	"cmp"
 	"slices"
 	"time"
 )
@@ -46,7 +45,6 @@ func (s *source) limit(now time.Time) int {
 }
 
 type Cache struct {
-	budget  int64
 	items   []Item
 	index   map[string]int
 	cursor  string
@@ -57,9 +55,8 @@ type Cache struct {
 	sources map[string]*source
 }
 
-func New(budget int64) *Cache {
+func New() *Cache {
 	return &Cache{
-		budget:  budget,
 		index:   map[string]int{},
 		cached:  map[string]int64{},
 		pinned:  map[string]bool{},
@@ -79,8 +76,6 @@ func (c *Cache) SetItems(items []Item) {
 
 func (c *Cache) SetCursor(id string) { c.cursor = id }
 
-func (c *Cache) SetBudget(budget int64) { c.budget = budget }
-
 func (c *Cache) Pin(id string) { c.pinned[id] = true }
 
 func (c *Cache) Unpin(id string) { delete(c.pinned, id) }
@@ -94,10 +89,9 @@ func (c *Cache) SetOnline(src string, online bool) {
 	s.offline = !online
 }
 
-func (c *Cache) Loaded(id string, size int64) {
-	c.answered(id)
-	c.cached[id] = size
-}
+func (c *Cache) SetCached(sizes map[string]int64) { c.cached = sizes }
+
+func (c *Cache) Loaded(id string) { c.answered(id) }
 
 func (c *Cache) Broken(id string) {
 	c.answered(id)
@@ -125,9 +119,8 @@ func (c *Cache) Failed(id string, now time.Time) {
 	s.retryAt = now.Add(backoff(s.failures))
 }
 
-func (c *Cache) Plan(now time.Time) (load, evict []string) {
-	window := c.window()
-	for _, it := range slices.Concat(window, c.wanted()) {
+func (c *Cache) Plan(now time.Time) (load []string) {
+	for _, it := range slices.Concat(c.window(), c.wanted()) {
 		if c.has(it.ID) || c.broken[it.ID] {
 			continue
 		}
@@ -139,7 +132,15 @@ func (c *Cache) Plan(now time.Time) (load, evict []string) {
 		s.loading++
 		load = append(load, it.ID)
 	}
-	return load, c.evict(window)
+	return load
+}
+
+func (c *Cache) Window() []string {
+	var out []string
+	for _, it := range c.window() {
+		out = append(out, it.ID)
+	}
+	return out
 }
 
 func (c *Cache) Waiting() []string {
@@ -206,51 +207,6 @@ func (c *Cache) window() []Item {
 		}
 	}
 	return w
-}
-
-func (c *Cache) evict(window []Item) []string {
-	var total int64
-	for _, size := range c.cached {
-		total += size
-	}
-	if total <= c.budget {
-		return nil
-	}
-	keep := map[string]bool{}
-	for _, it := range window {
-		keep[it.ID] = true
-	}
-	var victims []string
-	for id := range c.cached {
-		if !keep[id] && !c.pinned[id] {
-			victims = append(victims, id)
-		}
-	}
-	slices.SortFunc(victims, c.earlier)
-	var out []string
-	for _, id := range victims {
-		if total <= c.budget {
-			break
-		}
-		total -= c.cached[id]
-		delete(c.cached, id)
-		out = append(out, id)
-	}
-	return out
-}
-
-func (c *Cache) earlier(a, b string) int {
-	ia, oka := c.index[a]
-	ib, okb := c.index[b]
-	switch {
-	case !oka && !okb:
-		return cmp.Compare(a, b)
-	case !oka:
-		return -1
-	case !okb:
-		return 1
-	}
-	return cmp.Or(cmp.Compare(c.items[ia].TakenAt, c.items[ib].TakenAt), cmp.Compare(ia, ib))
 }
 
 func (c *Cache) has(id string) bool {

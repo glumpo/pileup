@@ -14,8 +14,6 @@ import (
 	"github.com/glumpo/pileup/core/prefetch"
 )
 
-const DefaultBudget = 1 << 30
-
 var (
 	ErrNoShow        = errors.New("show: no active show")
 	ErrUnknownScreen = errors.New("show: unknown screen")
@@ -49,7 +47,6 @@ type State struct {
 
 type Host struct {
 	n       *node.Node
-	budget  int64
 	ctx     context.Context
 	cancel  context.CancelFunc
 	wg      sync.WaitGroup
@@ -58,9 +55,9 @@ type Host struct {
 	loaders map[string]*loader
 }
 
-func New(n *node.Node, budget int64) *Host {
+func New(n *node.Node) *Host {
 	ctx, cancel := context.WithCancel(context.Background())
-	return &Host{n: n, budget: budget, ctx: ctx, cancel: cancel, loaders: map[string]*loader{}}
+	return &Host{n: n, ctx: ctx, cancel: cancel, loaders: map[string]*loader{}}
 }
 
 func (h *Host) loader(pileID []byte) (*loader, error) {
@@ -72,15 +69,13 @@ func (h *Host) loader(pileID []byte) (*loader, error) {
 		return nil, err
 	}
 	l := &loader{
-		n:       h.n,
-		pile:    pileID,
-		self:    h.n.Author(),
-		budget:  h.budget,
-		ctx:     h.ctx,
-		wg:      &h.wg,
-		checked: map[string]bool{},
-		pins:    map[string]bool{},
-		cache:   prefetch.New(h.budget),
+		n:     h.n,
+		pile:  pileID,
+		self:  h.n.Author(),
+		ctx:   h.ctx,
+		wg:    &h.wg,
+		pins:  map[string]bool{},
+		cache: prefetch.New(),
 	}
 	for _, a := range pins {
 		l.pins[a] = true
