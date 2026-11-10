@@ -2,6 +2,7 @@ package prefetch
 
 import (
 	"cmp"
+	"maps"
 	"slices"
 	"time"
 )
@@ -53,7 +54,7 @@ type Cache struct {
 	cursor  string
 	cached  map[string]int64
 	pinned  map[string]bool
-	broken  map[string]bool
+	broken  map[string]time.Time
 	loading map[string]string
 	sources map[string]*source
 }
@@ -63,7 +64,7 @@ func New() *Cache {
 		index:   map[string]int{},
 		cached:  map[string]int64{},
 		pinned:  map[string]bool{},
-		broken:  map[string]bool{},
+		broken:  map[string]time.Time{},
 		loading: map[string]string{},
 		sources: map[string]*source{},
 	}
@@ -98,7 +99,7 @@ func (c *Cache) Loaded(id string) { c.answered(id) }
 
 func (c *Cache) Broken(id string, now time.Time) {
 	c.answered(id)
-	c.broken[id] = true
+	c.broken[id] = now.Add(Recheck)
 }
 
 func (c *Cache) answered(id string) {
@@ -123,8 +124,9 @@ func (c *Cache) Failed(id string, now time.Time) {
 }
 
 func (c *Cache) Plan(now time.Time) (load []string) {
+	maps.DeleteFunc(c.broken, func(_ string, until time.Time) bool { return !now.Before(until) })
 	for _, it := range slices.Concat(c.window(), c.wanted()) {
-		if c.has(it.ID) || c.broken[it.ID] {
+		if c.has(it.ID) || !c.broken[it.ID].IsZero() {
 			continue
 		}
 		s := c.source(it.Source)
@@ -149,7 +151,7 @@ func (c *Cache) Window() []string {
 func (c *Cache) Waiting() []string {
 	var out []string
 	for _, it := range c.window() {
-		if _, ok := c.cached[it.ID]; !ok && !c.broken[it.ID] && c.source(it.Source).unavailable() {
+		if _, ok := c.cached[it.ID]; !ok && c.broken[it.ID].IsZero() && c.source(it.Source).unavailable() {
 			out = append(out, it.ID)
 		}
 	}
@@ -167,7 +169,7 @@ func (c *Cache) Progress() map[string]Progress {
 		p.Total++
 		if _, ok := c.cached[it.ID]; ok {
 			p.Done++
-		} else if c.broken[it.ID] {
+		} else if !c.broken[it.ID].IsZero() {
 			p.Failed++
 		}
 		out[it.Source] = p
