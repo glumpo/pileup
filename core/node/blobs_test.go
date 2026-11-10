@@ -39,6 +39,7 @@ type media struct {
 	originals  map[string][]byte
 	renditions map[int]int
 	reads      int
+	hold       chan chan struct{}
 }
 
 func newMedia() *media {
@@ -64,6 +65,14 @@ func rendition(local string, tier int) []byte {
 }
 
 func (m *media) Rendition(local string, tier int) ([]byte, error) {
+	m.mu.Lock()
+	hold := m.hold
+	m.mu.Unlock()
+	if hold != nil && tier == node.T2 {
+		release := make(chan struct{})
+		hold <- release
+		<-release
+	}
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	if _, ok := m.originals[local]; !ok {
