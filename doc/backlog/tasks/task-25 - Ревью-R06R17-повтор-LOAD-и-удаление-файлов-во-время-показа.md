@@ -1,9 +1,11 @@
 ---
 id: TASK-25
 title: 'Ревью R06+R17: повтор LOAD и удаление файлов во время показа'
-status: To Do
-assignee: []
+status: In Progress
+assignee:
+  - '@claude'
 created_date: '2026-11-10T04:10:00Z'
+updated_date: '2026-11-10T04:44:00Z'
 labels:
   - core
   - review
