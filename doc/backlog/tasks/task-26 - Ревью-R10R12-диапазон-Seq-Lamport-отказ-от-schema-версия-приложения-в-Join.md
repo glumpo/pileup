@@ -1,9 +1,11 @@
 ---
 id: TASK-26
 title: 'Ревью R10+R12: диапазон Seq/Lamport, отказ от schema, версия приложения в Join'
-status: To Do
-assignee: []
+status: In Progress
+assignee:
+  - '@claude'
 created_date: '2026-11-10T04:10:00Z'
+updated_date: '2026-11-10T04:34:00Z'
 labels:
   - core
   - protocol
