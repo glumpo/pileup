@@ -5,7 +5,7 @@ status: In Progress
 assignee:
   - '@claude'
 created_date: '2026-11-10T12:43:00Z'
-updated_date: '2026-11-10T12:48:00Z'
+updated_date: '2026-11-10T12:57:00Z'
 labels:
   - core
 dependencies: []
@@ -41,3 +41,17 @@ dialOwner в core/node/blobs.go не знает адрес владельца и
 4. Таймауты: 20 с на соединение и заголовки, тело — таймаут простоя чтения 10 с (обрыв → ErrUnavailable).
 5. Обновить doc/adr/cache.md; gofmt, vet, race x10, make check.
 <!-- SECTION:PLAN:END -->
+
+## Implementation Notes
+
+<!-- SECTION:NOTES:BEGIN -->
+Красные тесты (core/node/owner_test.go, коммит 9caa5d6) на старом коде:
+- TestFetchGoesOnlyToOwnerAddress: T2 владельца за 3 с не загружен (context deadline exceeded) — перебор упирается в молчащие адреса по 5 с.
+- TestFetchFromOwnerWithUnknownAddressFailsWithoutConnecting: context deadline exceeded вместо быстрого ErrUnavailable.
+- TestFetchFollowsOwnerToNewAddress: после announce с нового адреса T2 ушёл на старый (1 запрос на старый, 0 на новый).
+- TestBodyIsLimitedByReadIdleTimeoutNotByTotalTime: steady — тело обрезано общим таймаутом (Client.Timeout while reading body); stalled — ошибка не ErrUnavailable.
+- TestInviterFilesAreFetchedFromInviterRightAfterJoin на старом коде зелёный (перебор находил пригласившего), красный на промежуточной реализации без источника «вход» (owner address is unknown).
+
+Реализация: pile.addrs (память, под n.mu) — участник → последний подтверждённый адрес; источники: исходящий announce (attempt), входящий announce (IP соединения + порт, ключ из peer.Conn через ConnContext), reach при входе. При смене адреса закрываются простаивающие соединения к владельцам pile. dialOwner — только этот адрес, 5 с, проверка ключа (errNotOwner). download: 20 с на соединение и заголовки (таймер отменяет контекст), тело — 10 с без байтов (readIdle); ошибки чтения тела теперь ErrUnavailable. Хранить отображение на диске не стали: первый announce после старта его восстанавливает.
+Лимиты в тестах подменяются node.SetFetchTimeouts.
+<!-- SECTION:NOTES:END -->
