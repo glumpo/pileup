@@ -1,9 +1,11 @@
 ---
 id: TASK-24
 title: 'Ревью R15: локальное состояние в SQLite атомарно с журналом'
-status: To Do
-assignee: []
+status: In Progress
+assignee:
+  - '@claude'
 created_date: '2026-11-10T04:10:00Z'
+updated_date: '2026-11-10T04:44:00Z'
 labels:
   - core
   - review
