@@ -1,9 +1,11 @@
 ---
 id: TASK-21
 title: 'Ревью R02+R04: жизненный цикл blob и бюджет кеша'
-status: To Do
-assignee: []
+status: In Progress
+assignee:
+  - '@claude'
 created_date: '2026-11-10T04:10:00Z'
+updated_date: '2026-11-10T04:10:00Z'
 labels:
   - core
   - review

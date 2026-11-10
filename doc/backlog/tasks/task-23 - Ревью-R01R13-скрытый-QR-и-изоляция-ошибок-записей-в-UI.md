@@ -1,9 +1,11 @@
 ---
 id: TASK-23
 title: 'Ревью R01+R13: скрытый QR и изоляция ошибок записей в UI'
-status: To Do
-assignee: []
+status: In Progress
+assignee:
+  - '@claude'
 created_date: '2026-11-10T04:10:00Z'
+updated_date: '2026-11-10T04:10:00Z'
 labels:
   - app
   - review
