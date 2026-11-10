@@ -18,6 +18,7 @@ import (
 	"time"
 
 	"github.com/glumpo/pileup/core/crdt/op"
+	"github.com/glumpo/pileup/core/diag"
 	"github.com/glumpo/pileup/core/invite"
 	"github.com/glumpo/pileup/core/node"
 	"github.com/glumpo/pileup/core/peer"
@@ -119,14 +120,14 @@ func (o owner) serve(t *testing.T, routes map[string]http.HandlerFunc) *site {
 	return serveAs(t, o.key, o.id, o.secret, o.raws, routes)
 }
 
-func (o owner) announce(t *testing.T, to string, from *site) {
+func (o owner) announce(t *testing.T, to string, port int) {
 	t.Helper()
 	tr := &http.Transport{DialContext: func(ctx context.Context, _, a string) (net.Conn, error) {
 		return peer.Dial(ctx, a, o.key, o.id, o.secret)
 	}}
 	defer tr.CloseIdleConnections()
 	c := &http.Client{Transport: tr, Timeout: 10 * time.Second}
-	resp, err := c.Post("http://"+to+"/announce?port="+strconv.Itoa(portOf(from.addr())), "", nil)
+	resp, err := c.Post("http://"+to+"/announce?port="+strconv.Itoa(port), "", nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -231,7 +232,8 @@ func TestFetchFollowsOwnerToNewAddress(t *testing.T) {
 	}
 
 	moved := o.serve(t, nil)
-	o.announce(t, inviterAddr(t, inviteTo(t, n, node.Pile{ID: s.id})), moved)
+	o.announce(t, inviterAddr(t, inviteTo(t, n, node.Pile{ID: s.id})), portOf(moved.addr()))
+	eventually(t, "sync with the new address", logged(n, diag.Sync, node.Pile{ID: s.id}, moved.addr(), "sync established"))
 	got, err := fetchWithin(n, s.id, o.photo, node.T2, 3*time.Second)
 	if err != nil || !bytes.Equal(got, ownerBytes("2")) {
 		t.Fatalf("T2 after the move: %q, %v", got, err)
@@ -239,6 +241,62 @@ func TestFetchFollowsOwnerToNewAddress(t *testing.T) {
 	if o, m := old.displays.Load(), moved.displays.Load(); o != 0 || m != 1 {
 		t.Errorf("T2 requests: %d to the old address, %d to the new one; want 0 and 1", o, m)
 	}
+}
+
+func TestIncomingAnnounceAloneDoesNotSetOwnerAddress(t *testing.T) {
+	t.Run("undialable address keeps the working one", func(t *testing.T) {
+		s := newSaved(t)
+		o := newOwner(t, s.id, s.secret)
+		at := o.serve(t, nil)
+		s.write(t, s.history(t, 1), at.addr())
+		n := s.open(t)
+		syncedWith(t, n, s.id, o)
+		if got, err := fetchWithin(n, s.id, o.photo, node.T1, 3*time.Second); err != nil || !bytes.Equal(got, ownerBytes("1")) {
+			t.Fatalf("T1 from the working address: %q, %v", got, err)
+		}
+
+		o.announce(t, inviterAddr(t, inviteTo(t, n, node.Pile{ID: s.id})), int(closedAddr(t).Port()))
+		got, err := fetchWithin(n, s.id, o.photo, node.T2, 3*time.Second)
+		if err != nil || !bytes.Equal(got, ownerBytes("2")) {
+			t.Fatalf("T2 after an announce from an undialable address: %q, %v", got, err)
+		}
+		if d := at.displays.Load(); d != 1 {
+			t.Errorf("%d T2 requests to the working address, want 1", d)
+		}
+	})
+	t.Run("incoming contact becomes fetchable after our announce", func(t *testing.T) {
+		s := newSaved(t)
+		o := newOwner(t, s.id, s.secret)
+		asked, gate := make(chan struct{}, 1), make(chan struct{})
+		at := o.serve(t, map[string]http.HandlerFunc{
+			"POST /announce": func(w http.ResponseWriter, r *http.Request) {
+				signal(asked)
+				select {
+				case <-gate:
+					w.Write([]byte("[]"))
+				case <-r.Context().Done():
+				}
+			},
+		})
+		s.write(t, append(s.history(t, 1), o.raws...))
+		n := s.open(t)
+
+		o.announce(t, inviterAddr(t, inviteTo(t, n, node.Pile{ID: s.id})), portOf(at.addr()))
+		received(t, asked, "our announce to the announced address")
+		if _, err := fetchWithin(n, s.id, o.photo, node.T2, 3*time.Second); !errors.Is(err, node.ErrUnavailable) {
+			t.Fatalf("T2 before our announce succeeded: err = %v, want ErrUnavailable", err)
+		}
+		if d := at.displays.Load(); d != 0 {
+			t.Fatalf("%d T2 requests before our announce succeeded, want 0", d)
+		}
+
+		close(gate)
+		eventually(t, "sync with the announced address", logged(n, diag.Sync, node.Pile{ID: s.id}, at.addr(), "sync established"))
+		got, err := fetchWithin(n, s.id, o.photo, node.T2, 3*time.Second)
+		if err != nil || !bytes.Equal(got, ownerBytes("2")) {
+			t.Fatalf("T2 after our announce: %q, %v", got, err)
+		}
+	})
 }
 
 func TestBodyIsLimitedByReadIdleTimeoutNotByTotalTime(t *testing.T) {
