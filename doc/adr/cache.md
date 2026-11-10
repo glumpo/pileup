@@ -1,6 +1,6 @@
 # Кеш превью (T1/T2), предзагрузка и закрепления
 
-Описание реализации на ветке `master` после TASK-37 (2026-11-10). Источник истины — код. Решения: A15, A18, A19, A24, A26, A27, A30, A33, A34, A35 в [`architecture.md`](../architecture.md). Задачи: TASK-12, TASK-15, TASK-16, TASK-21, TASK-24, TASK-27, TASK-28, TASK-31, TASK-32, TASK-35, TASK-37.
+Описание реализации на ветке `master` после TASK-37 (2026-11-10). Источник истины — код. Решения: A15, A18, A19, A24, A26, A27, A30, A33, A34, A35 в [`architecture.md`](../architecture.md). Задачи: TASK-12, TASK-15, TASK-16, TASK-21, TASK-24, TASK-27, TASK-28, TASK-31, TASK-32, TASK-33, TASK-35, TASK-37.
 
 ## 1. Назначение и границы
 
@@ -100,12 +100,12 @@
 | `func (*Node) Pins(id []byte) ([]string, error)` | закреплённые asset_id pile, hex |
 | `func (*Node) SetPins(id []byte, assets []string) error` | заменить закрепления (hex) |
 | `func (*Node) Free() (int64, error)` | свободное место на разделе каталога данных (statfs) |
-| `func (*Node) ServeOriginal(w, r, pileID, assetID, revision []byte)` | стрим T3 с Range: свой — из `ReadOriginal`, чужой — прокси к владельцу. В кеш не попадает |
+| `func (*Node) ServeOriginal(w, r, pileID, assetID, revision []byte)` | стрим T3 с Range: свой — из `ReadOriginal`, чужой — прокси к владельцу с таймаутами заголовков и простоя (5.2). В кеш не попадает |
 | `func (*Node) Timeline(id []byte) (Pile, []state.Asset, error)` | хронология: `taken_at`, затем owner, asset_id; порядок окна |
 | `func (*Node) Online(pileID []byte) map[op.Author]bool` | участники с живым исходящим соединением синхронизации (A24) |
 | `func (*Node) Presence(pileID []byte, who op.Author) Presence` | на связи ли участник, когда был на связи, класс последней ошибки подключения (`security.md` §5.4) |
 
-Внутренние части, на которых держится логика: `open` (общий путь к `blob.Get`), `render` и очередь рендера `turns`, `fetch`/`download` (с `idle` — таймаутом простоя тела), `dialOwner`, `learn` (адрес участника, `node.go`), `serveBlob` (peer-маршрут), `thumbnails`/`fetchThumbnails` (фоновые T1 и `Retain`), `thumbhash` (T1 своих файлов), `importPins`.
+Внутренние части, на которых держится логика: `open` (общий путь к `blob.Get`), `render` и очередь рендера `turns`, `fetch`/`download` и `relayOriginal` (с `idle` — таймаутом простоя тела), `dialOwner`, `learn` (адрес участника, `node.go`), `serveBlob` (peer-маршрут), `thumbnails`/`fetchThumbnails` (фоновые T1 и `Retain`), `thumbhash` (T1 своих файлов), `importPins`.
 
 ### 4.3 `core/show` (ручная загрузка и показ)
 
@@ -169,7 +169,7 @@
 
 **Загрузчик `render` (свой файл).** `local_id` берётся из БД pile. Нет записи → `ErrUnknownAsset`; нет `RenditionMaker` → `ErrUnavailable`. `RenditionMaker.Rendition` вызывается через очередь `n.rendering` (`turns`), поэтому на узле идёт один рендер за раз. Когда рендер закончился, очередь переходит к самому раннему ожидающему T2, а если T2 никто не ждёт — к самому раннему T1 (тест `TestOwnerRendersWaitingDisplayBeforeWaitingThumbnails`). Начатый рендер не прерывается: T2, пришедший во время рендера T1, ждёт его конца. Контекст рендер **не учитывает** ни в очереди, ни во время рендера: отменённая попытка дождётся очереди и доработает, а её результат будет отброшен. Ошибки рендера и загрузки пишутся в диагностику (кроме отмены и закрытия узла).
 
-**Загрузчик `fetch` (чужой файл).** `GET http://<owner>/blob/{asset}/{rev}/{tier}`. Соединение (`dialOwner`) идёт только на последний подтверждённый адрес владельца (5.1.1), с таймаутом 5 с. Подходит только соединение, где peer-ключ равен ключу владельца: адрес мог достаться другому устройству. Адреса нет, соединиться не удалось или ответил другой ключ → сразу `ErrUnavailable`; к другим адресам pile загрузка не подключается. Таймауты (`download`): 20 с на соединение и заголовки ответа вместе; тело общего срока не имеет, но если за 10 с (`readIdle`) не пришло ни одного байта, загрузка обрывается. Поэтому большой T2 по медленному Wi-Fi дочитывается, пока байты идут. Соединения к владельцам переиспользуются (keep-alive, один `http.Transport` на pile; T3 идёт через него же). Исходы:
+**Загрузчик `fetch` (чужой файл).** `GET http://<owner>/blob/{asset}/{rev}/{tier}`. Соединение (`dialOwner`) идёт только на последний подтверждённый адрес владельца (5.1.1), с таймаутом 5 с. Подходит только соединение, где peer-ключ равен ключу владельца: адрес мог достаться другому устройству. Адреса нет, соединиться не удалось или ответил другой ключ → сразу `ErrUnavailable`; к другим адресам pile загрузка не подключается. Таймауты (`download`): 20 с на соединение и заголовки ответа вместе; тело общего срока не имеет, но если за 10 с (`readIdle`) не пришло ни одного байта, загрузка обрывается. Простой считается только по ожиданию байтов от владельца: время записи потребителю (во временный файл, экрану) не входит. Поэтому большой T2 по медленному Wi-Fi дочитывается, пока байты идут. Соединения к владельцам переиспользуются (keep-alive, один `http.Transport` на pile; T3 идёт через него же). Исходы:
 
 | Исход | Ошибка | UI | Загрузчик показа | Фоновые T1 |
 |---|---|---|---|---|
@@ -205,7 +205,7 @@
 | …во время загрузки | при публикации `Valid` не проходит: этому ожидающему `ErrUnknownAsset`, в его pile ничего не сохраняется. Ожидающие из других pile, где файл ещё актуален, получают результат (тест `TestRequestWaitingForCleanupChecksTheAssetAgain`) |
 | …после того как файл попал в кеш | следующий проход `Retain` снимает удержание (5.6) |
 | Потребитель отменил запрос | см. шаг 5: последний ушедший отменяет попытку. Запрос участника к владельцу попытку не отменяет: владелец ждёт результат с контекстом узла и кеширует его |
-| T3 | `Node.Blob` → `ErrUnknownAsset`. Видео на экран: `ServeOriginal`; свой — чтение оригинала кусками по 1 МиБ, чужой — прокси к владельцу с `Range`/`If-Range`/`If-None-Match`, по тому же адресу владельца (5.1.1), без общего таймаута и без таймаута простоя; ошибка соединения → 502 |
+| T3 | `Node.Blob` → `ErrUnknownAsset`. Видео на экран: `ServeOriginal`; свой — чтение оригинала кусками по 1 МиБ, чужой — прокси к владельцу с `Range`/`If-Range`/`If-None-Match`, по тому же адресу владельца (5.1.1), с таймаутами `download`: 20 с на соединение и заголовки, 10 с простоя тела; общего срока нет, пауза чтения на стороне экрана простоем не считается. Ошибка соединения или нет заголовков за 20 с → 502. Простой тела обрывает ответ экрану; следующий Range-запрос экрана при молчащем владельце получает 502, и срабатывают постер и подсказка (тест `TestRelayedOriginalIsLimitedByReadIdleTimeout`) |
 | Нет `RenditionMaker` у владельца | у владельца `ErrUnavailable`; участник получает 500 → `ErrRefused` |
 | Кеш закрыт | `ErrClosed` (UI 500 `internal`) |
 
@@ -332,7 +332,7 @@
 ## 10. Исходники и тесты
 
 - `core/blob/blob.go`, `blob_test.go` — хранилище, попытки, бюджет (сценарии на `testing/synctest`).
-- `core/node/blobs.go` (Blob, open, render, fetch, download, dialOwner, serveBlob, ServeOriginal, thumbnails, Retain), `pins.go`, `thumbhash.go`, `timeline.go`, `media.go` (asset_id, revision), `node.go` (Open/Close, таймауты, `learn`, announce, вход), `address.go` (чей адрес, вытеснение устаревших адресов); тесты `blobs_test.go`, `render_test.go` (очередь рендера, брошенный запрос участника), `cache_test.go`, `pins_test.go`, `thumbhash_test.go`, `thumbnails_test.go` (фоновые T1: недоступный владелец, пауза файла, проход без обращения к кешу), `owner_test.go` (адрес владельца, таймауты загрузки), `address_test.go` (смена адреса участника).
+- `core/node/blobs.go` (Blob, open, render, fetch, download, dialOwner, serveBlob, ServeOriginal, thumbnails, Retain), `pins.go`, `thumbhash.go`, `timeline.go`, `media.go` (asset_id, revision), `node.go` (Open/Close, таймауты, `learn`, announce, вход), `address.go` (чей адрес, вытеснение устаревших адресов); тесты `blobs_test.go`, `render_test.go` (очередь рендера, брошенный запрос участника), `cache_test.go`, `pins_test.go`, `thumbhash_test.go`, `thumbnails_test.go` (фоновые T1: недоступный владелец, пауза файла, проход без обращения к кешу), `owner_test.go` (адрес владельца, таймауты загрузки и прокси оригинала), `address_test.go` (смена адреса участника).
 - `core/show/loader.go`, `show.go`, `session.go`, `renderer.go`; тесты `cache_test.go`, `pins_test.go`, `show_test.go`, `removal_test.go`, `reload_test.go`.
 - `core/prefetch/prefetch.go`; тесты `prefetch_test.go`, `property_test.go` (rapid).
 - `core/httpapi/blobs.go`, `pins.go`; тесты `blobs_test.go`, `pins_test.go`. Контракт — `api/openapi.yaml`.

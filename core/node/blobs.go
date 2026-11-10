@@ -267,6 +267,7 @@ type idle struct {
 func (i idle) Read(b []byte) (int, error) {
 	i.deadline.Reset(readIdle)
 	n, err := i.r.Read(b)
+	i.deadline.Stop()
 	if err != nil && err != io.EOF {
 		err = fmt.Errorf("%w: %w", ErrUnavailable, err)
 	}
@@ -372,7 +373,11 @@ func (n *Node) ServeOriginal(w http.ResponseWriter, r *http.Request, pileID, ass
 
 func (n *Node) relayOriginal(p *pile, a state.Asset, w http.ResponseWriter, r *http.Request) {
 	u := fmt.Sprintf("http://%x/blob/%x/%x/%d", a.Owner[:], a.Meta.AssetID, a.Meta.Revision, T3)
-	req, err := http.NewRequestWithContext(r.Context(), r.Method, u, nil)
+	ctx, cancel := context.WithCancel(r.Context())
+	defer cancel()
+	deadline := time.AfterFunc(headerTimeout, cancel)
+	defer deadline.Stop()
+	req, err := http.NewRequestWithContext(ctx, r.Method, u, nil)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
@@ -395,7 +400,7 @@ func (n *Node) relayOriginal(p *pile, a state.Asset, w http.ResponseWriter, r *h
 		}
 	}
 	w.WriteHeader(resp.StatusCode)
-	io.Copy(w, resp.Body)
+	io.Copy(w, idle{r: resp.Body, deadline: deadline})
 }
 
 func (n *Node) original(p *pile, assetID []byte) (io.ReadSeeker, error) {
