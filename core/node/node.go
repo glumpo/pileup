@@ -134,7 +134,7 @@ func Open(cfg Config) (*Node, error) {
 	n.mu.Lock()
 	for _, e := range entries {
 		var p *pile
-		if p, err = n.start(e); err != nil {
+		if p, err = n.start(e, map[op.Author]string{}); err != nil {
 			break
 		}
 		n.piles = append(n.piles, p)
@@ -170,7 +170,7 @@ func (n *Node) Author() op.Author {
 
 func (n *Node) Create(name, member string) (Pile, error) {
 	e := entry{ID: random(pileIDSize), Secret: random(invite.SecretSize)}
-	return n.add(e, n.join(e.Secret, member), op.PileCreate{Name: name})
+	return n.add(e, map[op.Author]string{}, n.join(e.Secret, member), op.PileCreate{Name: name})
 }
 
 func (n *Node) Join(ctx context.Context, inv, member string) (Pile, error) {
@@ -181,12 +181,12 @@ func (n *Node) Join(ctx context.Context, inv, member string) (Pile, error) {
 	if _, err := n.find(i.PileID); err == nil {
 		return Pile{}, ErrJoined
 	}
-	addr, err := n.reach(ctx, i)
+	addr, who, err := n.reach(ctx, i)
 	if err != nil {
 		return Pile{}, err
 	}
 	e := entry{ID: i.PileID, Secret: i.Secret, Peers: []string{addr}}
-	return n.add(e, n.join(e.Secret, member))
+	return n.add(e, map[op.Author]string{who: addr}, n.join(e.Secret, member))
 }
 
 func (n *Node) Piles() ([]Pile, error) {
@@ -230,7 +230,7 @@ func (n *Node) find(id []byte) (*pile, error) {
 	return nil, ErrUnknownPile
 }
 
-func (n *Node) reach(ctx context.Context, i invite.Invite) (string, error) {
+func (n *Node) reach(ctx context.Context, i invite.Invite) (string, op.Author, error) {
 	addrs := n.discovered(i.PileID)
 	for _, a := range i.Addrs {
 		addrs = append(addrs, a.String())
@@ -242,16 +242,16 @@ func (n *Node) reach(ctx context.Context, i invite.Invite) (string, error) {
 		cancel()
 		if err == nil {
 			c.Close()
-			return a, nil
+			return a, op.Author(c.Peer()), nil
 		}
 		n.report(diag.Connection, i.PileID, a, "join", err)
 		errs = append(errs, err)
 	}
-	return "", fmt.Errorf("%w: %w", ErrUnreachable, errors.Join(errs...))
+	return "", op.Author{}, fmt.Errorf("%w: %w", ErrUnreachable, errors.Join(errs...))
 }
 
-func (n *Node) add(e entry, changes ...op.Change) (Pile, error) {
-	p, err := n.start(e, changes...)
+func (n *Node) add(e entry, addrs map[op.Author]string, changes ...op.Change) (Pile, error) {
+	p, err := n.start(e, addrs, changes...)
 	if err != nil {
 		return Pile{}, err
 	}
@@ -266,7 +266,7 @@ func (n *Node) add(e entry, changes ...op.Change) (Pile, error) {
 	return p.info()
 }
 
-func (n *Node) start(e entry, changes ...op.Change) (*pile, error) {
+func (n *Node) start(e entry, addrs map[op.Author]string, changes ...op.Change) (*pile, error) {
 	if err := n.importPins(e.ID); err != nil {
 		return nil, err
 	}
@@ -291,7 +291,7 @@ func (n *Node) start(e entry, changes ...op.Change) (*pile, error) {
 	}
 	e.Port = uint16(ln.Addr().(*net.TCPAddr).Port)
 	n.diag.Add(diag.Connection, e.ID, "", fmt.Sprintf("listening on port %d", e.Port))
-	p := &pile{entry: e, store: s, replica: replica.New(s, n.key, e.ID, e.Secret), online: map[op.Author]int{}, addrs: map[op.Author]string{}, loops: map[string]*loop{}}
+	p := &pile{entry: e, store: s, replica: replica.New(s, n.key, e.ID, e.Secret), online: map[op.Author]int{}, addrs: addrs, loops: map[string]*loop{}}
 	p.owners = n.owners(p)
 	p.stream = &http.Client{Transport: p.owners.Transport}
 	for _, a := range p.Peers {
