@@ -12,6 +12,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -118,7 +119,7 @@ func (s saved) choose(ctx context.Context, n *node.Node) error {
 	return n.Select(ctx, s.id, ms("2026-07-01T00:00:00Z"), ms("2026-07-10T00:00:00Z"))
 }
 
-func servePeer(t *testing.T, s saved, h http.Handler) string {
+func servePeer(t *testing.T, id, secret []byte, h http.Handler) string {
 	t.Helper()
 	ln, err := net.Listen("tcp", "127.0.0.1:0")
 	if err != nil {
@@ -126,20 +127,32 @@ func servePeer(t *testing.T, s saved, h http.Handler) string {
 	}
 	_, key, _ := ed25519.GenerateKey(nil)
 	srv := &http.Server{Handler: h}
-	go srv.Serve(peer.NewListener(ln, key, func(id []byte) ([]byte, bool) { return s.secret, bytes.Equal(id, s.id) }))
+	go srv.Serve(peer.NewListener(ln, key, func(got []byte) ([]byte, bool) { return secret, bytes.Equal(got, id) }))
 	t.Cleanup(func() { srv.Close() })
 	return ln.Addr().String()
 }
 
 type slowPeer struct {
 	addr  string
+	asks  *atomic.Int32
 	asked chan struct{}
+	gone  chan struct{}
 	gate  chan struct{}
 }
 
-func serveSlowPeer(t *testing.T, s saved, raws [][]byte) slowPeer {
+func signal(ch chan struct{}) {
+	select {
+	case ch <- struct{}{}:
+	default:
+	}
+}
+
+func serveSlowPeer(t *testing.T, id, secret []byte, raws [][]byte) slowPeer {
 	t.Helper()
-	st := s.openStore(t, filepath.Join(t.TempDir(), "peer.db"))
+	st, err := store.Open(filepath.Join(t.TempDir(), "peer.db"), id, secret)
+	if err != nil {
+		t.Fatal(err)
+	}
 	t.Cleanup(func() { st.Close() })
 	for _, raw := range raws {
 		if _, err := st.Apply(raw); err != nil {
@@ -147,21 +160,20 @@ func serveSlowPeer(t *testing.T, s saved, raws [][]byte) slowPeer {
 		}
 	}
 	_, key, _ := ed25519.GenerateKey(nil)
-	sp := slowPeer{asked: make(chan struct{}, 1), gate: make(chan struct{})}
+	sp := slowPeer{asks: &atomic.Int32{}, asked: make(chan struct{}, 1), gone: make(chan struct{}, 1), gate: make(chan struct{})}
 	mux := http.NewServeMux()
-	mux.Handle("/", replica.New(st, key, s.id, s.secret).Handler())
+	mux.Handle("/", replica.New(st, key, id, secret).Handler())
 	mux.HandleFunc("POST /announce", func(w http.ResponseWriter, r *http.Request) {
-		select {
-		case sp.asked <- struct{}{}:
-		default:
-		}
+		sp.asks.Add(1)
+		signal(sp.asked)
 		select {
 		case <-sp.gate:
 			w.Write([]byte("[]"))
 		case <-r.Context().Done():
+			signal(sp.gone)
 		}
 	})
-	sp.addr = servePeer(t, s, mux)
+	sp.addr = servePeer(t, id, secret, mux)
 	return sp
 }
 
@@ -203,7 +215,7 @@ func checkContinues(t *testing.T, s saved, history [][]byte) {
 func TestFirstWriteAfterRestartWaitsForKnownPeer(t *testing.T) {
 	s := newSaved(t)
 	history := s.history(t, 12)
-	p := serveSlowPeer(t, s, history)
+	p := serveSlowPeer(t, s.id, s.secret, history)
 	s.write(t, history[:10], p.addr)
 	n := s.open(t)
 
@@ -260,7 +272,7 @@ func TestUnreachablePeerDoesNotBlockWrites(t *testing.T) {
 func TestCancelledWriteLeavesStartCheckForOthers(t *testing.T) {
 	s := newSaved(t)
 	history := s.history(t, 12)
-	p := serveSlowPeer(t, s, history)
+	p := serveSlowPeer(t, s.id, s.secret, history)
 	s.write(t, history[:10], p.addr)
 	n := s.open(t)
 

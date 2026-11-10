@@ -4,6 +4,7 @@ import (
 	"cmp"
 	"crypto/sha256"
 	"encoding/hex"
+	"maps"
 	"net/netip"
 	"slices"
 	"strings"
@@ -107,28 +108,47 @@ func (b browser) Found(name, host string, port int, txt []byte) {
 	s := service{addr: netip.AddrPortFrom(a.Unmap(), uint16(port)), txt: parseTXT(txt)}
 	n := b.n
 	n.mu.Lock()
+	defer n.mu.Unlock()
 	if n.found[b.service] == nil {
 		n.found[b.service] = map[string]service{}
 	}
+	old, seen := n.found[b.service][name]
 	n.found[b.service][name] = s
-	var target *pile
-	if b.service == pileService {
-		for _, p := range n.piles {
-			if s.txt["pile"] == pileTag(p.ID) && name != n.advertName(p.ID) {
-				target = p
-			}
-		}
+	if b.service != pileService || seen && old.addr == s.addr && maps.Equal(old.txt, s.txt) {
+		return
 	}
-	n.mu.Unlock()
-	if target != nil {
-		n.addPeer(target, s.addr.String())
+	for _, p := range n.piles {
+		if s.txt["pile"] == pileTag(p.ID) && name != n.advertName(p.ID) {
+			n.dial(p, s.addr.String(), func() {})
+		}
 	}
 }
 
 func (b browser) Lost(name string) {
-	b.n.mu.Lock()
-	delete(b.n.found[b.service], name)
-	b.n.mu.Unlock()
+	n := b.n
+	n.mu.Lock()
+	defer n.mu.Unlock()
+	s, ok := n.found[b.service][name]
+	delete(n.found[b.service], name)
+	if !ok || b.service != pileService {
+		return
+	}
+	addr := s.addr.String()
+	for _, p := range n.piles {
+		if l := p.loops[addr]; l != nil && s.txt["pile"] == pileTag(p.ID) && !slices.Contains(p.Peers, addr) && !n.advertised(p, addr) {
+			l.cancel()
+			delete(p.loops, addr)
+		}
+	}
+}
+
+func (n *Node) advertised(p *pile, addr string) bool {
+	for _, s := range n.found[pileService] {
+		if s.addr.String() == addr && s.txt["pile"] == pileTag(p.ID) {
+			return true
+		}
+	}
+	return false
 }
 
 func (n *Node) Screens() []Screen {

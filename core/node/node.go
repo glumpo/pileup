@@ -34,6 +34,8 @@ import (
 const (
 	pileIDSize  = 16
 	retry       = time.Second
+	retries     = 100
+	backoff     = 10 * time.Millisecond
 	timeout     = 20 * time.Second
 	dialTimeout = 5 * time.Second
 )
@@ -77,6 +79,11 @@ type pile struct {
 	stream  *http.Client
 	local   map[string]string
 	online  map[op.Author]int
+	loops   map[string]*loop
+}
+
+type loop struct {
+	cancel context.CancelFunc
 }
 
 type Node struct {
@@ -277,11 +284,11 @@ func (n *Node) start(e entry, changes ...op.Change) (*pile, error) {
 	}
 	e.Port = uint16(ln.Addr().(*net.TCPAddr).Port)
 	n.diag.Add(diag.Connection, e.ID, "", fmt.Sprintf("listening on port %d", e.Port))
-	p := &pile{entry: e, store: s, replica: replica.New(s, n.key, e.ID, e.Secret), local: c.Local, online: map[op.Author]int{}}
+	p := &pile{entry: e, store: s, replica: replica.New(s, n.key, e.ID, e.Secret), local: c.Local, online: map[op.Author]int{}, loops: map[string]*loop{}}
 	p.owners = n.owners(p)
 	p.stream = &http.Client{Transport: p.owners.Transport}
 	for _, a := range p.Peers {
-		n.pull(p, a, p.replica.Hold())
+		n.dial(p, a, p.replica.Hold())
 	}
 	n.serve(p, ln)
 	n.thumbnails(p)
@@ -331,6 +338,7 @@ func (n *Node) announced(p *pile, w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	n.mu.Lock()
+	n.dial(p, addr, func() {})
 	others := slices.DeleteFunc(slices.Clone(p.Peers), func(a string) bool { return a == addr })
 	n.mu.Unlock()
 	w.Header().Set("Content-Type", "application/json")
@@ -345,39 +353,78 @@ func (n *Node) addPeer(p *pile, addr string) error {
 	}
 	p.Peers = append(p.Peers, addr)
 	n.diag.Add(diag.Discovery, p.ID, addr, "new peer address")
-	n.pull(p, addr, func() {})
+	n.dial(p, addr, func() {})
 	return n.save()
 }
 
-func (n *Node) pull(p *pile, addr string, release func()) {
+func (n *Node) dial(p *pile, addr string, release func()) {
+	if n.ctx.Err() != nil || p.loops[addr] != nil {
+		release()
+		return
+	}
+	ctx, cancel := context.WithCancel(n.ctx)
+	l := &loop{cancel: cancel}
+	p.loops[addr] = l
 	n.wg.Add(1)
 	go func() {
 		defer n.wg.Done()
-		for {
-			who, err := n.announce(p, addr)
-			n.report(diag.Connection, p.ID, addr, "announce", err)
-			if err == nil {
-				n.connected(p, who, 1)
-			}
-			synced := n.synced(p, addr)
-			n.report(diag.Sync, p.ID, addr, "sync", p.replica.Pull(n.ctx, addr, func(ops int) {
-				release()
-				synced(ops)
-			}))
-			release()
-			if err == nil {
-				n.connected(p, who, -1)
-			}
-			select {
-			case <-n.ctx.Done():
-				return
-			case <-time.After(retry):
-			}
+		defer cancel()
+		n.connect(ctx, p, addr, release)
+		n.mu.Lock()
+		if p.loops[addr] == l {
+			delete(p.loops, addr)
 		}
+		n.mu.Unlock()
 	}()
 }
 
-func (n *Node) announce(p *pile, addr string) (op.Author, error) {
+func (n *Node) connect(ctx context.Context, p *pile, addr string, release func()) {
+	for retry := 0; ; retry++ {
+		if retry > 0 && pause(ctx, time.Duration(retry)*backoff) != nil {
+			return
+		}
+		synced, err := n.attempt(ctx, p, addr, release)
+		release()
+		if synced {
+			retry = 0
+		}
+		if ctx.Err() != nil || errors.Is(err, peer.ErrCertificate) || errors.Is(err, peer.ErrMembership) || retry == retries {
+			return
+		}
+	}
+}
+
+func (n *Node) attempt(ctx context.Context, p *pile, addr string, release func()) (bool, error) {
+	who, err := n.announce(ctx, p, addr)
+	n.report(diag.Connection, p.ID, addr, "announce", err)
+	if err != nil {
+		return false, err
+	}
+	n.report(diag.Discovery, p.ID, addr, "add peer", n.addPeer(p, addr))
+	n.connected(p, who, 1)
+	defer n.connected(p, who, -1)
+	synced, report := false, n.synced(p, addr)
+	err = p.replica.Pull(ctx, addr, func(ops int) {
+		synced = true
+		release()
+		report(ops)
+	})
+	n.report(diag.Sync, p.ID, addr, "sync", err)
+	return synced, err
+}
+
+var pause = func(ctx context.Context, d time.Duration) error {
+	t := time.NewTimer(d)
+	defer t.Stop()
+	select {
+	case <-ctx.Done():
+		return ctx.Err()
+	case <-t.C:
+		return nil
+	}
+}
+
+func (n *Node) announce(ctx context.Context, p *pile, addr string) (op.Author, error) {
 	var mu sync.Mutex
 	var who op.Author
 	c := http.Client{Timeout: timeout, Transport: &http.Transport{
@@ -393,7 +440,7 @@ func (n *Node) announce(p *pile, addr string) (op.Author, error) {
 		},
 	}}
 	u := "http://" + addr + "/announce?port=" + strconv.Itoa(int(p.Port))
-	req, err := http.NewRequestWithContext(n.ctx, http.MethodPost, u, nil)
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, u, nil)
 	if err != nil {
 		return op.Author{}, err
 	}
