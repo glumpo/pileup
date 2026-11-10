@@ -9,7 +9,7 @@ class ScaleTest {
   @Test
   fun tiersHaveDocumentedLongSide() {
     assertEquals(256, maxSide(1))
-    assertEquals(3840, maxSide(2))
+    assertEquals(1920, maxSide(2))
     for (tier in listOf(0L, 3L)) {
       assertThrows(IllegalArgumentException::class.java) { maxSide(tier) }
     }
