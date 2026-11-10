@@ -5,7 +5,7 @@ status: In Progress
 assignee:
   - '@claude'
 created_date: '2026-11-10T04:10:00Z'
-updated_date: '2026-11-10T04:16:00Z'
+updated_date: '2026-11-10T04:20:00Z'
 labels:
   - app
   - review
@@ -44,4 +44,6 @@ ordinal: 23000
 
 <!-- SECTION:NOTES:BEGIN -->
 R01: красный тест — piles.test.tsx «a created pile opens with its invite hidden until it is asked for» (Expected false, Received true: QR и строка приглашения видны сразу после открытия, запрос /invite уходит при монтировании); «a shown invite is hidden again after leaving the pile» и «an invite that cannot be made is explained» — нет кнопки «Показать приглашение». Старое ожидание «a created pile opens with its invite as a QR code» закрепляло автоматический показ вопреки 7.2 и заменено. Исправление: PileScreen запрашивает приглашение только по кнопке «Показать приглашение»; состояние живёт в экране, при уходе (экран размонтируется) приглашение снова скрыто.
+
+R13: красные тесты в timeline.test.tsx на текущем коде — дата 9e15 в конце, первым элементом и в просмотре: RangeError: Invalid time value из toISOString (рушится весь экран); дата до 0 года первым элементом (-1e14): заголовок дня «-001199-0» вместо «Дата неизвестна»; thumbhash «не base64»: InvalidCharacterError из atob в рендере Preview; author_name-объект: Objects are not valid as a React child (весь экран). Исправление: time.ts отдаёт «Дата неизвестна» и пустое время для дат вне 0–9999 года, модель не меняется; Preview перехватывает ошибку thumbhash (console.warn), остаётся серый фон, T1 грузится; Boundary в ui.tsx (getDerivedStateFromError + console.warn, сброс при смене item) вокруг ячейки сетки («Не удалось показать файл») и подписи в просмотре («Не удалось показать подпись»); ✕, счётчик и листание вне границы. Восстановление после pull-to-refresh и при листании проверено тестами (без сброса по смене item два теста падают).
 <!-- SECTION:NOTES:END -->

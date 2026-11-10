@@ -6,7 +6,12 @@ import { ImageSource } from './api';
 
 function placeholderOf(thumbhash: string): string | undefined {
   if (!thumbhash) return undefined;
-  return thumbHashToDataURL(Uint8Array.from(atob(thumbhash), (c) => c.charCodeAt(0)));
+  try {
+    return thumbHashToDataURL(Uint8Array.from(atob(thumbhash), (c) => c.charCodeAt(0)));
+  } catch (e) {
+    console.warn('thumbhash', e);
+    return undefined;
+  }
 }
 
 export function Preview({

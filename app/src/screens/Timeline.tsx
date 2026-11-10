@@ -4,7 +4,7 @@ import { FlatList, Pressable, StyleSheet, Text, useWindowDimensions, View } from
 import { Api, Pile, TimelineItem } from '../api';
 import { Preview } from '../Preview';
 import { dayOf, duration } from '../time';
-import { describe, ErrorText, Screen, styles } from '../ui';
+import { Boundary, describe, ErrorText, Screen, styles } from '../ui';
 
 const COLUMNS = 4;
 const HEADER = 36;
@@ -126,15 +126,17 @@ export function Timeline({
           ) : (
             <View style={{ flexDirection: 'row' }}>
               {row.items.map((item, i) => (
-                <Cell
+                <Boundary
                   key={item.id}
-                  api={api}
-                  pile={pile.id}
                   item={item}
-                  index={row.first + i}
-                  size={size}
-                  onPress={open}
-                />
+                  fallback={
+                    <View style={{ width: size, height: size, padding: 1 }}>
+                      <Text style={cell.broken}>Не удалось показать файл</Text>
+                    </View>
+                  }
+                >
+                  <Cell api={api} pile={pile.id} item={item} index={row.first + i} size={size} onPress={open} />
+                </Boundary>
               ))}
             </View>
           )
@@ -157,4 +159,5 @@ const cell = StyleSheet.create({
     backgroundColor: 'rgba(0,0,0,0.45)',
   },
   duration: { position: 'absolute', top: 3, right: 5, fontSize: 11, color: '#fff' },
+  broken: { flex: 1, padding: 4, fontSize: 11, color: '#777', backgroundColor: '#ddd' },
 });

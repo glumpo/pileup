@@ -4,6 +4,7 @@ import { FlatList, Pressable, StyleSheet, Text, useWindowDimensions, View } from
 import { Api, Pile, TimelineItem } from '../api';
 import { Preview } from '../Preview';
 import { dayOf, duration, timeOf } from '../time';
+import { Boundary } from '../ui';
 
 export function Viewer({
   api,
@@ -57,11 +58,13 @@ export function Viewer({
           <Text style={styles.text}>✕</Text>
         </Pressable>
         <View style={{ flex: 1 }}>
-          <Text style={styles.text}>{item.author_name}</Text>
-          <Text style={styles.text}>
-            {dayOf(item)} {timeOf(item)}
-            {item.duration_ms !== undefined ? ` · видео ${duration(item.duration_ms)}` : ''}
-          </Text>
+          <Boundary item={item} fallback={<Text style={styles.text}>Не удалось показать подпись</Text>}>
+            <Text style={styles.text}>{item.author_name}</Text>
+            <Text style={styles.text}>
+              {dayOf(item)} {timeOf(item)}
+              {item.duration_ms !== undefined ? ` · видео ${duration(item.duration_ms)}` : ''}
+            </Text>
+          </Boundary>
         </View>
         <Text style={styles.text}>
           {current + 1} / {items.length}
