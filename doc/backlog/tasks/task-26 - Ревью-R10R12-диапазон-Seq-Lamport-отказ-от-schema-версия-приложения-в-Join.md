@@ -5,7 +5,7 @@ status: In Progress
 assignee:
   - '@claude'
 created_date: '2026-11-10T04:10:00Z'
-updated_date: '2026-11-10T04:45:00Z'
+updated_date: '2026-11-10T05:00:00Z'
 labels:
   - core
   - protocol
@@ -53,4 +53,7 @@ R10 подтверждён с уточнением: входящая опера�
 R12 подтверждён: New пишет schema=1 (ключ 7), decodeChange распознаёт только schema=1; известная операция без schema становится неизвестной, а первая такая операция (Join) отвергается ErrJoin и блокирует журнал автора.
 Красные тесты R12 (на коде до изменения, после добавления полей-заглушек без поведения): TestNewWritesNoSchemaField (ключи тела [1 2 3 5 6 7 8 9]); TestSchemaFieldDoesNotSelectDecoding (все известные типы без schema и со schema=2 → Change=nil, битый payload без schema не отвергался); TestJoinUnknownKnownWithoutSchemaValidate (Join без schema не распознан); replica TestUnknownTypeIsRelayedVerbatimAndLaterOpsApply (ErrJoin на Join без schema); state TestMembers, store TestMemberKeepsAppVersionFromJoin и TestDatabaseOfPreviousVersionOpens, httpapi TestCreateListAndJoinByInvite, mobile TestMemberCarriesAppVersionFromNative (версия приложения не доходит до участника/API). TestLegacyVectorsWithSchemaStillApply и store TestLegacyOpsWithSchemaApply зелёные и до изменения (страховка перехода).
 Сделано: поле Schema и константа удалены из Body, выбор обработчика только по type; ключ 7 не занят, остальные номера не менялись; прежнее поле schema игнорируется как неизвестное (байты и подпись сохраняются). Join.AppVersion — CBOR-ключ 4, omitempty, внутри подписанного payload. Golden-векторы перегенерированы (тело без ключа 7, Join с app_version), прежние векторы со schema=1 сохранены в testdata/schema1 и проверяются: декодируются, проходят Validator.Check и применяются в store. state.Member и members.app_version (миграция: ALTER TABLE ADD COLUMN app_version DEFAULT '' для БД прежней версии), node.Config.AppVersion → Join, mobile.Start(dir, platform, appVersion, …), Kotlin передаёт versionName пакета; GET /piles: members[].app_version (пустая строка — версия неизвестна), openapi обновлён. iOS не подключён (модуль-заглушка), версию не передаёт.
+
+Решения для журнала (architecture.md не менялся): 5.1 — поле schema убрано из Op, seq/lamport в диапазоне [1, 2^63−1]; A4 — номера полей тела: 1 pile_id, 2 author, 3 seq, 4 prev, 5 lamport, 6 wall_time, 8 type, 9 payload; ключ 7 (бывший schema) выведен и не переиспользуется; A6 — ErrRange (seq/lamport вне диапазона) — структурная ошибка; A8 — первая часть («schema ≠ 1 → неизвестный тип») заменена: обработчик выбирается только по type, прежнее поле schema игнорируется, несовместимые изменения — новым типом, номера типов и полей не переиспользуются; «неизвестные поля игнорируются» и «перечисления не проверяются» остаются; 5.2 — Join{name, platform, proof, app_version?} (ключ 4, необязательный; нет — версия неизвестна); A9 — БД прежней версии получает столбец members.app_version при открытии; A13 — Start(dir, platform, appVersion, …); A21 — Android передаёт versionName пакета. API: members[].app_version, пустая строка — неизвестна.
+Проверки: gofmt, go vet, go test -race ./..., fuzz по 10 с, make check, Kotlin :core:testDebugUnitTest (38 тестов), make android-debug — пройдены.
 <!-- SECTION:NOTES:END -->
