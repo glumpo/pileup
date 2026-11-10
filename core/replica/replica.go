@@ -69,6 +69,12 @@ func (n *Node) track(d int) {
 	n.notify()
 }
 
+func (n *Node) Hold() func() {
+	n.track(1)
+	var once sync.Once
+	return func() { once.Do(func() { n.track(-1) }) }
+}
+
 func (n *Node) Create(ctx context.Context, wallTime int64, c op.Change) (op.Op, error) {
 	for {
 		n.mu.Lock()

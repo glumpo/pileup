@@ -281,7 +281,7 @@ func (n *Node) start(e entry, changes ...op.Change) (*pile, error) {
 	p.owners = n.owners(p)
 	p.stream = &http.Client{Transport: p.owners.Transport}
 	for _, a := range p.Peers {
-		n.pull(p, a)
+		n.pull(p, a, p.replica.Hold())
 	}
 	n.serve(p, ln)
 	n.thumbnails(p)
@@ -345,11 +345,11 @@ func (n *Node) addPeer(p *pile, addr string) error {
 	}
 	p.Peers = append(p.Peers, addr)
 	n.diag.Add(diag.Discovery, p.ID, addr, "new peer address")
-	n.pull(p, addr)
+	n.pull(p, addr, func() {})
 	return n.save()
 }
 
-func (n *Node) pull(p *pile, addr string) {
+func (n *Node) pull(p *pile, addr string, release func()) {
 	n.wg.Add(1)
 	go func() {
 		defer n.wg.Done()
@@ -359,7 +359,12 @@ func (n *Node) pull(p *pile, addr string) {
 			if err == nil {
 				n.connected(p, who, 1)
 			}
-			n.report(diag.Sync, p.ID, addr, "sync", p.replica.Pull(n.ctx, addr, n.synced(p, addr)))
+			synced := n.synced(p, addr)
+			n.report(diag.Sync, p.ID, addr, "sync", p.replica.Pull(n.ctx, addr, func(ops int) {
+				release()
+				synced(ops)
+			}))
+			release()
 			if err == nil {
 				n.connected(p, who, -1)
 			}
