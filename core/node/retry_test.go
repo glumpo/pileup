@@ -9,6 +9,7 @@ import (
 	"crypto/rand"
 	"crypto/tls"
 	"crypto/x509"
+	"errors"
 	"io"
 	"math/big"
 	"net"
@@ -42,13 +43,20 @@ func (p *pauses) list() []time.Duration {
 	return slices.Clone(p.got)
 }
 
+const runaway = 500
+
+var errRunaway = errors.New("series does not end")
+
 func instantPauses(t *testing.T) *pauses {
 	t.Helper()
 	p := &pauses{}
 	t.Cleanup(node.SetPause(func(ctx context.Context, d time.Duration) error {
 		p.mu.Lock()
+		defer p.mu.Unlock()
 		p.got = append(p.got, d)
-		p.mu.Unlock()
+		if len(p.got) > runaway {
+			return errRunaway
+		}
 		return ctx.Err()
 	}))
 	return p
@@ -150,6 +158,12 @@ func stopped(t *testing.T, n *node.Node, id []byte) {
 	eventually(t, "connection loops end", func() bool { return len(n.Dialing(id)) == 0 })
 }
 
+func exhausted(n *node.Node, id []byte) {
+	for len(n.Dialing(id)) > 0 {
+		time.Sleep(10 * time.Millisecond)
+	}
+}
+
 func received(t *testing.T, ch <-chan struct{}, what string) {
 	t.Helper()
 	select {
@@ -168,7 +182,7 @@ func TestAmbiguousFailuresAreRetriedHundredTimesWithLinearPauses(t *testing.T) {
 	s.write(t, s.history(t, 1), refusing.Addr().String())
 	n := s.open(t)
 
-	stopped(t, n, s.id)
+	exhausted(n, s.id)
 	if got := refusing.accepted.Load(); got != 101 {
 		t.Errorf("%d connection attempts, want the first one and 100 retries", got)
 	}
@@ -199,7 +213,7 @@ func TestAuthenticityErrorStopsSeriesWithoutPull(t *testing.T) {
 			s.write(t, s.history(t, 1), addr)
 			n := s.open(t)
 
-			stopped(t, n, s.id)
+			exhausted(n, s.id)
 			eventually(t, "the error is logged", logged(n, diag.Connection, node.Pile{ID: s.id}, addr, c.want.Error()))
 			if got := impostor.accepted.Load(); got != 1 {
 				t.Errorf("%d connections, want only the failed announce", got)
@@ -235,7 +249,7 @@ func TestSeriesRestartsOnlyAfterSuccessfulSync(t *testing.T) {
 	s.write(t, s.history(t, 1), addr)
 	n := s.open(t)
 
-	stopped(t, n, s.id)
+	exhausted(n, s.id)
 	if got := announces.Load(); got != 151 {
 		t.Errorf("%d attempts, want 51 until the successful round and 100 retries after it", got)
 	}
@@ -324,7 +338,7 @@ func TestOnlyNewDiscoveryStartsNewSeries(t *testing.T) {
 	advertise := func() {
 		c.lan.Advertise("_pileup._tcp", "pileup-candidate", portOf(addr), txt("pile="+pileHash(c.pile.ID)))
 	}
-	stopped(t, c.n, c.pile.ID)
+	exhausted(c.n, c.pile.ID)
 	if got := refusing.accepted.Load(); got != 101 {
 		t.Fatalf("%d attempts in the first series, want 101", got)
 	}
@@ -336,9 +350,10 @@ func TestOnlyNewDiscoveryStartsNewSeries(t *testing.T) {
 
 	c.lan.Stop()
 	advertise()
-	eventually(t, "second series ends", func() bool {
-		return refusing.accepted.Load() == 202 && len(c.n.Dialing(c.pile.ID)) == 0
-	})
+	exhausted(c.n, c.pile.ID)
+	if got := refusing.accepted.Load(); got != 202 {
+		t.Errorf("%d attempts after both series, want 202", got)
+	}
 }
 
 func openFull(t *testing.T, dir, platform string, lib node.MediaProvider, l *lan) *node.Node {
@@ -394,7 +409,7 @@ func TestReturningMemberIsSyncedAfterSeriesEnded(t *testing.T) {
 	if err := borya.Close(); err != nil {
 		t.Fatal(err)
 	}
-	stopped(t, anya, p.ID)
+	exhausted(anya, p.ID)
 
 	borya = openWith(t, dirB, "ios", lib)
 	choose(t, borya, p.ID, "2026-07-01T00:00:00Z", "2026-07-10T00:00:00Z")
