@@ -3,6 +3,7 @@ package state_test
 import (
 	"bytes"
 	"errors"
+	"math"
 	"reflect"
 	"testing"
 
@@ -267,5 +268,29 @@ func TestOwnershipStaysWithFirstAdder(t *testing.T) {
 		if got := n.View().Assets; !reflect.DeepEqual(got, want) {
 			t.Errorf("assets = %v, want %v", got, want)
 		}
+	}
+}
+
+func TestLamportBoundIsCheckedBeforeApplying(t *testing.T) {
+	const top = uint64(math.MaxInt64)
+	a, b, c := newNode(1), newNode(2), newNode(3)
+	a.join(t, "Аня", "ios")
+	for _, l := range []uint64{top + 1, math.MaxUint64} {
+		raw := op.New(c.key, pile, op.Head{}, l, 0, op.Join{Name: "Вера", Proof: op.JoinProof(secret, c.author())})
+		if _, err := a.Apply(raw); !errors.Is(err, op.ErrRange) {
+			t.Fatalf("incoming lamport %d: err = %v, want ErrRange", l, err)
+		}
+	}
+	if v := a.View(); v.Lamport != 1 || len(v.VV) != 1 {
+		t.Fatalf("rejected ops changed state: L = %d, vv %v", v.Lamport, v.VV)
+	}
+	if _, err := a.Apply(op.New(b.key, pile, op.Head{}, top, 0, op.Join{Name: "Боря", Proof: op.JoinProof(secret, b.author())})); err != nil {
+		t.Fatalf("incoming lamport 2^63-1: %v", err)
+	}
+	if _, err := a.Create(a.key, 0, op.MemberSet{Name: "А"}); !errors.Is(err, op.ErrRange) {
+		t.Fatalf("local write after 2^63-1: err = %v, want ErrRange", err)
+	}
+	if v := a.View(); v.Lamport != top || v.VV[a.author()] != 1 || v.Members[a.author()].Name != "Аня" {
+		t.Fatalf("failed local write changed state: %+v", v)
 	}
 }

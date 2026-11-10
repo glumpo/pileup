@@ -1,6 +1,8 @@
 package store_test
 
 import (
+	"errors"
+	"math"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -90,5 +92,37 @@ func TestOpsFromOtherEncodersAreReducedLikeReference(t *testing.T) {
 		if got, want := view(t, s), ref.View(); !reflect.DeepEqual(got, want) {
 			t.Fatalf("op %d: view differs from reference:\n got %+v\nwant %+v", i, got, want)
 		}
+	}
+}
+
+func TestLamportBoundIsCheckedBeforeStorage(t *testing.T) {
+	const top = uint64(math.MaxInt64)
+	s := open(t, filepath.Join(t.TempDir(), "pile.db"))
+	defer s.Close()
+	a, b, c := key(1), key(2), key(3)
+	create(t, s, a, join(a, "Аня"))
+
+	for _, l := range []uint64{top + 1, math.MaxUint64} {
+		if _, err := s.Apply(op.New(c, pile, op.Head{}, l, wallTime, join(c, "Вера"))); !errors.Is(err, op.ErrRange) {
+			t.Fatalf("incoming lamport %d: err = %v, want ErrRange", l, err)
+		}
+	}
+	if v := view(t, s); v.Lamport != 1 || len(v.VV) != 1 {
+		t.Fatalf("rejected ops changed state: L = %d, vv %v", v.Lamport, v.VV)
+	}
+
+	raw := op.New(b, pile, op.Head{}, top, wallTime, join(b, "Боря"))
+	if _, err := s.Apply(raw); err != nil {
+		t.Fatalf("incoming lamport 2^63-1: %v", err)
+	}
+	if v := view(t, s); v.Lamport != top || !reflect.DeepEqual(ops(t, s, author(b), 1), [][]byte{raw}) {
+		t.Fatalf("after lamport 2^63-1: L = %d", v.Lamport)
+	}
+
+	if _, err := s.Create(a, wallTime, op.MemberSet{Name: "А"}); !errors.Is(err, op.ErrRange) {
+		t.Fatalf("local write after 2^63-1: err = %v, want ErrRange", err)
+	}
+	if v := view(t, s); v.Lamport != top || v.VV[author(a)] != 1 || v.Members[author(a)].Name != "Аня" {
+		t.Fatalf("failed local write changed state: %+v", v)
 	}
 }

@@ -6,6 +6,7 @@ import (
 	"crypto/hmac"
 	"crypto/sha256"
 	"errors"
+	"math"
 )
 
 var (
@@ -14,6 +15,7 @@ var (
 	ErrPrev    = errors.New("op: prev does not match author's previous op")
 	ErrLamport = errors.New("op: lamport does not increase")
 	ErrJoin    = errors.New("op: author log must start with a valid Join")
+	ErrRange   = errors.New("op: seq or lamport out of range")
 )
 
 type Validator struct {
@@ -46,6 +48,9 @@ func JoinProof(secret []byte, a Author) []byte {
 func (v Validator) Check(o Op, head Head) error {
 	if !bytes.Equal(o.PileID, v.pileID) {
 		return ErrPile
+	}
+	if o.Seq > math.MaxInt64 || o.Lamport > math.MaxInt64 {
+		return ErrRange
 	}
 	if o.Seq != head.Seq+1 {
 		return ErrSeq

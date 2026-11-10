@@ -6,6 +6,7 @@ import (
 	"crypto/hmac"
 	"crypto/sha256"
 	"errors"
+	"math"
 	"testing"
 
 	"github.com/glumpo/pileup/core/crdt/op"
@@ -58,6 +59,34 @@ func TestCheck(t *testing.T) {
 		{"proof of other author", mustDecode(t, op.New(k, pile, op.Head{}, 1, 0, join(key(2)))), op.Head{}, op.ErrJoin},
 		{"no proof", mustDecode(t, op.New(k, pile, op.Head{}, 1, 0, op.Join{Name: "x"})), op.Head{}, op.ErrJoin},
 		{"join at seq 2", mustDecode(t, op.New(k, pile, first.Head(), 6, 0, join(k))), first.Head(), op.ErrJoin},
+	}
+	for _, c := range cases {
+		if err := v.Check(c.op, c.head); !errors.Is(err, c.want) {
+			t.Errorf("%s: err = %v, want %v", c.name, err, c.want)
+		}
+	}
+}
+
+func TestSeqAndLamportStayWithinSignedInt64(t *testing.T) {
+	v := op.NewValidator(pile, secret)
+	k := key(1)
+	const top = uint64(math.MaxInt64)
+	first := mustDecode(t, op.New(k, pile, op.Head{}, 1, 0, join(k)))
+	beforeTop := op.Head{Seq: top - 1, ID: op.ID{7}, Lamport: 1}
+	atTop := op.Head{Seq: top, ID: op.ID{7}, Lamport: 1}
+
+	cases := []struct {
+		name string
+		op   op.Op
+		head op.Head
+		want error
+	}{
+		{"lamport 2^63-1", mustDecode(t, op.New(k, pile, first.Head(), top, 0, op.MemberSet{})), first.Head(), nil},
+		{"lamport 2^63", mustDecode(t, op.New(k, pile, first.Head(), top+1, 0, op.MemberSet{})), first.Head(), op.ErrRange},
+		{"lamport 2^64-1", mustDecode(t, op.New(k, pile, first.Head(), math.MaxUint64, 0, op.MemberSet{})), first.Head(), op.ErrRange},
+		{"join with lamport 2^63", mustDecode(t, op.New(k, pile, op.Head{}, top+1, 0, join(k))), op.Head{}, op.ErrRange},
+		{"seq 2^63-1", mustDecode(t, op.New(k, pile, beforeTop, 2, 0, op.MemberSet{})), beforeTop, nil},
+		{"seq 2^63", mustDecode(t, op.New(k, pile, atTop, 2, 0, op.MemberSet{})), atTop, op.ErrRange},
 	}
 	for _, c := range cases {
 		if err := v.Check(c.op, c.head); !errors.Is(err, c.want) {
