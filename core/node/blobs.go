@@ -41,6 +41,8 @@ var (
 	errNoOwner     = errors.New("node: owner is not among known peers")
 )
 
+var headerTimeout, readIdle = timeout, 10 * time.Second
+
 type RenditionMaker interface {
 	Rendition(localID string, tier int) ([]byte, error)
 	OriginalSize(localID string) (int64, error)
@@ -218,7 +220,7 @@ func (n *Node) owners(p *pile) *http.Client {
 		return n.dialOwner(ctx, p, addr)
 	}}
 	context.AfterFunc(n.ctx, tr.CloseIdleConnections)
-	return &http.Client{Transport: tr, Timeout: timeout}
+	return &http.Client{Transport: tr, Timeout: headerTimeout}
 }
 
 func (n *Node) dialOwner(ctx context.Context, p *pile, addr string) (net.Conn, error) {
