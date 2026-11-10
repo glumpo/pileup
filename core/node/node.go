@@ -307,7 +307,13 @@ func (n *Node) serve(p *pile, ln net.Listener) {
 	mux.Handle("/", p.replica.Handler())
 	mux.HandleFunc("POST /announce", func(w http.ResponseWriter, r *http.Request) { n.announced(p, w, r) })
 	mux.HandleFunc("GET /blob/{asset}/{revision}/{tier}", func(w http.ResponseWriter, r *http.Request) { n.serveBlob(p, w, r) })
-	srv := &http.Server{Handler: mux, ReadHeaderTimeout: timeout, IdleTimeout: timeout, ConnState: n.handshakes(p)}
+	srv := &http.Server{
+		Handler:           n.tracked(mux),
+		ReadHeaderTimeout: timeout,
+		IdleTimeout:       timeout,
+		ConnState:         n.handshakes(p),
+		BaseContext:       func(net.Listener) context.Context { return n.ctx },
+	}
 	l := peer.NewListener(ln, n.key, func(id []byte) ([]byte, bool) {
 		return p.Secret, bytes.Equal(id, p.ID)
 	})
@@ -319,6 +325,23 @@ func (n *Node) serve(p *pile, ln net.Listener) {
 	context.AfterFunc(n.ctx, func() {
 		srv.Close()
 		ln.Close()
+	})
+}
+
+func (n *Node) tracked(h http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		n.mu.Lock()
+		closed := n.ctx.Err() != nil
+		if !closed {
+			n.wg.Add(1)
+		}
+		n.mu.Unlock()
+		if closed {
+			http.Error(w, "node is closed", http.StatusServiceUnavailable)
+			return
+		}
+		defer n.wg.Done()
+		h.ServeHTTP(w, r)
 	})
 }
 
