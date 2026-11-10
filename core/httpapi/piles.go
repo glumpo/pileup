@@ -70,6 +70,7 @@ func WithNode(token string, n *node.Node, h *show.Host) http.Handler {
 	timeline(mux, n)
 	screens(mux, n)
 	diagnostics(mux, n)
+	reconnect(mux, n)
 	shows(mux, h)
 	pins(mux, h)
 	return authorized(token, mux)

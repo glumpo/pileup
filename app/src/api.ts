@@ -130,6 +130,7 @@ export function connect(port: number, token: string) {
       call<void>('PUT', `/piles/${pile}/selection/${asset}`, { selected }),
     timeline: (pile: string) => call<TimelineItem[]>('GET', `/piles/${pile}/timeline`),
     diag: () => call<DiagEvent[]>('GET', '/diag'),
+    reconnect: () => call<void>('POST', '/reconnect'),
     diagExport: () => text('/diag/export'),
     screens: () => call<Screen[]>('GET', '/screens'),
     startShow: (pile: string, screen: string, asset?: string) =>

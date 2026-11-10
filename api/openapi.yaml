@@ -513,6 +513,20 @@ paths:
                 type: string
         "401":
           description: Missing or invalid token.
+  /reconnect:
+    post:
+      operationId: reconnect
+      summary: Retry the connections to all known peer addresses now
+      description: >-
+        Connection loops that wait for their next retry try at once, and every
+        saved peer address without a loop gets a new one. The app calls this
+        when it returns to the foreground. The reconnect and its reason are
+        written to the diagnostic log.
+      responses:
+        "204":
+          description: Retries started.
+        "401":
+          description: Missing or invalid token.
   /show:
     post:
       operationId: startShow

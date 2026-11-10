@@ -1,6 +1,6 @@
 import { StatusBar } from 'expo-status-bar';
 import { useEffect, useState } from 'react';
-import { BackHandler, StyleSheet, Text, View } from 'react-native';
+import { AppState, BackHandler, StyleSheet, Text, View } from 'react-native';
 
 import { Api, Pile, ShowState, TimelineItem } from './src/api';
 import { startCore } from './src/core';
@@ -45,6 +45,14 @@ export default function App() {
     });
     return () => sub.remove();
   }, [depth, showing]);
+
+  useEffect(() => {
+    if (!api) return;
+    const sub = AppState.addEventListener('change', (state) => {
+      if (state === 'active') api.reconnect().catch(() => {});
+    });
+    return () => sub.remove();
+  }, [api]);
 
   if (!api) {
     return (
