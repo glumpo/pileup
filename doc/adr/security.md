@@ -204,6 +204,24 @@ T1, T3 фото, другие ревизии, маршруты UI и порта 
   - `reconnect, <причина>: <n> waiting loops retried now, <m> loops started`;
   - `network addresses changed from [...] to [...]`.
 
+Состояние участника (TASK-39, `Presence` в [`presence.go`](../../core/node/presence.go)). Узел помнит класс последней неудачи цикла для каждого адреса из `peers`, а для участника — когда закончилось его последнее соединение. Оба значения хранятся только в памяти. `Node.Presence` отдаёт их приложению через `GET /piles` (поля `online`, `last_seen`, `last_error`) и в подсказках показа (`last_error`):
+
+- **На связи** — идёт синхронизация хотя бы по одному адресу. Тогда класса нет, а `last_seen` — текущее время. Своё устройство для себя всегда на связи.
+- **Не на связи** — `last_seen` равен концу последнего соединения или отсутствует, если связи не было с запуска ядра. Класс берётся по таблице:
+
+  | Класс | Ошибка (`errors.Is` / `errors.As`) | Совет в приложении |
+  |---|---|---|
+  | `refused` | `syscall.ECONNREFUSED` | Pileup закрыт — попросите открыть Pileup |
+  | `timeout` | `net.Error` с `Timeout()`: announce не ответил за 20 с, long-poll — за 40 с | возможно, погас экран — разблокировать телефон и открыть Pileup |
+  | `no_route` | `syscall.EHOSTUNREACH`, `syscall.ENETUNREACH` | телефон не в этой сети — подключиться к той же Wi-Fi |
+  | `other_device` | `peer.ErrMembership`, `peer.ErrCertificate`, `replica.ErrPeerChanged` | по известному адресу отвечает другое устройство — открыть Pileup в той же Wi-Fi |
+  | `error` | всё прочее, в том числе EOF, когда отказали нам (выше) | общий: разблокировать телефон и открыть Pileup |
+  | `no_address` | у участника нет адресов в `peers` | адрес неизвестен — открыть Pileup в той же Wi-Fi |
+
+- **Несколько адресов.** Побеждает первый класс в порядке `refused`, `timeout`, `no_route`, `other_device`, `error`: чем ближе ответ к живому Pileup, тем полезнее совет. Пока первые попытки не закончились, класса нет.
+- **Сброс.** Подключение по адресу стирает его класс, вытеснение адреса (§4.5) удаляет класс вместе с адресом. Класс после `ErrMembership` остаётся и после конца цикла, пока адрес в `peers`.
+- **Чего не видно.** Неудачи mDNS-кандидатов без ключа не приписываются никому. Ошибки загрузок файлов у владельца в класс не входят: их показывает причина подсказки `timeout` (`cache.md` §6.2).
+
 ## 6. От чего защищено и от чего нет
 
 **Защищено (механизм):**
@@ -259,7 +277,7 @@ T1, T3 фото, другие ревизии, маршруты UI и порта 
 - [`core/store/store.go`](../../core/store/store.go): применение операций, `members`.
 - [`core/device/device.go`](../../core/device/device.go): ключ устройства, `Keystore`, `WriteFile`.
 - [`core/invite/invite.go`](../../core/invite/invite.go): формат приглашения.
-- [`core/node/node.go`](../../core/node/node.go): Create/Join/Invite, listener, announce, повторы; [`blobs.go`](../../core/node/blobs.go): blob-маршруты, проверка владельца; [`discovery.go`](../../core/node/discovery.go): mDNS.
+- [`core/node/node.go`](../../core/node/node.go): Create/Join/Invite, listener, announce, повторы; [`blobs.go`](../../core/node/blobs.go): blob-маршруты, проверка владельца; [`discovery.go`](../../core/node/discovery.go): mDNS; [`presence.go`](../../core/node/presence.go): состояние участника и класс ошибки подключения.
 - [`core/replica/replica.go`](../../core/replica/replica.go): `/vv`, `/ops`, Pull, форки.
 - [`core/httpapi/health.go`](../../core/httpapi/health.go) (`authorized`), [`piles.go`](../../core/httpapi/piles.go) (маршруты).
 - [`core/show/renderer.go`](../../core/show/renderer.go), [`show.go`](../../core/show/show.go), [`session.go`](../../core/show/session.go): порт и токен показа; [`core/cast/cast.go`](../../core/cast/cast.go).

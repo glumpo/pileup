@@ -713,10 +713,19 @@ components:
           items:
             type: object
             required:
+              - key
               - name
               - platform
               - app_version
+              - online
+              - last_seen
             properties:
+              key:
+                type: string
+                pattern: "^[0-9a-f]+$"
+                description: >-
+                  Device key of the member, as author of timeline items and
+                  hints.
               name:
                 type: string
               platform:
@@ -726,6 +735,35 @@ components:
                 description: >-
                   Version of the app that created the member's Join, as of
                   joining; empty when the Join carries no version.
+              online:
+                type: boolean
+                description: >-
+                  A sync connection to the member is up now. This device is
+                  always online for itself.
+              last_seen:
+                type:
+                  - integer
+                  - "null"
+                description: >-
+                  Unix ms of the last moment the member was connected: now
+                  while online, the end of the last connection otherwise;
+                  null if not connected since the core started. Not saved
+                  across restarts.
+              last_error:
+                type: string
+                description: >-
+                  Present only while offline: why the member cannot be
+                  reached, from the last attempt at each of its known
+                  addresses. refused — nothing listens at the address
+                  (Pileup is closed); timeout — no answer in time (the
+                  phone sleeps or is busy); no_route — no route to the
+                  address (not in this network); other_device — another
+                  device or another pile answers at the address; error —
+                  any other failure; no_address — no address of the member
+                  is known. With several addresses the first class of
+                  refused, timeout, no_route, other_device, error wins;
+                  absent while the first attempts are still running. Newer
+                  versions may add others.
     TimelineItem:
       type: object
       required:
@@ -983,11 +1021,12 @@ components:
           type: array
           description: >-
             Members the show waits for: owners of waiting files and of an
-            unavailable current video, in timeline order. The UI words them,
-            e.g. «Нет ответа от iPhone Ани. Возможно, погас экран — попросите
-            разблокировать телефон и открыть Pileup» with «Загрузить всё с
-            iPhone Ани» (POST /piles/{id}/pins). A member whose files wait is
-            also logged in /diag as kind timeout.
+            unavailable current video, in timeline order. The UI words them
+            with advice by last_error, e.g. «Нет ответа от iPhone: Аня.
+            Pileup закрыт — попросите открыть Pileup» with «Загрузить всё с
+            участника» (POST /piles/{id}/pins). While the owner of the current
+            file is among them, the UI shows its hint instead of load_failed.
+            A member whose files wait is also logged in /diag as kind timeout.
           items:
             $ref: "#/components/schemas/Hint"
     Hint:
@@ -1013,6 +1052,12 @@ components:
             unreachable — no connection to the member's device; timeout —
             connected, but requests to it fail or time out. Newer versions
             may add others.
+        last_error:
+          type: string
+          description: >-
+            Why the member cannot be reached, as last_error of the member in
+            GET /piles; the UI picks its advice by it. Absent while the
+            member is online.
     PinProgress:
       type: object
       required:
