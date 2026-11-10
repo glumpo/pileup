@@ -322,7 +322,6 @@ func (n *Node) serve(p *pile, ln net.Listener) {
 		IdleTimeout:       timeout,
 		ConnState:         n.handshakes(p),
 		BaseContext:       func(net.Listener) context.Context { return n.ctx },
-		ConnContext:       func(ctx context.Context, c net.Conn) context.Context { return context.WithValue(ctx, connKey{}, c) },
 	}
 	l := peer.NewListener(ln, n.key, func(id []byte) ([]byte, bool) {
 		return p.Secret, bytes.Equal(id, p.ID)
@@ -361,7 +360,6 @@ func (n *Node) announced(p *pile, w http.ResponseWriter, r *http.Request) {
 	}
 	addr := netip.AddrPortFrom(from.Addr().Unmap(), uint16(port)).String()
 	n.diag.Add(diag.Connection, p.ID, addr, "announce received")
-	n.learn(p, op.Author(r.Context().Value(connKey{}).(*peer.Conn).Peer()), addr)
 	if err := n.addPeer(p, addr); err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
@@ -373,8 +371,6 @@ func (n *Node) announced(p *pile, w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(others)
 }
-
-type connKey struct{}
 
 func (n *Node) learn(p *pile, who op.Author, addr string) {
 	n.mu.Lock()

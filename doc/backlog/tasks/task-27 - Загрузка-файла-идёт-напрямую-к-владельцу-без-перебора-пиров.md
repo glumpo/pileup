@@ -5,7 +5,7 @@ status: In Progress
 assignee:
   - '@claude'
 created_date: '2026-11-10T12:43:00Z'
-updated_date: '2026-11-10T12:57:00Z'
+updated_date: '2026-11-10T13:06:00Z'
 labels:
   - core
 dependencies: []
@@ -54,4 +54,6 @@ dialOwner в core/node/blobs.go не знает адрес владельца и
 
 Реализация: pile.addrs (память, под n.mu) — участник → последний подтверждённый адрес; источники: исходящий announce (attempt), входящий announce (IP соединения + порт, ключ из peer.Conn через ConnContext), reach при входе. При смене адреса закрываются простаивающие соединения к владельцам pile. dialOwner — только этот адрес, 5 с, проверка ключа (errNotOwner). download: 20 с на соединение и заголовки (таймер отменяет контекст), тело — 10 с без байтов (readIdle); ошибки чтения тела теперь ErrUnavailable. Хранить отображение на диске не стали: первый announce после старта его восстанавливает.
 Лимиты в тестах подменяются node.SetFetchTimeouts.
+
+Доработка: входящий POST /announce больше не источник адреса владельца. Он только запускает исходящий цикл к IP соединения + объявленному порту; адрес запоминается после успешного исходящего announce, то есть когда он достижим с нашей стороны. Красный тест TestIncomingAnnounceAloneDoesNotSetOwnerAddress на прежнем коде: announce с недостижимого адреса подменял рабочий (T2: connection refused); участник, известный только по входящему announce, загружался до нашего announce (err = nil вместо ErrUnavailable). Риск об односторонней достижимости из doc/adr/cache.md снят. Тест смены адреса ждёт sync established с новым адресом.
 <!-- SECTION:NOTES:END -->
