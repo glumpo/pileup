@@ -221,3 +221,18 @@ func TestLegacyOpsWithSchemaApply(t *testing.T) {
 		t.Fatalf("view %+v", v)
 	}
 }
+
+func TestMemberIsFoundByKey(t *testing.T) {
+	s := open(t, filepath.Join(t.TempDir(), "pile.db"))
+	defer s.Close()
+	a, b := key(1), key(2)
+	create(t, s, a, join(a, "Аня"))
+	create(t, s, a, op.MemberSet{Name: "Анна"})
+	m, ok, err := s.Member(author(a))
+	if err != nil || !ok || m != view(t, s).Members[author(a)] {
+		t.Fatalf("member %+v, %v, %v; want %+v", m, ok, err, view(t, s).Members[author(a)])
+	}
+	if m, ok, err := s.Member(author(b)); err != nil || ok {
+		t.Fatalf("unknown member %+v, %v, %v; want not found", m, ok, err)
+	}
+}
