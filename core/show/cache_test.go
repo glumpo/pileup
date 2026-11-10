@@ -39,7 +39,7 @@ func (ph *phone) evictFirst(p node.Pile, first, second string) {
 	rx := newReceiver(ph.t)
 	must(ph.t)(ph.show.Start(p.ID, ph.tv(rx), ph.asset(p, first).Meta.AssetID))
 	eventually(ph.t, "window cached", func() bool { return ph.cached(p, first) && ph.cached(p, second) })
-	must(ph.t)(ph.show.Goto(ph.asset(p, second).Meta.AssetID))
+	ph.show.Stop()
 	eventually(ph.t, first+" evicted", func() bool { return !ph.cached(p, first) })
 }
 
@@ -97,8 +97,8 @@ func TestEvictedFileKeepsOtherFileWithSameBytes(t *testing.T) {
 	a.lib.content["X"] = "same bytes"
 	a.lib.content["Z"] = "same bytes"
 	a.lib.photo("X", 0)
-	a.lib.photo("Z", 1)
-	a.lib.photo("Y", 2)
+	a.lib.photo("Y", 1)
+	a.lib.photo("Z", 2)
 	a.share(p)
 	waitTimeline(t, p, 3, b)
 
@@ -152,16 +152,22 @@ func TestDisplaysOpenedInViewerAreKeptWithinBudget(t *testing.T) {
 }
 
 func TestViewerShowAndPinsShareOneAccounting(t *testing.T) {
-	a, b, c := newPhone(t, "ios", node.DefaultBudget), newPhone(t, "android", 4*int64(len(display("A0")))), newPhone(t, "ios", node.DefaultBudget)
+	a, b, c := newPhone(t, "ios", node.DefaultBudget), newPhone(t, "android", 9*int64(len(display("A0")))), newPhone(t, "ios", node.DefaultBudget)
 	p := pileOf(t, a, b, c)
 	a.lib.photo("A0", 0)
 	a.lib.photo("A1", 1)
 	c.lib.photo("C0", 2)
-	a.lib.photo("A2", 3)
-	a.lib.photo("A3", 4)
+	want := map[string]bool{"A0": true, "A1": false, "C0": true, "A2": true, "A3": true}
+	for i := range 5 {
+		l := fmt.Sprintf("F%d", i)
+		a.lib.photo(l, 3+i)
+		want[l] = true
+	}
+	a.lib.photo("A2", 8)
+	a.lib.photo("A3", 9)
 	a.share(p)
 	c.share(p)
-	waitTimeline(t, p, 5, b)
+	waitTimeline(t, p, 10, b)
 	ui := httptest.NewServer(httpapi.WithNode("ui", b.Node, b.show))
 	t.Cleanup(ui.Close)
 
@@ -173,12 +179,19 @@ func TestViewerShowAndPinsShareOneAccounting(t *testing.T) {
 	b.view(ui.URL, p, b.asset(p, "C0"))
 	rx := newReceiver(t)
 	must(t)(b.show.Start(p.ID, b.tv(rx), b.asset(p, "A2").Meta.AssetID))
-	eventually(t, "window cached", func() bool { return b.cached(p, "A2") && b.cached(p, "A3") })
+	eventually(t, "window cached", func() bool {
+		for l, w := range want {
+			if w && !b.cached(p, l) {
+				return false
+			}
+		}
+		return true
+	})
 	b.view(ui.URL, p, b.asset(p, "A2"))
 
-	for l, want := range map[string]bool{"A0": true, "A1": false, "C0": true, "A2": true, "A3": true} {
-		if b.cached(p, l) != want {
-			t.Fatalf("%s cached %v, want %v", l, !want, want)
+	for l, w := range want {
+		if b.cached(p, l) != w {
+			t.Fatalf("%s cached %v, want %v", l, !w, w)
 		}
 	}
 	if n, m := a.lib.displayed("A2"), c.lib.displayed("C0"); n != 1 || m != 1 {

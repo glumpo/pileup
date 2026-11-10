@@ -53,6 +53,12 @@ func (m *model) window() []prefetch.Item {
 			w = append(w, it)
 		}
 	}
+	ahead := len(w)
+	for j := i - 1; j >= 0; j-- {
+		if !m.items[j].Skip && len(w) < ahead+prefetch.Behind {
+			w = append(w, m.items[j])
+		}
+	}
 	return w
 }
 

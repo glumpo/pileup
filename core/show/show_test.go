@@ -310,21 +310,21 @@ func TestNextWindowIsCachedBeforeRendererAsks(t *testing.T) {
 	if _, body := get(t, rx.waitLoad(t, 2).url); string(body) != display("P01") {
 		t.Fatalf("renderer got %q", body)
 	}
-	must(t)(b.show.Goto(b.asset(p, "P25").Meta.AssetID))
+	must(t)(b.show.Goto(b.asset(p, "P28").Meta.AssetID))
 	eventually(t, "window after a jump", func() bool {
-		for _, l := range locals[25:] {
+		for _, l := range locals[23:] {
 			if !b.cached(p, l) {
 				return false
 			}
 		}
 		return true
 	})
-	if _, body := get(t, rx.waitLoad(t, 3).url); string(body) != display("P25") {
+	if _, body := get(t, rx.waitLoad(t, 3).url); string(body) != display("P28") {
 		t.Fatalf("renderer got %q", body)
 	}
 	for i, l := range locals {
 		want := 1
-		if i >= 22 && i < 25 {
+		if i == 22 {
 			want = 0
 		}
 		if n := a.lib.displayed(l); n != want {
@@ -357,12 +357,49 @@ func TestCacheEvictsEarliestFilesOverBudget(t *testing.T) {
 		}
 	}
 	eventually(t, "first window cached", cachedExactly(0, 20))
-	must(t)(b.show.Goto(b.asset(p, "P09").Meta.AssetID))
+	must(t)(b.show.Goto(b.asset(p, "P10").Meta.AssetID))
 	eventually(t, "earliest files evicted down to the budget", cachedExactly(5, 29))
 	for _, l := range locals[:5] {
 		x := b.asset(p, l)
 		if _, ok := b.Cached(p.ID, x.Meta.AssetID, x.Meta.Revision, node.T1); !ok {
 			t.Fatalf("T1 of %s evicted", l)
+		}
+	}
+}
+
+func TestFiveFilesBeforeCursorAreCachedAndKeptOverBudget(t *testing.T) {
+	size := int64(len(display("P00")))
+	a, b := newPhone(t, "ios", node.DefaultBudget), newPhone(t, "android", 21*size)
+	p := pileOf(t, a, b)
+	var locals []string
+	for i := range 40 {
+		locals = append(locals, fmt.Sprintf("P%02d", i))
+		a.lib.photo(locals[i], i)
+	}
+	a.share(p)
+	waitTimeline(t, p, 40, b)
+	rx := newReceiver(t)
+	must(t)(b.show.Start(p.ID, b.tv(rx), b.asset(p, "P10").Meta.AssetID))
+	window := func() bool {
+		for i, l := range locals {
+			if b.cached(p, l) != (i >= 5 && i <= 30) {
+				return false
+			}
+		}
+		return true
+	}
+	eventually(t, "cursor, 20 next and 5 previous files cached", window)
+	time.Sleep(1500 * time.Millisecond)
+	if !window() {
+		t.Fatal("files of the window are evicted")
+	}
+	for i, l := range locals {
+		want := 0
+		if i >= 5 && i <= 30 {
+			want = 1
+		}
+		if n := a.lib.displayed(l); n != want {
+			t.Fatalf("%s rendered on the source %d times, want %d", l, n, want)
 		}
 	}
 }

@@ -7,6 +7,7 @@ import (
 
 const (
 	WindowSize = 20
+	Behind     = 5
 	PerSource  = 5
 	MinBackoff = time.Second
 	MaxBackoff = 30 * time.Second

@@ -208,7 +208,7 @@ func TestPinnedFilesAreNotEvictedUntilUnpinned(t *testing.T) {
 	eventually(t, "window cached, pinned kept", cached(want))
 	must(t)(b.show.Goto(b.asset(p, "C25").Meta.AssetID))
 	for i, l := range ofC {
-		want[l] = i >= 25
+		want[l] = i >= 20
 	}
 	eventually(t, "unpinned files evicted, pinned kept over budget", cached(want))
 

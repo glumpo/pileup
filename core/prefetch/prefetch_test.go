@@ -22,6 +22,14 @@ func ids(from, to int) []string {
 	return out
 }
 
+func behind(cursor int) []string {
+	var out []string
+	for i := cursor - 1; i >= 0 && i >= cursor-5; i-- {
+		out = append(out, id(i))
+	}
+	return out
+}
+
 func chronology(n int, src func(i int) string) []prefetch.Item {
 	items := make([]prefetch.Item, n)
 	for i := range items {
@@ -73,20 +81,20 @@ func TestNoCursorNoLoads(t *testing.T) {
 	equal(t, "load", load, nil)
 }
 
-func TestLoadsCursorAndNextTwentyInOrder(t *testing.T) {
+func TestLoadsCursorAndNextTwentyThenFiveBeforeInOrder(t *testing.T) {
 	c := newCache(chronology(60, ownSource))
 	c.SetCursor(id(10))
 	load := c.Plan(t0)
-	equal(t, "load", load, ids(10, 31))
+	equal(t, "load", load, slices.Concat(ids(10, 31), behind(10)))
 	load = c.Plan(t0)
 	equal(t, "load while in flight", load, nil)
 }
 
-func TestWindowStopsAtEndOfChronology(t *testing.T) {
+func TestWindowStopsAtEndsOfChronology(t *testing.T) {
 	c := newCache(chronology(15, ownSource))
-	c.SetCursor(id(5))
+	c.SetCursor(id(3))
 	load := c.Plan(t0)
-	equal(t, "load", load, ids(5, 15))
+	equal(t, "load", load, slices.Concat(ids(3, 15), behind(3)))
 }
 
 func TestSkippedItemsAreNotLoadedOrCounted(t *testing.T) {
@@ -107,7 +115,7 @@ func TestSkippedCursorItemIsStillLoaded(t *testing.T) {
 	c := newCache(items)
 	c.SetCursor(id(2))
 	load := c.Plan(t0)
-	equal(t, "load", load, ids(2, 23))
+	equal(t, "load", load, slices.Concat(ids(2, 23), behind(2)))
 }
 
 func TestCursorStepLoadsOnlyTheNewItem(t *testing.T) {
@@ -139,7 +147,7 @@ func TestJumpForwardKeepsEarlierCache(t *testing.T) {
 	c.loaded(load...)
 	c.SetCursor(id(150))
 	load = c.Plan(t0)
-	equal(t, "load", load, ids(150, 171))
+	equal(t, "load", load, slices.Concat(ids(150, 171), behind(150)))
 	c.loaded(load...)
 	c.SetCursor(id(0))
 	load = c.Plan(t0)
@@ -153,10 +161,20 @@ func TestJumpBackwardLoadsNewWindow(t *testing.T) {
 	c.loaded(load...)
 	c.SetCursor(id(140))
 	load = c.Plan(t0)
-	equal(t, "load", load, ids(140, 150))
+	equal(t, "load", load, slices.Concat(ids(140, 145), behind(140)))
 	c.SetCursor(id(20))
 	load = c.Plan(t0)
-	equal(t, "load", load, ids(20, 41))
+	equal(t, "load", load, slices.Concat(ids(20, 41), behind(20)))
+}
+
+func TestItemsBeforeCursorWaitForNextItemsOfTheirSource(t *testing.T) {
+	c := newCache(chronology(100, oneSource))
+	c.SetCursor(id(50))
+	for _, want := range [][]string{ids(50, 55), ids(55, 60), ids(60, 65), ids(65, 70), {id(70), id(49), id(48), id(47), id(46)}, {id(45)}, nil} {
+		load := c.Plan(t0)
+		equal(t, "load", load, want)
+		c.loaded(load...)
+	}
 }
 
 func TestAtMostFiveLoadsPerSourceInChronologicalOrder(t *testing.T) {
@@ -278,7 +296,7 @@ func TestPinnedItemsLoadAfterWindowFromCursor(t *testing.T) {
 	pinAll(c, ids(55, 60))
 	c.SetCursor(id(30))
 	load := c.Plan(t0)
-	equal(t, "load", load, slices.Concat(ids(30, 51), ids(55, 60), ids(0, 10)))
+	equal(t, "load", load, slices.Concat(ids(30, 51), behind(30), ids(55, 60), ids(0, 10)))
 }
 
 func TestPinnedItemsLoadWithoutCursorInChronologicalOrder(t *testing.T) {
@@ -299,6 +317,9 @@ func TestPinnedItemsShareFiveLoadsPerSource(t *testing.T) {
 	equal(t, "load", load, ids(95, 100))
 	c.loaded(load...)
 	load = c.Plan(t0)
+	equal(t, "load before the cursor", load, behind(90))
+	c.loaded(load...)
+	load = c.Plan(t0)
 	equal(t, "load after the end of chronology", load, ids(0, 5))
 }
 
@@ -313,14 +334,15 @@ func TestPinnedItemsAreAllLoaded(t *testing.T) {
 	}
 }
 
-func TestWindowIsCursorAndTwentyNextShownItems(t *testing.T) {
+func TestWindowIsCursorTwentyNextAndFiveBeforeShownItems(t *testing.T) {
 	items := chronology(40, ownSource)
 	items[12].Skip = true
+	items[7].Skip = true
 	c := newCache(items)
 	equal(t, "window without cursor", c.Window(), nil)
 	c.SetCursor(id(10))
 	want := slices.DeleteFunc(ids(10, 32), func(x string) bool { return x == id(12) })
-	equal(t, "window", c.Window(), want)
+	equal(t, "window", c.Window(), slices.Concat(want, []string{id(9), id(8), id(6), id(5), id(4)}))
 }
 
 func TestItemDroppedFromCacheIsLoadedAgainWhenWanted(t *testing.T) {
