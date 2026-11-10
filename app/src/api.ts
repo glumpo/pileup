@@ -148,6 +148,15 @@ export function connect(port: number, token: string) {
       uri: `${base}/piles/${pile}/blob/${item.id}/${item.revision}/${tier}`,
       headers: auth,
     }),
+    checkBlob: async (pile: string, item: { id: string; revision: string }, tier: 1 | 2) => {
+      const res = await fetch(`${base}/piles/${pile}/blob/${item.id}/${item.revision}/${tier}`, {
+        headers: auth,
+      });
+      if (!res.ok) {
+        const problem = await res.json().catch(() => ({}));
+        throw new ApiError(res.status, problem.error ?? 'internal', problem.reason);
+      }
+    },
   };
 }
 

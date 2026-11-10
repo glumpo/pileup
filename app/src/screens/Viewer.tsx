@@ -1,10 +1,59 @@
-import { useCallback, useState } from 'react';
-import { FlatList, Pressable, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
+import { useCallback, useEffect, useState } from 'react';
+import { FlatList, Image, Pressable, StyleSheet, Text, useWindowDimensions, View, ViewStyle } from 'react-native';
 
-import { Api, Pile, TimelineItem } from '../api';
+import { Api, ApiError, Pile, TimelineItem } from '../api';
 import { Preview } from '../Preview';
 import { dayOf, duration, timeOf } from '../time';
-import { Boundary } from '../ui';
+import { Boundary, describe } from '../ui';
+
+type Problem = { text: string; retry: boolean };
+
+const advice = 'Возможно, погас экран — попросите разблокировать телефон и открыть Pileup.';
+
+function problemOf(error: unknown, author: string): Problem {
+  const code = error instanceof ApiError ? error.code : undefined;
+  if (code === 'source_unavailable') return { text: `Нет ответа от участника: ${author}. ${advice}`, retry: true };
+  if (code === 'unknown_asset') return { text: 'Файл удалён или изменён: обновите хронологию', retry: false };
+  return { text: `Не удалось загрузить файл. ${describe(error)}`, retry: false };
+}
+
+function Page({ api, pile, item, style }: { api: Api; pile: string; item: TimelineItem; style: ViewStyle }) {
+  const [attempt, setAttempt] = useState(0);
+  const [problem, setProblem] = useState<Problem>();
+
+  useEffect(() => {
+    if (!problem?.retry) return;
+    const timer = setTimeout(() => setAttempt((a) => a + 1), 2000);
+    return () => clearTimeout(timer);
+  }, [problem]);
+
+  const failed = () =>
+    api.checkBlob(pile, item, 2).then(
+      () => setProblem({ text: 'Не удалось показать файл', retry: false }),
+      (e) => setProblem(problemOf(e, item.author_name)),
+    );
+
+  return (
+    <View style={style}>
+      <Preview
+        thumbhash={item.thumbhash}
+        source={api.blob(pile, item, 1)}
+        style={StyleSheet.absoluteFill}
+        resizeMode="contain"
+      />
+      <Image
+        key={attempt}
+        testID="image"
+        source={api.blob(pile, item, 2)}
+        style={StyleSheet.absoluteFill}
+        resizeMode="contain"
+        onLoad={() => setProblem(undefined)}
+        onError={failed}
+      />
+      {problem && <Text style={styles.problem}>{problem.text}</Text>}
+    </View>
+  );
+}
 
 export function Viewer({
   api,
@@ -25,14 +74,7 @@ export function Viewer({
   const [current, setCurrent] = useState(index);
   const item = items[current];
   const renderPage = useCallback(
-    ({ item: page }: { item: TimelineItem }) => (
-      <Preview
-        thumbhash={page.thumbhash}
-        source={api.blob(pile.id, page, 2)}
-        style={{ width, height }}
-        resizeMode="contain"
-      />
-    ),
+    ({ item: page }: { item: TimelineItem }) => <Page api={api} pile={pile.id} item={page} style={{ width, height }} />,
     [api, pile.id, width, height],
   );
 
@@ -98,4 +140,15 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(0,0,0,0.4)',
   },
   text: { color: '#fff', fontSize: 16 },
+  problem: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    bottom: 0,
+    padding: 16,
+    paddingBottom: 32,
+    color: '#fff',
+    fontSize: 16,
+    backgroundColor: 'rgba(0,0,0,0.6)',
+  },
 });
