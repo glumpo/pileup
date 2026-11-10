@@ -4,7 +4,7 @@ const val JPEG_QUALITY = 85
 
 fun maxSide(tier: Long): Int = when (tier) {
   1L -> 256
-  2L -> 3840
+  2L -> 1920
   else -> throw IllegalArgumentException("no rendition for tier $tier")
 }
 
