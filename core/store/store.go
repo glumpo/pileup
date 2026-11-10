@@ -56,7 +56,7 @@ func Open(path string, pileID, secret []byte) (*Store, error) {
 		return nil, err
 	}
 	db.SetMaxOpenConns(1)
-	if _, err := db.Exec(schema); err != nil {
+	if _, err := db.Exec(schema + localSchema); err != nil {
 		db.Close()
 		return nil, err
 	}
@@ -70,17 +70,19 @@ func (s *Store) Apply(raw []byte) (op.Op, error) {
 }
 
 func (s *Store) Create(key ed25519.PrivateKey, wallTime int64, c op.Change) (op.Op, error) {
-	return s.inTx(func(tx *sql.Tx) (op.Op, error) {
-		head, err := headOf(tx, op.Author(key.Public().(ed25519.PublicKey)))
-		if err != nil {
-			return op.Op{}, err
-		}
-		var l uint64
-		if err := tx.QueryRow(`SELECT l FROM pile`).Scan(&l); err != nil {
-			return op.Op{}, err
-		}
-		return s.apply(tx, op.New(key, s.pileID, head, l+1, wallTime, c))
-	})
+	return s.inTx(func(tx *sql.Tx) (op.Op, error) { return s.create(tx, key, wallTime, c) })
+}
+
+func (s *Store) create(tx *sql.Tx, key ed25519.PrivateKey, wallTime int64, c op.Change) (op.Op, error) {
+	head, err := headOf(tx, op.Author(key.Public().(ed25519.PublicKey)))
+	if err != nil {
+		return op.Op{}, err
+	}
+	var l uint64
+	if err := tx.QueryRow(`SELECT l FROM pile`).Scan(&l); err != nil {
+		return op.Op{}, err
+	}
+	return s.apply(tx, op.New(key, s.pileID, head, l+1, wallTime, c))
 }
 
 func (s *Store) inTx(f func(*sql.Tx) (op.Op, error)) (op.Op, error) {

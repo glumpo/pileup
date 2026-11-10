@@ -77,7 +77,6 @@ type pile struct {
 	replica *replica.Node
 	owners  *http.Client
 	stream  *http.Client
-	local   map[string]string
 	online  map[op.Author]int
 }
 
@@ -262,12 +261,12 @@ func (n *Node) start(e entry, changes ...op.Change) (*pile, error) {
 	if err := n.importPins(e.ID); err != nil {
 		return nil, err
 	}
-	c, err := n.load(e.ID)
+	s, err := store.Open(filepath.Join(n.cfg.Dir, "piles", hex.EncodeToString(e.ID)+".db"), e.ID, e.Secret)
 	if err != nil {
 		return nil, err
 	}
-	s, err := store.Open(filepath.Join(n.cfg.Dir, "piles", hex.EncodeToString(e.ID)+".db"), e.ID, e.Secret)
-	if err != nil {
+	if err := n.importSelection(e.ID, s); err != nil {
+		s.Close()
 		return nil, err
 	}
 	for _, c := range changes {
@@ -283,7 +282,7 @@ func (n *Node) start(e entry, changes ...op.Change) (*pile, error) {
 	}
 	e.Port = uint16(ln.Addr().(*net.TCPAddr).Port)
 	n.diag.Add(diag.Connection, e.ID, "", fmt.Sprintf("listening on port %d", e.Port))
-	p := &pile{entry: e, store: s, replica: replica.New(s, n.key, e.ID, e.Secret), local: c.Local, online: map[op.Author]int{}}
+	p := &pile{entry: e, store: s, replica: replica.New(s, n.key, e.ID, e.Secret), online: map[op.Author]int{}}
 	p.owners = n.owners(p)
 	p.stream = &http.Client{Transport: p.owners.Transport}
 	for _, a := range p.Peers {
