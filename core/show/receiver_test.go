@@ -11,6 +11,7 @@ import (
 	"io"
 	"math/big"
 	"net"
+	"net/http"
 	"sync"
 	"testing"
 	"time"
@@ -36,6 +37,9 @@ type receiver struct {
 	mu       sync.Mutex
 	conns    []net.Conn
 	fail     bool
+	fetch    bool
+	idle     bool
+	shown    []string
 	media    int
 	state    string
 	loads    []load
@@ -106,20 +110,11 @@ func (r *receiver) serve(c net.Conn) {
 }
 
 func (r *receiver) control(typ string, id any, p map[string]any) map[string]any {
+	if typ == "LOAD" {
+		return r.load(id, p)
+	}
 	r.mu.Lock()
 	defer r.mu.Unlock()
-	if typ == "LOAD" {
-		media, _ := p["media"].(map[string]any)
-		url, _ := media["contentId"].(string)
-		ct, _ := media["contentType"].(string)
-		r.loads = append(r.loads, load{url, ct})
-		if r.fail {
-			return map[string]any{"type": "LOAD_FAILED", "requestId": id, "detailedErrorCode": 905}
-		}
-		r.media++
-		r.state = "PLAYING"
-		return r.status(id, "")
-	}
 	r.commands = append(r.commands, typ)
 	if sid, _ := p["mediaSessionId"].(float64); r.media == 0 || int(sid) != r.media {
 		return map[string]any{"type": "INVALID_REQUEST", "requestId": id, "reason": "INVALID_MEDIA_SESSION_ID"}
@@ -134,6 +129,46 @@ func (r *receiver) control(typ string, id any, p map[string]any) map[string]any 
 		return r.status(id, "CANCELLED")
 	}
 	return r.status(id, "")
+}
+
+func (r *receiver) load(id any, p map[string]any) map[string]any {
+	media, _ := p["media"].(map[string]any)
+	url, _ := media["contentId"].(string)
+	ct, _ := media["contentType"].(string)
+	r.mu.Lock()
+	fetch := r.fetch
+	r.mu.Unlock()
+	body, fetched := "", true
+	if fetch {
+		body, fetched = download(url)
+	}
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	r.loads = append(r.loads, load{url, ct})
+	if r.fail || !fetched {
+		return map[string]any{"type": "LOAD_FAILED", "requestId": id, "detailedErrorCode": 905}
+	}
+	if fetch {
+		r.shown = append(r.shown, body)
+	}
+	r.media++
+	if r.idle {
+		r.state = "IDLE"
+		return r.status(id, "ERROR")
+	}
+	r.state = "PLAYING"
+	return r.status(id, "")
+}
+
+func download(url string) (string, bool) {
+	client := http.Client{Timeout: 10 * time.Second}
+	resp, err := client.Get(url)
+	if err != nil {
+		return "", false
+	}
+	defer resp.Body.Close()
+	body, err := io.ReadAll(resp.Body)
+	return string(body), err == nil && resp.StatusCode == http.StatusOK
 }
 
 func (r *receiver) status(id any, idleReason string) map[string]any {
@@ -157,6 +192,24 @@ func (r *receiver) failLoads(fail bool) {
 	r.mu.Lock()
 	r.fail = fail
 	r.mu.Unlock()
+}
+
+func (r *receiver) fetching() {
+	r.mu.Lock()
+	r.fetch = true
+	r.mu.Unlock()
+}
+
+func (r *receiver) failPlayback(idle bool) {
+	r.mu.Lock()
+	r.idle = idle
+	r.mu.Unlock()
+}
+
+func (r *receiver) displayed() []string {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	return append([]string(nil), r.shown...)
 }
 
 func (r *receiver) drop() {

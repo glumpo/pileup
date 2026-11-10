@@ -30,3 +30,11 @@ func (n *Node) Timeline(id []byte) (Pile, []state.Asset, error) {
 	})
 	return Pile{ID: p.ID, Name: v.PileName, Members: v.Members}, out, nil
 }
+
+func (n *Node) Changed(id []byte) (<-chan struct{}, error) {
+	p, err := n.find(id)
+	if err != nil {
+		return nil, err
+	}
+	return p.replica.Changed(), nil
+}

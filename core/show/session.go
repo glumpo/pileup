@@ -21,6 +21,8 @@ const (
 	tick    = time.Second
 )
 
+var settle = 200 * time.Millisecond
+
 type session struct {
 	n      *node.Node
 	pile   []byte
@@ -58,13 +60,15 @@ func parseKey(k string) (assetID, revision []byte) {
 	return assetID, revision
 }
 
-func (s *session) begin(p node.Pile, items []state.Asset, cursor int) {
+func (s *session) begin(p node.Pile, items []state.Asset, cursor int, changed <-chan struct{}) {
 	s.mu.Lock()
 	s.setItems(p, items)
 	s.cursor = -1
 	s.move(cursor)
 	s.mu.Unlock()
 	s.n.Diag().Add(diag.Renderer, s.pile, s.screen.Name, "show started")
+	s.wg.Add(1)
+	go s.follow(changed)
 	if s.cast != nil {
 		s.wg.Add(1)
 		go s.drive()
@@ -80,20 +84,65 @@ func (s *session) setItems(p node.Pile, items []state.Asset) {
 	s.l.setItems(p, items)
 }
 
-func (s *session) refresh() {
+func (s *session) follow(changed <-chan struct{}) {
+	defer s.wg.Done()
+	for {
+		select {
+		case <-s.ctx.Done():
+			return
+		case <-changed:
+		}
+		select {
+		case <-s.ctx.Done():
+			return
+		case <-time.After(settle):
+		}
+		var err error
+		if changed, err = s.n.Changed(s.pile); err != nil {
+			return
+		}
+		s.mu.Lock()
+		i, _ := s.refresh()
+		s.seek(i)
+		s.mu.Unlock()
+	}
+}
+
+func (s *session) refresh() (int, bool) {
 	p, items, err := s.n.Timeline(s.pile)
-	if err != nil || len(items) == 0 {
-		return
+	if err != nil {
+		return s.cursor, true
 	}
-	current := key(s.items[s.cursor])
+	old, cur := s.items, s.cursor
 	s.setItems(p, items)
-	if i, ok := s.index[current]; ok {
-		s.cursor = i
-		return
+	pos := make(map[string]int, len(items))
+	for i, a := range items {
+		pos[string(a.Meta.AssetID)] = i
 	}
-	i := min(s.cursor, len(items)-1)
+	if cur < 0 {
+		return 0, false
+	}
+	if i, ok := pos[string(old[cur].Meta.AssetID)]; ok {
+		s.cursor = i
+		return i, true
+	}
 	s.cursor = -1
-	s.move(i)
+	for _, a := range old[cur+1:] {
+		if i, ok := pos[string(a.Meta.AssetID)]; ok {
+			return i, false
+		}
+	}
+	return len(items), false
+}
+
+func (s *session) seek(i int) error {
+	if len(s.items) == 0 {
+		s.l.setCursor("")
+		s.signal()
+		return ErrEmpty
+	}
+	s.move(min(max(i, 0), len(s.items)-1))
+	return nil
 }
 
 func (s *session) move(i int) {
@@ -115,6 +164,9 @@ func (s *session) move(i int) {
 }
 
 func (s *session) control(command string) error {
+	if s.cursor < 0 {
+		return ErrEmpty
+	}
 	cur := s.items[s.cursor]
 	if cur.Meta.Kind != op.KindVideo {
 		return ErrNotVideo
@@ -147,7 +199,7 @@ func (s *session) signal() {
 
 func (s *session) unavailable(a state.Asset) {
 	s.mu.Lock()
-	down := key(s.items[s.cursor]) == key(a) && !s.videoDown
+	down := s.cursor >= 0 && key(s.items[s.cursor]) == key(a) && !s.videoDown
 	if down {
 		s.videoDown = true
 		s.signal()
@@ -165,23 +217,21 @@ func (s *session) posterOnly(a state.Asset) {
 func (s *session) state() State {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	cur := s.items[s.cursor]
-	st := State{
-		Pile:             s.pile,
-		Screen:           s.screen,
-		Index:            s.cursor,
-		Total:            len(s.items),
-		Current:          cur,
-		Playing:          cur.Meta.Kind == op.KindVideo && !s.videoDown && (s.player == playing || s.player == "BUFFERING"),
-		VideoUnavailable: s.videoDown,
+	st := State{Pile: s.pile, Screen: s.screen, Total: len(s.items)}
+	var down []op.Author
+	if s.cursor >= 0 {
+		cur := s.items[s.cursor]
+		st.Index = s.cursor
+		st.Current = cur
+		st.Playing = cur.Meta.Kind == op.KindVideo && !s.videoDown && (s.player == playing || s.player == "BUFFERING")
+		st.VideoUnavailable = s.videoDown
+		if s.videoDown {
+			down = append(down, cur.Owner)
+		}
 	}
 	if s.fault != nil {
 		f := *s.fault
 		st.Error = &f
-	}
-	var down []op.Author
-	if s.videoDown {
-		down = append(down, cur.Owner)
 	}
 	st.Waiting, st.Hints = s.l.status(down...)
 	return st

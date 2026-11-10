@@ -1,9 +1,11 @@
 ---
 id: TASK-25
 title: 'Ревью R06+R17: повтор LOAD и удаление файлов во время показа'
-status: To Do
-assignee: []
+status: In Progress
+assignee:
+  - '@claude'
 created_date: '2026-11-10T04:10:00Z'
+updated_date: '2026-11-10T05:07:00Z'
 labels:
   - core
   - review
@@ -30,3 +32,36 @@ ordinal: 25000
 - [ ] #3 Применённое удаление обновляет состояние активного показа без команд с пульта
 - [ ] #4 Каждая ошибка сначала воспроизведена красным тестом
 <!-- AC:END -->
+
+## Implementation Plan
+
+<!-- SECTION:PLAN:BEGIN -->
+1. Проверить утверждения R06/R17.1/R17.2 по коду core/show (ветка task-21).
+2. Красные тесты (отдельный коммит): управляемый receiver получает изображение по URL из LOAD; (R06) LOAD при недоступном источнике повторяется после его возвращения без команд, receiver получает нужные байты, ошибка снимается, повторов после успеха нет; IDLE/ERROR после LOAD и в ответе на LOAD повторяются; смена курсора во время ожидания повтора, Stop прекращает повторы; (R17.1) A,B,C,D: удаление текущего B → Next даёт C, удаление текущего последнего D → Prev даёт C, удаление всех файлов → пустое состояние, STOP на экран, команды дают ErrEmpty; (R17.2) применённое удаление с другого устройства обновляет total/index/current, при удалении текущего выбирается следующий (или предыдущий) и загружается на экран, окно загрузки сдвигается без команд.
+3. renderer: loaded фиксируется только после успешного LOAD; ошибка LOAD или MEDIA_STATUS IDLE/ERROR ставят отменяемый таймер повтора (пауза reload = 1 с), по таймеру — LOAD текущего кадра; Stop отменяет; пустой показ — STOP.
+4. session: refresh возвращает позицию текущего файла по asset id либо ближайшего оставшегося следующего; Next/Prev/Goto/автообновление выбирают цель без двойного сдвига; пустая хронология принимается (курсор -1, total 0, команды ErrEmpty).
+5. node.Changed(pile) — сигнал изменения реплики; сессия ждёт его, выдерживает паузу settle (200 мс) и обновляет хронологию, курсор, загрузчик и экран.
+6. gofmt/vet/race (новые тесты -count=10), make check; заметки и решения в задаче.
+<!-- SECTION:PLAN:END -->
+
+## Implementation Notes
+
+<!-- SECTION:NOTES:BEGIN -->
+Проверка утверждений ревью по коду (ветка task-21):
+- R06 подтверждено: drive присваивает loaded = url до результата LOAD; после ошибки цикл ждёт только wake/Changed/Done, появление T2 его не будит; status сообщает IDLE/ERROR, но признак загрузки не сбрасывает. Уточнение: MEDIA_STATUS в ответе на LOAD тоже приходит в Changed, поэтому IDLE/ERROR в ответе обрабатывается тем же путём, что и поздний статус.
+- R17.1 подтверждено: refresh сам ставит курсор на файл с прежним индексом (C), затем Next сдвигает на D; Prev после удаления текущего последнего D даёт B (ожидался C); пустая хронология игнорируется (current C, total 3).
+- R17.2 подтверждено: хронология перечитывается только в Next/Prev/Goto; tick загрузчика планирует по старому списку.
+- Найдено попутно: в TestCastErrorsAndDisconnectAreReported после Goto на видео ожидалось 3 LOAD вместо 4 (P0, P1 с ошибкой, P2, V) — тест проходил только при проверке до прихода LOAD видео; под -race падал. Исправлено на 4.
+Красные тесты (коммит e0d2d74) до исправления:
+- TestFailedLoadIsRepeatedWhenSourceIsBack: «receiver shows the file: timed out».
+- TestLoadEndingInPlaybackErrorIsRepeated: «LOAD repeated after a late error status: timed out».
+- TestLoadRetryFollowsCursorAndEndsWithShow: «LOAD of the new file repeated: timed out».
+- TestRemovedCurrentFileIsNotSkipped: «next after removing the current file: D, index 2 of 3»; отдельно проверено: Prev после удаления D даёт B, после удаления всех файлов Next без ошибки, current C, total 3.
+- TestAppliedRemovalUpdatesShow: «other file removed: timed out».
+- TestAppliedRemovalMovesLoadWindow: «window extends past the removed file: timed out».
+После 77886a5 все зелёные.
+Решения: пауза повтора LOAD фиксированная, 1 с (reload), повтор по таймеру перечитывает текущий кадр; сигнал изменения — node.Changed(pile) (канал реплики), сессия выжидает 200 мс (settle) и перечитывает хронологию; текущий файл узнаётся по asset id; при удалении текущего выбирается ближайший оставшийся следующий из прежнего списка, иначе последний; пустой показ: сессия жива, total 0, index 0, current пустой, экрану STOP, Next/Prev/Goto/Play/Pause → ErrEmpty (409 empty_pile); при появлении файлов показ продолжается с первого.
+
+Проверки: gofmt -l пусто, go vet ./... чисто, go test -race ./... зелёный, новые тесты и TestCastErrors/TestFilesSharedDuringShow -race -count=10 зелёные, make check проходит.
+Риски: при постоянной ошибке файла LOAD повторяется каждую секунду, пока кадр текущий (без backoff); устаревший IDLE/ERROR прежнего медиа после смены кадра может вызвать один лишний повтор; STOP при переходе к пустому показу после неудачного LOAD может вернуть INVALID_REQUEST и показать command_failed. Приложению нужен вид пустого показа (total 0: сейчас «1 / 0» и превью с пустым id).
+<!-- SECTION:NOTES:END -->

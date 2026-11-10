@@ -166,6 +166,10 @@ func (h *Host) Start(pileID []byte, screenID string, assetID []byte) (State, err
 	if err != nil {
 		return State{}, err
 	}
+	changed, err := h.n.Changed(pileID)
+	if err != nil {
+		return State{}, err
+	}
 	p, items, err := h.n.Timeline(pileID)
 	if err != nil {
 		return State{}, err
@@ -202,7 +206,7 @@ func (h *Host) Start(pileID []byte, screenID string, assetID []byte) (State, err
 			return State{}, err
 		}
 	}
-	s.begin(p, items, cursor)
+	s.begin(p, items, cursor, changed)
 	h.cur = s
 	return s.state(), nil
 }
@@ -226,29 +230,32 @@ func (h *Host) State() (State, error) {
 
 func (h *Host) Next() (State, error) {
 	return h.do(func(s *session) error {
-		s.refresh()
-		s.move(min(s.cursor+1, len(s.items)-1))
-		return nil
+		i, kept := s.refresh()
+		if kept {
+			i++
+		}
+		return s.seek(i)
 	})
 }
 
 func (h *Host) Prev() (State, error) {
 	return h.do(func(s *session) error {
-		s.refresh()
-		s.move(max(s.cursor-1, 0))
-		return nil
+		i, _ := s.refresh()
+		return s.seek(i - 1)
 	})
 }
 
 func (h *Host) Goto(assetID []byte) (State, error) {
 	return h.do(func(s *session) error {
-		s.refresh()
+		at, _ := s.refresh()
 		i := slices.IndexFunc(s.items, func(a state.Asset) bool { return bytes.Equal(a.Meta.AssetID, assetID) })
 		if i < 0 {
+			if err := s.seek(at); err != nil {
+				return err
+			}
 			return node.ErrUnknownAsset
 		}
-		s.move(i)
-		return nil
+		return s.seek(i)
 	})
 }
 
