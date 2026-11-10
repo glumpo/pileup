@@ -57,6 +57,7 @@ var (
 	shows    *show.Host
 	listener net.Listener
 	server   *http.Server
+	drain    func()
 	port     int
 	token    string
 )
@@ -87,11 +88,25 @@ func Start(dir, platform, appVersion string, keystore Keystore, media MediaProvi
 	}
 	t := rand.Text()
 	ctx, cancel := context.WithCancel(context.Background())
+	var running sync.RWMutex
 	core = n
 	shows = show.New(n)
 	listener = ln
-	server = &http.Server{Handler: httpapi.WithNode(t, n, shows), BaseContext: func(net.Listener) context.Context { return ctx }}
-	server.RegisterOnShutdown(cancel)
+	api := httpapi.WithNode(t, n, shows)
+	server = &http.Server{
+		Handler: http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			if !running.TryRLock() {
+				panic(http.ErrAbortHandler)
+			}
+			defer running.RUnlock()
+			api.ServeHTTP(w, r)
+		}),
+		BaseContext: func(net.Listener) context.Context { return ctx },
+	}
+	drain = func() {
+		cancel()
+		running.Lock()
+	}
 	port = ln.Addr().(*net.TCPAddr).Port
 	token = t
 	go server.Serve(ln)
@@ -124,13 +139,14 @@ func Stop() error {
 		return nil
 	}
 	listener.Close()
-	err := server.Shutdown(context.Background())
+	err := server.Close()
 	if errors.Is(err, net.ErrClosed) {
 		err = nil
 	}
+	drain()
 	shows.Close()
 	err = errors.Join(err, core.Close())
-	core, shows, listener, server, port, token = nil, nil, nil, nil, 0, ""
+	core, shows, listener, server, drain, port, token = nil, nil, nil, nil, nil, 0, ""
 	return err
 }
 

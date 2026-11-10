@@ -1,7 +1,6 @@
 package mobile_test
 
 import (
-	"bufio"
 	"bytes"
 	"crypto/sha256"
 	"encoding/binary"
@@ -15,6 +14,7 @@ import (
 	"net/netip"
 	"slices"
 	"strconv"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -414,34 +414,13 @@ func (s stalled) Media(from, to int64) ([]byte, error) {
 	return s.library.Media(from, to)
 }
 
-func idleConnection(t *testing.T) <-chan struct{} {
-	t.Helper()
-	conn, err := net.Dial("tcp", "127.0.0.1:"+strconv.Itoa(mobile.Port()))
-	if err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(func() { conn.Close() })
-	fmt.Fprintf(conn, "GET /health HTTP/1.1\r\nHost: pileup\r\nAuthorization: Bearer %s\r\n\r\n", mobile.Token())
-	r := bufio.NewReader(conn)
-	resp, err := http.ReadResponse(r, nil)
-	if err != nil {
-		t.Fatal(err)
-	}
-	io.Copy(io.Discard, resp.Body)
-	resp.Body.Close()
-	closed := make(chan struct{})
-	go func() {
-		r.ReadByte()
-		close(closed)
-	}()
-	return closed
-}
-
-func TestStopLetsInFlightRequestFinishBeforeRestart(t *testing.T) {
+func TestStopLetsInFlightRequestFinishBeforeClosingData(t *testing.T) {
 	d := newDevice(t)
 	taken := time.Date(2026, 7, 2, 10, 0, 0, 0, time.UTC).UnixMilli()
+	photo := fmt.Sprintf(`{"local_id":"image:42","kind":"photo","platform_time":%d,"width":4000,"height":3000,"size_bytes":10,"mime":"image/jpeg","original_name":"IMG_1.jpg","modified":1}`, taken)
+	older := strings.Repeat(`,{"local_id":"image:1","kind":"photo","platform_time":1,"mime":"image/jpeg","modified":1}`, 5000)
 	media := stalled{
-		library: library{items: fmt.Sprintf(`[{"local_id":"image:42","kind":"photo","platform_time":%d,"width":4000,"height":3000,"size_bytes":10,"mime":"image/jpeg","original_name":"IMG_1.jpg","modified":1}]`, taken)},
+		library: library{items: "[" + photo + older + "]"},
 		once:    &sync.Once{},
 		entered: make(chan struct{}),
 		release: make(chan struct{}),
@@ -451,7 +430,6 @@ func TestStopLetsInFlightRequestFinishBeforeRestart(t *testing.T) {
 	}
 	t.Cleanup(func() { mobile.Stop() })
 	p := createPile(t, "Поездка")
-	stopping := idleConnection(t)
 
 	b, _ := json.Marshal(map[string]int64{"from": taken - 1000, "to": taken + 1000})
 	req, err := http.NewRequest(http.MethodPut, "http://127.0.0.1:"+strconv.Itoa(mobile.Port())+"/piles/"+p.ID+"/selection", bytes.NewReader(b))
@@ -459,28 +437,21 @@ func TestStopLetsInFlightRequestFinishBeforeRestart(t *testing.T) {
 		t.Fatal(err)
 	}
 	req.Header.Set("Authorization", "Bearer "+mobile.Token())
-	answered := make(chan error, 1)
+	dropped := make(chan struct{})
 	go func() {
-		resp, err := http.DefaultClient.Do(req)
-		if err == nil {
+		if resp, err := http.DefaultClient.Do(req); err == nil {
 			resp.Body.Close()
-			if resp.StatusCode != http.StatusNoContent {
-				err = fmt.Errorf("status = %d, want 204", resp.StatusCode)
-			}
 		}
-		answered <- err
+		close(dropped)
 	}()
 	<-media.entered
 
 	stopped := make(chan error, 1)
 	go func() { stopped <- mobile.Stop() }()
-	<-stopping
+	<-dropped
 	close(media.release)
 	if err := <-stopped; err != nil {
 		t.Fatalf("Stop: %v", err)
-	}
-	if err := <-answered; err != nil {
-		t.Fatalf("selection in flight during Stop: %v, want it answered before the data is closed", err)
 	}
 
 	start(t, d)
