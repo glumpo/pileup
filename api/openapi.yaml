@@ -955,7 +955,11 @@ components:
           type: object
           description: >-
             Last error of the screen, until the next successful load or
-            command; disconnected stays until the show is restarted.
+            command. reconnecting: the connection to the Cast screen is lost
+            and the host connects to the same screen again with pauses of 1,
+            2, 4 … 30 s until the show stops; then the screen loads the
+            current file and the error clears. Restarting the show (POST
+            /show with the current file) stays a fallback.
           required:
             - code
             - message
@@ -963,7 +967,7 @@ components:
             code:
               type: string
               description: >-
-                load_failed, command_failed, playback_failed or disconnected;
+                load_failed, command_failed, playback_failed or reconnecting;
                 newer versions may add others.
             message:
               type: string
