@@ -174,15 +174,53 @@ func (n *Node) render(p *pile, assetID []byte, tier int) blob.Load {
 		if err != nil {
 			return err
 		}
-		n.rendering.Lock()
+		n.rendering.wait(tier)
 		b, err := n.cfg.Renditions.Rendition(local, tier)
-		n.rendering.Unlock()
+		n.rendering.done()
 		n.report(diag.Media, p.ID, "", fmt.Sprintf("render %x T%d", assetID, tier), err)
 		if err != nil {
 			return err
 		}
 		_, err = w.Write(b)
 		return err
+	}
+}
+
+type turns struct {
+	mu                   sync.Mutex
+	busy                 bool
+	displays, thumbnails []chan struct{}
+}
+
+func (t *turns) wait(tier int) {
+	t.mu.Lock()
+	if !t.busy {
+		t.busy = true
+		t.mu.Unlock()
+		return
+	}
+	turn := make(chan struct{})
+	if tier == T2 {
+		t.displays = append(t.displays, turn)
+	} else {
+		t.thumbnails = append(t.thumbnails, turn)
+	}
+	t.mu.Unlock()
+	<-turn
+}
+
+func (t *turns) done() {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	switch {
+	case len(t.displays) > 0:
+		close(t.displays[0])
+		t.displays = t.displays[1:]
+	case len(t.thumbnails) > 0:
+		close(t.thumbnails[0])
+		t.thumbnails = t.thumbnails[1:]
+	default:
+		t.busy = false
 	}
 }
 
@@ -287,7 +325,7 @@ func (n *Node) serveBlob(p *pile, w http.ResponseWriter, r *http.Request) {
 	} else if err == nil {
 		var f *os.File
 		var h blob.Hash
-		if f, h, err = n.open(r.Context(), p, id, rev, tier); err == nil {
+		if f, h, err = n.open(n.ctx, p, id, rev, tier); err == nil {
 			defer f.Close()
 			content = f
 			w.Header().Set("ETag", ETag(h))

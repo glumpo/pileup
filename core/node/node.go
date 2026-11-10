@@ -113,7 +113,7 @@ type Node struct {
 	found map[string]map[string]service
 
 	selecting sync.Mutex
-	rendering sync.Mutex
+	rendering turns
 }
 
 func Open(cfg Config) (*Node, error) {
