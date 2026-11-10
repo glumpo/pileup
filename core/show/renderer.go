@@ -23,8 +23,9 @@ const (
 	requestTimeout = 30 * time.Second
 	stopTimeout    = 2 * time.Second
 	reload         = time.Second
-	maxPause       = 30 * time.Second
 )
+
+var firstPause, maxPause = time.Second, 30 * time.Second
 
 func (s *session) connect() error {
 	ctx, cancel := context.WithTimeout(s.ctx, connectTimeout)
@@ -175,7 +176,7 @@ func (s *session) drive() {
 }
 
 func (s *session) reconnect() bool {
-	for pause := time.Second; ; pause = min(2*pause, maxPause) {
+	for pause := firstPause; ; pause = min(2*pause, maxPause) {
 		select {
 		case <-s.ctx.Done():
 			return false

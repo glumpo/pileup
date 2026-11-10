@@ -215,3 +215,27 @@ func TestStoppedShowStopsReconnecting(t *testing.T) {
 		t.Fatalf("%d connections to the screen after stop, want 2", n)
 	}
 }
+
+func TestReconnectPauseStopsGrowingAtMaximum(t *testing.T) {
+	show.Pauses(t, 100*time.Millisecond, 400*time.Millisecond)
+	a := newPhone(t, "android", node.DefaultBudget)
+	p := pileOf(t, a)
+	a.lib.photo("P0", 0)
+	a.share(p)
+	rx := newReceiver(t)
+	must(t)(a.show.Start(p.ID, a.tv(rx), nil))
+	rx.waitLoad(t, 1)
+
+	rx.refusing(true)
+	dropped := time.Now()
+	rx.drop()
+	eventually(t, "six refused attempts", func() bool { return len(rx.dialed()) == 7 })
+	dials, prev := rx.dialed(), dropped
+	for i, pause := range []time.Duration{100, 200, 400, 400, 400, 400} {
+		pause *= time.Millisecond
+		if gap := dials[i+1].Sub(prev); gap < pause || gap >= pause+300*time.Millisecond {
+			t.Fatalf("attempt %d after %v, want %v", i+1, gap, pause)
+		}
+		prev = dials[i+1]
+	}
+}
