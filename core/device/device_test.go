@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"crypto/ed25519"
 	"errors"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"testing"
@@ -85,5 +86,36 @@ func TestCorruptKeyIsRejected(t *testing.T) {
 	}
 	if _, err := device.Key(device.File(path)); !errors.Is(err, device.ErrSeed) {
 		t.Fatalf("err = %v, want ErrSeed", err)
+	}
+}
+
+func TestWriteFileReplacesContentWithoutLeftovers(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "piles.json")
+	for _, data := range []string{`[{"id":"a"}]`, `[]`} {
+		if err := device.WriteFile(path, []byte(data)); err != nil {
+			t.Fatal(err)
+		}
+		got, err := os.ReadFile(path)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if string(got) != data {
+			t.Fatalf("read back %q, want %q", got, data)
+		}
+	}
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(entries) != 1 || entries[0].Name() != "piles.json" {
+		t.Fatalf("directory holds %v, want only piles.json", entries)
+	}
+}
+
+func TestWriteFileIntoMissingDirectoryFails(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "missing", "piles.json")
+	if err := device.WriteFile(path, []byte("[]")); !errors.Is(err, fs.ErrNotExist) {
+		t.Fatalf("err = %v, want ErrNotExist", err)
 	}
 }

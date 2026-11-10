@@ -6,6 +6,8 @@ import (
 	"errors"
 	"io/fs"
 	"os"
+	"path/filepath"
+	"syscall"
 )
 
 var ErrSeed = errors.New("device: stored key has wrong size")
@@ -62,6 +64,24 @@ func WriteFile(path string, data []byte) error {
 	}
 	if err == nil {
 		err = os.Rename(tmp, path)
+	}
+	if err == nil {
+		err = syncDir(filepath.Dir(path))
+	}
+	return err
+}
+
+func syncDir(path string) error {
+	d, err := os.Open(path)
+	if err != nil {
+		return err
+	}
+	err = d.Sync()
+	if errors.Is(err, errors.ErrUnsupported) || errors.Is(err, syscall.EINVAL) {
+		err = nil
+	}
+	if cerr := d.Close(); err == nil {
+		err = cerr
 	}
 	return err
 }
