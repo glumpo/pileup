@@ -11,7 +11,7 @@ const rendererErrors: Record<string, string> = {
   load_failed: 'Экран не смог открыть этот файл. Попробуйте следующий.',
   command_failed: 'Экран не выполнил команду. Попробуйте ещё раз.',
   playback_failed: 'Экран не смог воспроизвести видео. Попробуйте следующий файл.',
-  disconnected: 'Связь с экраном потеряна.',
+  reconnecting: 'Переподключаемся к экрану…',
 };
 
 function hintText({ name, platform, reason }: Hint): string {
@@ -135,7 +135,7 @@ export function Remote({
         {rendererError && (
           <ErrorText error={rendererErrors[rendererError.code] ?? `Ошибка экрана: ${rendererError.code}`} />
         )}
-        {rendererError?.code === 'disconnected' && (
+        {rendererError?.code === 'reconnecting' && (
           <Button
             title="Перезапустить показ"
             onPress={() => run(() => api.startShow(pile.id, state.screen.id, current.id))}

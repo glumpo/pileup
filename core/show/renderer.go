@@ -23,6 +23,7 @@ const (
 	requestTimeout = 30 * time.Second
 	stopTimeout    = 2 * time.Second
 	reload         = time.Second
+	maxPause       = 30 * time.Second
 )
 
 func (s *session) connect() error {
@@ -39,8 +40,10 @@ func (s *session) connect() error {
 		cs.Close()
 		return err
 	}
+	s.mu.Lock()
 	s.cast = cs
 	s.base = "http://" + ln.Addr().String() + "/show/" + s.token
+	s.mu.Unlock()
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /show/{token}/{asset}/{revision}/{tier}", s.serve)
 	s.srv = &http.Server{Handler: mux, ReadHeaderTimeout: requestTimeout}
@@ -151,6 +154,7 @@ func (s *session) drive() {
 			s.cast.Stop(ctx)
 			cancel()
 			s.cast.Close()
+			s.srv.Close()
 			return
 		case <-s.wake:
 		case <-retry:
@@ -160,8 +164,26 @@ func (s *session) drive() {
 				retry = time.After(reload)
 			}
 		case <-s.cast.Done():
-			s.failed("disconnected", "connection", s.cast.Err())
-			return
+			s.failed("reconnecting", "connection", s.cast.Err())
+			s.srv.Close()
+			if !s.reconnect() {
+				return
+			}
+			loaded, retry = "", nil
+		}
+	}
+}
+
+func (s *session) reconnect() bool {
+	for pause := time.Second; ; pause = min(2*pause, maxPause) {
+		select {
+		case <-s.ctx.Done():
+			return false
+		case <-time.After(pause):
+		}
+		if s.connect() == nil {
+			s.n.Diag().Add(diag.Renderer, s.pile, s.screen.Name, "reconnected to the screen")
+			return true
 		}
 	}
 }

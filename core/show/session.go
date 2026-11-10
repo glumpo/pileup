@@ -239,9 +239,6 @@ func (s *session) state() State {
 
 func (s *session) stop() {
 	s.cancel()
-	if s.srv != nil {
-		s.srv.Close()
-	}
 	s.wg.Wait()
 	s.l.setCursor("")
 	s.n.Diag().Add(diag.Renderer, s.pile, s.screen.Name, "show stopped")
