@@ -14,6 +14,7 @@ import (
 	"net/netip"
 	"path/filepath"
 	"strconv"
+	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -70,6 +71,34 @@ func newOwner(t *testing.T, id, secret []byte) owner {
 }
 
 func (o owner) author() op.Author { return op.Author(o.key.Public().(ed25519.PublicKey)) }
+
+func (o owner) withPhotos(t *testing.T, count int) (owner, []op.AssetMeta) {
+	t.Helper()
+	st, err := store.Open(filepath.Join(t.TempDir(), "owner.db"), o.id, o.secret)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer st.Close()
+	for _, raw := range o.raws {
+		if _, err := st.Apply(raw); err != nil {
+			t.Fatal(err)
+		}
+	}
+	var metas []op.AssetMeta
+	for i := range count {
+		m := o.photo
+		m.AssetID = bytes.Repeat([]byte{byte(10 + i)}, 32)
+		m.OriginalName = fmt.Sprintf("IMG_%d.JPG", 10+i)
+		metas = append(metas, m)
+	}
+	if _, err := st.Create(o.key, 1700000000001, op.AssetAdd{Assets: metas}); err != nil {
+		t.Fatal(err)
+	}
+	if o.raws, err = st.Ops(o.author(), 1); err != nil {
+		t.Fatal(err)
+	}
+	return o, metas
+}
 
 func ownerBytes(tier string) []byte { return []byte("T" + tier + " from the owner") }
 
@@ -462,6 +491,55 @@ func TestRelayedOriginalIsLimitedByReadIdleTimeout(t *testing.T) {
 			t.Fatalf("next request while the owner is silent: status %d, want 502", resp.StatusCode)
 		}
 	})
+}
+
+func TestParallelFetchesFromOwnerReuseConnections(t *testing.T) {
+	const parallel = 5
+	s := newSaved(t)
+	o, photos := newOwner(t, s.id, s.secret).withPhotos(t, 2*parallel)
+	at := o.serve(t, map[string]http.HandlerFunc{
+		"GET /blob/{asset}/{revision}/{tier}": func(w http.ResponseWriter, r *http.Request) {
+			if r.PathValue("tier") == "2" {
+				time.Sleep(200 * time.Millisecond)
+			}
+			w.Write(ownerBytes(r.PathValue("tier")))
+		},
+	})
+	s.write(t, s.history(t, 1), at.addr())
+	n := s.open(t)
+	eventually(t, "T1 of every photo", func() bool {
+		for _, m := range photos {
+			if !n.Stored(s.id, m.AssetID, m.Revision, node.T1) {
+				return false
+			}
+		}
+		return true
+	})
+	fetch := func(batch []op.AssetMeta) {
+		t.Helper()
+		errs := make(chan error, len(batch))
+		var wg sync.WaitGroup
+		for _, m := range batch {
+			wg.Go(func() {
+				_, err := fetchWithin(n, s.id, m, node.T2, 10*time.Second)
+				errs <- err
+			})
+		}
+		wg.Wait()
+		close(errs)
+		for err := range errs {
+			if err != nil {
+				t.Fatal(err)
+			}
+		}
+	}
+
+	fetch(photos[:parallel])
+	before := at.accepted.Load()
+	fetch(photos[parallel:])
+	if opened := at.accepted.Load() - before; opened != 0 {
+		t.Fatalf("%d new connections to the owner for the next %d parallel downloads, want none", opened, parallel)
+	}
 }
 
 func TestInviterFilesAreFetchedFromInviterRightAfterJoin(t *testing.T) {

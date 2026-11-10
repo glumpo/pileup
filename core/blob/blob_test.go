@@ -638,3 +638,38 @@ func TestObjectWhoseFileVanishedIsDroppedOnOpen(t *testing.T) {
 		t.Fatalf("object loaded again: %q", got)
 	}
 }
+
+func TestCacheIsConsistentAfterLosingLastCommits(t *testing.T) {
+	dir, snapshot := t.TempDir(), t.TempDir()
+	s := open(t, dir, budget)
+	read(t, s, req("A", key("x", 2), 1, fixed("x")))
+	for _, name := range []string{"cache.db", "cache.db-wal"} {
+		b, err := os.ReadFile(filepath.Join(dir, name))
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(filepath.Join(snapshot, name), b, 0o600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	read(t, s, req("A", key("y", 2), 2, fixed("y")))
+	drop(t, s, "A", key("x", 2))
+	if err := s.Close(); err != nil {
+		t.Fatal(err)
+	}
+	for _, name := range []string{"cache.db", "cache.db-wal", "cache.db-shm"} {
+		os.Remove(filepath.Join(dir, name))
+		if b, err := os.ReadFile(filepath.Join(snapshot, name)); err == nil {
+			if err := os.WriteFile(filepath.Join(dir, name), b, 0o600); err != nil {
+				t.Fatal(err)
+			}
+		}
+	}
+
+	s = open(t, dir, budget)
+	equal(t, "held after the lost commits", held(t, s, "A", 2), nil)
+	equal(t, "files after the lost commits", contents(t, dir), nil)
+	if got := read(t, s, req("A", key("y", 2), 2, fixed("y"))); got != "y" {
+		t.Fatalf("object loaded again: %q", got)
+	}
+}
