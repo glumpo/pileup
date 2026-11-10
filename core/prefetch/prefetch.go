@@ -1,6 +1,7 @@
 package prefetch
 
 import (
+	"cmp"
 	"slices"
 	"time"
 )
@@ -151,6 +152,7 @@ func (c *Cache) Waiting() []string {
 			out = append(out, it.ID)
 		}
 	}
+	slices.SortFunc(out, func(a, b string) int { return cmp.Compare(c.index[a], c.index[b]) })
 	return out
 }
 
