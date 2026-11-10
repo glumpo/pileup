@@ -1,10 +1,11 @@
 ---
 id: TASK-38
 title: 'Полноэкранный просмотр: T1 под T2, причина и повтор при недоступном владельце'
-status: To Do
+status: In Progress
 assignee:
   - '@claude'
 created_date: '2026-11-10T22:58:00Z'
+updated_date: '2026-11-10T23:08:00Z'
 labels:
   - app
 dependencies: []
@@ -28,3 +29,11 @@ ordinal: 38000
 - [ ] #3 Другие ошибки загрузки показываются понятным текстом
 - [ ] #4 Каждое поведение сначала воспроизведено красным тестом
 <!-- AC:END -->
+
+## Implementation Plan
+
+<!-- SECTION:PLAN:BEGIN -->
+1. Красные тесты app/test/viewer.test.tsx на уровне поведения: Image в этом файле подменён загрузчиком, который на монтировании запрашивает source у фейкового ядра (fetch) и вызывает onLoad или onError, — как нативный Image; fakeCore принимает ответ-обещание, чтобы T2 мог «грузиться». Проверки: T1 и без thumbhash, пока T2 не пришёл; 502 source_unavailable → «Нет ответа от участника: <author_name>…», после возвращения владельца сообщение исчезает само и запросы прекращаются; 404 unknown_asset, 500 internal и неразборчивый ответ 200 → понятный текст. → verify: tsc чистый, тесты падают на поведении.
+2. Viewer.tsx: страница = Preview(thumbhash, T1) + Image T2 поверх; Image onError → api.checkBlob (GET того же URL, ApiError с кодом ядра); source_unavailable → подпись и повтор (перемонтирование Image) раз в 2 с до onLoad; unknown_asset/прочие/200 → текст без повтора. Preview, сетка и пульт не меняются. → verify: npx tsc --noEmit && npx jest --ci.
+3. Заметки (падения красных тестов, реализация, проверка, ограничения, «Решение для architecture.md:»), AC, итог, Done.
+<!-- SECTION:PLAN:END -->

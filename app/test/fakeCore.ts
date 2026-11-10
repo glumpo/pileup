@@ -4,11 +4,11 @@ export const BASE = 'http://127.0.0.1:4321';
 
 export const AUTH = { Authorization: 'Bearer test-token' };
 
-type Reply = [number, unknown?];
+export type Reply = [number, unknown?];
 
 export type Request = { method: string; path: string; body: unknown; headers: Record<string, string> };
 
-export function fakeCore(routes: Record<string, Reply | ((body: any) => Reply)>): Request[] {
+export function fakeCore(routes: Record<string, Reply | ((body: any) => Reply | Promise<Reply>)>): Request[] {
   const requests: Request[] = [];
   globalThis.fetch = jest.fn(async (url: string, init: RequestInit = {}) => {
     const method = init.method ?? 'GET';
@@ -17,7 +17,7 @@ export function fakeCore(routes: Record<string, Reply | ((body: any) => Reply)>)
     requests.push({ method, path, body, headers: init.headers as Record<string, string> });
     const route = routes[`${method} ${path}`];
     const [status, reply] =
-      route === undefined ? [404, { error: 'unknown_pile' }] : typeof route === 'function' ? route(body) : route;
+      route === undefined ? [404, { error: 'unknown_pile' }] : typeof route === 'function' ? await route(body) : route;
     return {
       ok: status >= 200 && status < 300,
       status,
