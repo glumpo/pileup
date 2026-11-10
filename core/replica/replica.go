@@ -27,7 +27,10 @@ const (
 	timeout  = 20 * time.Second
 )
 
-var ErrFork = errors.New("replica: author log forked")
+var (
+	ErrFork        = errors.New("replica: author log forked")
+	ErrPeerChanged = errors.New("replica: another device answers at the address")
+)
 
 type Node struct {
 	store  *store.Store
@@ -242,8 +245,22 @@ func (p remote) vv(ctx context.Context, mine vv.VV) (vv.VV, error) {
 }
 
 func (n *Node) Pull(ctx context.Context, addr string, synced func(ops int)) error {
+	var mu sync.Mutex
+	var from ed25519.PublicKey
 	tr := &http.Transport{DialContext: func(ctx context.Context, _, a string) (net.Conn, error) {
-		return peer.Dial(ctx, a, n.key, n.pileID, n.secret)
+		c, err := peer.Dial(ctx, a, n.key, n.pileID, n.secret)
+		if err != nil {
+			return nil, err
+		}
+		mu.Lock()
+		defer mu.Unlock()
+		if from == nil {
+			from = c.Peer()
+		} else if !from.Equal(c.Peer()) {
+			c.Close()
+			return nil, ErrPeerChanged
+		}
+		return c, nil
 	}}
 	defer tr.CloseIdleConnections()
 	p := remote{http: &http.Client{Transport: tr, Timeout: pollWait + timeout}, base: "http://" + addr}
