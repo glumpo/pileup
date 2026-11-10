@@ -1039,8 +1039,9 @@ components:
         failed:
           type: integer
           description: >-
-            Of them, failed for good (the owner has no such file or cannot
-            render it); not retried until the core restarts.
+            Of them, failed with a permanent error (the owner has no such
+            file or cannot render it); retried 5 minutes after the error,
+            and counted here until then.
         reason:
           type: string
           description: >-
