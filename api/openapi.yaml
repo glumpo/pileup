@@ -536,8 +536,9 @@ paths:
         only on this device. On a Cast screen the host connects to the Default
         Media Receiver, serves media to it over plain HTTP in the local network
         under a token valid until the show stops, and loads the current file
-        on every cursor change; T2 of the cursor and the next 20 files is
-        prefetched from their owners into the cache of the pile, which
+        on every cursor change; T2 of the cursor, the next 20 files and then
+        the 5 files before the cursor is prefetched from their owners into
+        the cache of the pile, which
         outlives the show (see /piles/{id}/pins). An AirPlay screen is
         available only on an iPhone host, where the app renders it natively.
       requestBody:
