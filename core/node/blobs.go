@@ -452,11 +452,12 @@ func (n *Node) thumbnails(p *pile) {
 	n.wg.Add(1)
 	go func() {
 		defer n.wg.Done()
+		broken := map[blob.Key]time.Time{}
 		for {
 			changed := p.replica.Changed()
 			var again <-chan time.Time
-			if !n.fetchThumbnails(p) {
-				again = time.After(retry)
+			if d := n.fetchThumbnails(p, broken); d > 0 {
+				again = time.After(d)
 			}
 			select {
 			case <-n.ctx.Done():
@@ -468,10 +469,10 @@ func (n *Node) thumbnails(p *pile) {
 	}()
 }
 
-func (n *Node) fetchThumbnails(p *pile) bool {
+func (n *Node) fetchThumbnails(p *pile, broken map[blob.Key]time.Time) time.Duration {
 	v, err := p.store.View()
 	if err != nil {
-		return false
+		return retry
 	}
 	current := map[blob.Key]bool{}
 	for _, a := range v.Assets {
@@ -482,8 +483,29 @@ func (n *Node) fetchThumbnails(p *pile) bool {
 		return current[k]
 	})
 	n.report(diag.Media, p.ID, "", "cache cleanup", err)
+	held, err := n.blobs.Held(string(p.ID), T1)
+	if err != nil {
+		return retry
+	}
+	cached := map[blob.Key]bool{}
+	for _, h := range held {
+		cached[h.Key] = true
+	}
+	online, now := n.Online(p.ID), time.Now()
+	for k, until := range broken {
+		if !now.Before(until) {
+			delete(broken, k)
+		}
+	}
+	var missing []state.Asset
+	for _, a := range v.Assets {
+		k := key(a.Owner, a.Meta.AssetID, a.Meta.Revision, T1)
+		if _, paused := broken[k]; a.Owner != n.Author() && online[a.Owner] && !cached[k] && !paused {
+			missing = append(missing, a)
+		}
+	}
 	var mu sync.Mutex
-	done, offline := true, map[op.Author]bool{}
+	offline := map[op.Author]bool{}
 	todo := make(chan state.Asset)
 	var wg sync.WaitGroup
 	for range fetchers {
@@ -500,22 +522,27 @@ func (n *Node) fetchThumbnails(p *pile) bool {
 					f.Close()
 				}
 				mu.Lock()
-				if err != nil {
-					done = false
-				}
-				if errors.Is(err, ErrUnavailable) && !errors.Is(err, ErrRefused) {
+				switch {
+				case err == nil:
+				case errors.Is(err, ErrUnavailable) && !errors.Is(err, ErrRefused):
 					offline[a.Owner] = true
+				default:
+					broken[key(a.Owner, a.Meta.AssetID, a.Meta.Revision, T1)] = time.Now().Add(brokenPause)
 				}
 				mu.Unlock()
 			}
 		})
 	}
-	for _, a := range v.Assets {
-		if a.Owner != n.Author() {
-			todo <- a
-		}
+	for _, a := range missing {
+		todo <- a
 	}
 	close(todo)
 	wg.Wait()
-	return done
+	switch {
+	case len(offline) > 0:
+		return retry
+	case len(broken) > 0:
+		return brokenPause
+	}
+	return 0
 }
