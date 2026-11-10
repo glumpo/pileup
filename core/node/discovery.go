@@ -135,7 +135,8 @@ func (b browser) Lost(name string) {
 	}
 	addr := s.addr.String()
 	for _, p := range n.piles {
-		if l := p.loops[addr]; l != nil && s.txt["pile"] == pileTag(p.ID) && !slices.Contains(p.Peers, addr) && !n.advertised(p, addr) {
+		_, saved := p.peers[addr]
+		if l := p.loops[addr]; l != nil && s.txt["pile"] == pileTag(p.ID) && !saved && !n.advertised(p, addr) {
 			l.cancel()
 			delete(p.loops, addr)
 		}

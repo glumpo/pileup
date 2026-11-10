@@ -75,11 +75,19 @@ func ownerBytes(tier string) []byte { return []byte("T" + tier + " from the owne
 type site struct {
 	*counting
 	displays atomic.Int32
+	srv      *http.Server
 }
 
 func (s *site) addr() string { return s.Addr().String() }
 
+func (s *site) stop() { s.srv.Close() }
+
 func serveAs(t *testing.T, key ed25519.PrivateKey, id, secret []byte, raws [][]byte, routes map[string]http.HandlerFunc) *site {
+	t.Helper()
+	return serveOn(t, listenCounting(t), key, id, secret, raws, routes)
+}
+
+func serveOn(t *testing.T, ln *counting, key ed25519.PrivateKey, id, secret []byte, raws [][]byte, routes map[string]http.HandlerFunc) *site {
 	t.Helper()
 	st, err := store.Open(filepath.Join(t.TempDir(), "site.db"), id, secret)
 	if err != nil {
@@ -91,7 +99,7 @@ func serveAs(t *testing.T, key ed25519.PrivateKey, id, secret []byte, raws [][]b
 			t.Fatal(err)
 		}
 	}
-	s := &site{counting: listenCounting(t)}
+	s := &site{counting: ln}
 	h := map[string]http.HandlerFunc{
 		"POST /announce": func(w http.ResponseWriter, r *http.Request) { w.Write([]byte("[]")) },
 		"GET /blob/{asset}/{revision}/{tier}": func(w http.ResponseWriter, r *http.Request) {
@@ -109,9 +117,9 @@ func serveAs(t *testing.T, key ed25519.PrivateKey, id, secret []byte, raws [][]b
 			f(w, r)
 		})
 	}
-	srv := &http.Server{Handler: mux}
-	go srv.Serve(peer.NewListener(s, key, func(got []byte) ([]byte, bool) { return secret, bytes.Equal(got, id) }))
-	t.Cleanup(func() { srv.Close() })
+	s.srv = &http.Server{Handler: mux}
+	go s.srv.Serve(peer.NewListener(s, key, func(got []byte) ([]byte, bool) { return secret, bytes.Equal(got, id) }))
+	t.Cleanup(func() { s.srv.Close() })
 	return s
 }
 

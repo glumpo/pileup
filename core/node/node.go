@@ -68,10 +68,10 @@ type Pile struct {
 }
 
 type entry struct {
-	ID     []byte   `json:"id"`
-	Secret []byte   `json:"secret"`
-	Port   uint16   `json:"port"`
-	Peers  []string `json:"peers"`
+	ID     []byte            `json:"id"`
+	Secret []byte            `json:"secret"`
+	Port   uint16            `json:"port"`
+	Peers  map[string][]byte `json:"peers"`
 }
 
 type pile struct {
@@ -82,12 +82,17 @@ type pile struct {
 	stream  *http.Client
 	online  map[op.Author]int
 	addrs   map[op.Author]string
+	peers   map[string]op.Author
 	loops   map[string]*loop
 }
 
 type loop struct {
-	cancel context.CancelFunc
+	cancel  context.CancelFunc
+	live    bool
+	failing bool
 }
+
+type connKey struct{}
 
 type Node struct {
 	cfg    Config
@@ -169,7 +174,7 @@ func (n *Node) Author() op.Author {
 }
 
 func (n *Node) Create(name, member string) (Pile, error) {
-	e := entry{ID: random(pileIDSize), Secret: random(invite.SecretSize)}
+	e := entry{ID: random(pileIDSize), Secret: random(invite.SecretSize), Peers: map[string][]byte{}}
 	return n.add(e, map[op.Author]string{}, n.join(e.Secret, member), op.PileCreate{Name: name})
 }
 
@@ -185,8 +190,12 @@ func (n *Node) Join(ctx context.Context, inv, member string) (Pile, error) {
 	if err != nil {
 		return Pile{}, err
 	}
-	e := entry{ID: i.PileID, Secret: i.Secret, Peers: []string{addr}}
-	return n.add(e, map[op.Author]string{who: addr}, n.join(e.Secret, member))
+	e := entry{ID: i.PileID, Secret: i.Secret, Peers: map[string][]byte{addr: who[:]}}
+	joined, err := n.add(e, map[op.Author]string{who: addr}, n.join(e.Secret, member))
+	if p, ferr := n.find(i.PileID); err == nil && ferr == nil {
+		n.fetching(p, who, addr, "")
+	}
+	return joined, err
 }
 
 func (n *Node) Piles() ([]Pile, error) {
@@ -267,6 +276,10 @@ func (n *Node) add(e entry, addrs map[op.Author]string, changes ...op.Change) (P
 }
 
 func (n *Node) start(e entry, addrs map[op.Author]string, changes ...op.Change) (*pile, error) {
+	peers, err := peersOf(e)
+	if err != nil {
+		return nil, err
+	}
 	if err := n.importPins(e.ID); err != nil {
 		return nil, err
 	}
@@ -291,10 +304,11 @@ func (n *Node) start(e entry, addrs map[op.Author]string, changes ...op.Change) 
 	}
 	e.Port = uint16(ln.Addr().(*net.TCPAddr).Port)
 	n.diag.Add(diag.Connection, e.ID, "", fmt.Sprintf("listening on port %d", e.Port))
-	p := &pile{entry: e, store: s, replica: replica.New(s, n.key, e.ID, e.Secret), online: map[op.Author]int{}, addrs: addrs, loops: map[string]*loop{}}
+	e.Peers = nil
+	p := &pile{entry: e, store: s, replica: replica.New(s, n.key, e.ID, e.Secret), online: map[op.Author]int{}, addrs: addrs, peers: peers, loops: map[string]*loop{}}
 	p.owners = n.owners(p)
 	p.stream = &http.Client{Transport: p.owners.Transport}
-	for _, a := range p.Peers {
+	for a := range p.peers {
 		n.dial(p, a, p.replica.Hold())
 	}
 	n.serve(p, ln)
@@ -322,6 +336,7 @@ func (n *Node) serve(p *pile, ln net.Listener) {
 		IdleTimeout:       timeout,
 		ConnState:         n.handshakes(p),
 		BaseContext:       func(net.Listener) context.Context { return n.ctx },
+		ConnContext:       func(ctx context.Context, c net.Conn) context.Context { return context.WithValue(ctx, connKey{}, c) },
 	}
 	l := peer.NewListener(ln, n.key, func(id []byte) ([]byte, bool) {
 		return p.Secret, bytes.Equal(id, p.ID)
@@ -358,40 +373,93 @@ func (n *Node) announced(p *pile, w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "bad announce", http.StatusBadRequest)
 		return
 	}
+	asker := op.Author(r.Context().Value(connKey{}).(*peer.Conn).Peer())
+	w.Header().Set("Content-Type", "application/json")
+	if asker == n.Author() {
+		w.Write([]byte("[]"))
+		return
+	}
 	addr := netip.AddrPortFrom(from.Addr().Unmap(), uint16(port)).String()
-	n.diag.Add(diag.Connection, p.ID, addr, "announce received")
-	if err := n.addPeer(p, addr); err != nil {
+	n.diag.Add(diag.Connection, p.ID, addr, "announce received from "+n.member(p, asker))
+	n.mu.Lock()
+	fresh, err := n.admit(p, addr, asker)
+	var others []listedAddr
+	if err == nil {
+		n.dial(p, addr, func() {})
+		others = p.listing(asker)
+	}
+	n.mu.Unlock()
+	if fresh {
+		n.added(p, addr, asker, "announced by the member")
+	}
+	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
-	n.mu.Lock()
-	n.dial(p, addr, func() {})
-	others := slices.DeleteFunc(slices.Clone(p.Peers), func(a string) bool { return a == addr })
-	n.mu.Unlock()
-	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(others)
 }
 
-func (n *Node) learn(p *pile, who op.Author, addr string) {
+func (n *Node) learn(p *pile, l *loop, who op.Author, addr string) {
 	n.mu.Lock()
-	moved := p.addrs[who] != addr
+	was, known := p.peers[addr]
+	p.peers[addr] = who
+	l.live, l.failing = true, false
+	p.online[who]++
+	prev := p.addrs[who]
 	p.addrs[who] = addr
+	dropped := p.supersede(who)
+	var err error
+	if !known || was != who || len(dropped) > 0 {
+		err = n.save()
+	}
 	n.mu.Unlock()
-	if moved {
+	n.report(diag.Discovery, p.ID, addr, "save addresses", err)
+	if known && was != who {
+		n.diag.Add(diag.Discovery, p.ID, addr, fmt.Sprintf("address now answers as %s instead of %s", n.member(p, who), n.member(p, was)))
+	}
+	if prev != addr {
 		p.owners.Transport.(*http.Transport).CloseIdleConnections()
+		n.fetching(p, who, addr, prev)
+	}
+	for _, d := range dropped {
+		n.diag.Add(diag.Discovery, p.ID, d, fmt.Sprintf("dropped address of %s: it answers at %s", n.member(p, who), addr))
 	}
 }
 
-func (n *Node) addPeer(p *pile, addr string) error {
+func (n *Node) left(p *pile, l *loop, who op.Author) {
 	n.mu.Lock()
 	defer n.mu.Unlock()
-	if n.ctx.Err() != nil || slices.Contains(p.Peers, addr) {
-		return nil
+	l.live = false
+	p.online[who]--
+	if p.online[who] == 0 {
+		delete(p.online, who)
 	}
-	p.Peers = append(p.Peers, addr)
-	n.diag.Add(diag.Discovery, p.ID, addr, "new peer address")
+}
+
+func (n *Node) addPeer(p *pile, addr string, who op.Author, from string) error {
+	n.mu.Lock()
+	fresh, err := n.admit(p, addr, who)
+	n.mu.Unlock()
+	if fresh {
+		n.added(p, addr, who, from)
+	}
+	return err
+}
+
+func (n *Node) admit(p *pile, addr string, who op.Author) (bool, error) {
+	if n.ctx.Err() != nil {
+		return false, nil
+	}
+	if _, known := p.peers[addr]; known {
+		return false, nil
+	}
+	p.peers[addr] = who
 	n.dial(p, addr, func() {})
-	return n.save()
+	return true, n.save()
+}
+
+func (n *Node) added(p *pile, addr string, who op.Author, from string) {
+	n.diag.Add(diag.Discovery, p.ID, addr, fmt.Sprintf("new address of %s, %s", n.member(p, who), from))
 }
 
 func (n *Node) dial(p *pile, addr string, release func()) {
@@ -406,7 +474,7 @@ func (n *Node) dial(p *pile, addr string, release func()) {
 	go func() {
 		defer n.wg.Done()
 		defer cancel()
-		n.connect(ctx, p, addr, release)
+		n.connect(ctx, p, l, addr, release)
 		n.mu.Lock()
 		if p.loops[addr] == l {
 			delete(p.loops, addr)
@@ -415,32 +483,39 @@ func (n *Node) dial(p *pile, addr string, release func()) {
 	}()
 }
 
-func (n *Node) connect(ctx context.Context, p *pile, addr string, release func()) {
+func (n *Node) connect(ctx context.Context, p *pile, l *loop, addr string, release func()) {
 	for retry := 0; ; retry++ {
 		if retry > 0 && pause(ctx, time.Duration(retry)*backoff) != nil {
 			return
 		}
-		synced, err := n.attempt(ctx, p, addr, release)
+		synced, err := n.attempt(ctx, p, l, addr, release)
 		release()
 		if synced {
 			retry = 0
 		}
-		if ctx.Err() != nil || errors.Is(err, peer.ErrCertificate) || errors.Is(err, peer.ErrMembership) || retry == retries {
+		if ctx.Err() != nil || errors.Is(err, peer.ErrCertificate) || errors.Is(err, peer.ErrMembership) || errors.Is(err, errOwnAddress) {
+			return
+		}
+		if n.failed(p, l, addr) || retry == retries {
 			return
 		}
 	}
 }
 
-func (n *Node) attempt(ctx context.Context, p *pile, addr string, release func()) (bool, error) {
-	who, err := n.announce(ctx, p, addr)
+func (n *Node) attempt(ctx context.Context, p *pile, l *loop, addr string, release func()) (bool, error) {
+	who, others, err := n.announce(ctx, p, addr)
 	n.report(diag.Connection, p.ID, addr, "announce", err)
 	if err != nil {
 		return false, err
 	}
-	n.report(diag.Discovery, p.ID, addr, "add peer", n.addPeer(p, addr))
-	n.learn(p, who, addr)
-	n.connected(p, who, 1)
-	defer n.connected(p, who, -1)
+	if who == n.Author() {
+		n.dropOwn(p, addr)
+		return false, errOwnAddress
+	}
+	n.report(diag.Discovery, p.ID, addr, "add peer", n.addPeer(p, addr, who, "confirmed by announce"))
+	n.learn(p, l, who, addr)
+	defer n.left(p, l, who)
+	n.listed(p, addr, others)
 	synced, report := false, n.synced(p, addr)
 	err = p.replica.Pull(ctx, addr, func(ops int) {
 		synced = true
@@ -462,7 +537,7 @@ var pause = func(ctx context.Context, d time.Duration) error {
 	}
 }
 
-func (n *Node) announce(ctx context.Context, p *pile, addr string) (op.Author, error) {
+func (n *Node) announce(ctx context.Context, p *pile, addr string) (op.Author, []listedAddr, error) {
 	var mu sync.Mutex
 	var who op.Author
 	c := http.Client{Timeout: timeout, Transport: &http.Transport{
@@ -480,35 +555,23 @@ func (n *Node) announce(ctx context.Context, p *pile, addr string) (op.Author, e
 	u := "http://" + addr + "/announce?port=" + strconv.Itoa(int(p.Port))
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, u, nil)
 	if err != nil {
-		return op.Author{}, err
+		return op.Author{}, nil, err
 	}
 	resp, err := c.Do(req)
 	if err != nil {
-		return op.Author{}, err
+		return op.Author{}, nil, err
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusOK {
-		return op.Author{}, errors.New(resp.Status)
+		return op.Author{}, nil, errors.New(resp.Status)
 	}
-	var others []string
+	var others []listedAddr
 	if err := json.NewDecoder(resp.Body).Decode(&others); err != nil {
-		return op.Author{}, err
-	}
-	for _, a := range others {
-		n.report(diag.Discovery, p.ID, a, "add peer", n.addPeer(p, a))
+		return op.Author{}, nil, err
 	}
 	mu.Lock()
 	defer mu.Unlock()
-	return who, nil
-}
-
-func (n *Node) connected(p *pile, who op.Author, d int) {
-	n.mu.Lock()
-	defer n.mu.Unlock()
-	p.online[who] += d
-	if p.online[who] == 0 {
-		delete(p.online, who)
-	}
+	return who, others, nil
 }
 
 func (n *Node) Online(pileID []byte) map[op.Author]bool {
@@ -528,7 +591,12 @@ func (n *Node) Online(pileID []byte) map[op.Author]bool {
 func (n *Node) save() error {
 	entries := make([]entry, len(n.piles))
 	for i, p := range n.piles {
-		entries[i] = p.entry
+		e := p.entry
+		e.Peers = map[string][]byte{}
+		for a, k := range p.peers {
+			e.Peers[a] = k[:]
+		}
+		entries[i] = e
 	}
 	b, err := json.Marshal(entries)
 	if err != nil {

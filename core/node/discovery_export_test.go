@@ -1,6 +1,9 @@
 package node
 
-import "slices"
+import (
+	"maps"
+	"slices"
+)
 
 func (n *Node) Peers(pileID []byte) []string {
 	p, err := n.find(pileID)
@@ -9,5 +12,5 @@ func (n *Node) Peers(pileID []byte) []string {
 	}
 	n.mu.Lock()
 	defer n.mu.Unlock()
-	return slices.Clone(p.Peers)
+	return slices.Sorted(maps.Keys(p.peers))
 }

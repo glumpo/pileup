@@ -90,7 +90,12 @@ func (s saved) write(t *testing.T, raws [][]byte, peers ...string) {
 	if err := st.Close(); err != nil {
 		t.Fatal(err)
 	}
-	b, err := json.Marshal([]map[string]any{{"id": s.id, "secret": s.secret, "port": 0, "peers": peers}})
+	keys := map[string][]byte{}
+	for _, a := range peers {
+		_, who := newKey(t)
+		keys[a] = who[:]
+	}
+	b, err := json.Marshal([]map[string]any{{"id": s.id, "secret": s.secret, "port": 0, "peers": keys}})
 	if err != nil {
 		t.Fatal(err)
 	}
