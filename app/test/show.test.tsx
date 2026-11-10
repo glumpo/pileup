@@ -4,6 +4,31 @@ import App from '../App';
 import { Hint, PinEstimate, PinProgress, Screen, ShowState, TimelineItem } from '../src/api';
 import { asset, AUTH, BASE, fakeCore, georgia, INVITE } from './fakeCore';
 
+jest.mock('expo-keep-awake', () => {
+  const { useEffect } = require('react');
+  const held = new Set<string>();
+  const activateKeepAwakeAsync = async (tag = 'default') => {
+    held.add(tag);
+  };
+  const deactivateKeepAwake = async (tag = 'default') => {
+    held.delete(tag);
+  };
+  return {
+    held,
+    activateKeepAwakeAsync,
+    deactivateKeepAwake,
+    useKeepAwake: (tag = 'hook') =>
+      useEffect(() => {
+        activateKeepAwakeAsync(tag);
+        return () => {
+          deactivateKeepAwake(tag);
+        };
+      }, [tag]),
+  };
+});
+
+const screenKeptOn = () => jest.requireMock<{ held: Set<string> }>('expo-keep-awake').held.size > 0;
+
 const july1 = Date.UTC(2026, 6, 1, 6, 0);
 const minute = 60_000;
 
@@ -386,6 +411,20 @@ test('while the host reconnects to the screen the remote says so and still resta
   });
   expect(screen.queryByText('Переподключаемся к экрану…')).toBeNull();
   expect(screen.getByText('2 / 3')).toBeOnTheScreen();
+});
+
+test('the phone screen is kept on while the remote is open and released after the show', async () => {
+  core();
+  const user = await openScreens();
+  expect(screenKeptOn()).toBe(false);
+
+  await user.press(await screen.findByRole('button', { name: 'Гостиная' }));
+  await screen.findByText('На экране «Гостиная»');
+  expect(screenKeptOn()).toBe(true);
+
+  await user.press(screen.getByRole('button', { name: 'Остановить показ' }));
+  expect(await screen.findByRole('button', { name: 'Хронология' })).toBeOnTheScreen();
+  expect(screenKeptOn()).toBe(false);
 });
 
 test('stopping the show returns to the pile', async () => {
