@@ -327,14 +327,14 @@ test('screen errors are explained in Russian by their code', async () => {
   expect(screen.queryByRole('button', { name: 'Перезапустить показ' })).toBeNull();
 });
 
-test('after the screen disconnects the show is restarted from the current file', async () => {
+test('while the host reconnects to the screen the remote says so and still restarts from the current file', async () => {
   const { requests, show } = core();
   const user = await startShow();
   await user.press(screen.getByRole('button', { name: 'Следующий' }));
   await screen.findByText('2 / 3');
 
-  show.renderer_error = { code: 'disconnected', message: 'cast: connection closed' };
-  expect(await screen.findByText('Связь с экраном потеряна.', {}, { timeout: 3000 })).toBeOnTheScreen();
+  show.renderer_error = { code: 'reconnecting', message: 'cast: connection closed' };
+  expect(await screen.findByText('Переподключаемся к экрану…', {}, { timeout: 3000 })).toBeOnTheScreen();
   await user.press(screen.getByRole('button', { name: 'Перезапустить показ' }));
 
   expect(requests.filter((r) => r.method === 'POST' && r.path === '/show').pop()?.body).toEqual({
@@ -342,7 +342,7 @@ test('after the screen disconnects the show is restarted from the current file',
     screen: 'cast-1',
     asset: 'a1',
   });
-  expect(screen.queryByText('Связь с экраном потеряна.')).toBeNull();
+  expect(screen.queryByText('Переподключаемся к экрану…')).toBeNull();
   expect(screen.getByText('2 / 3')).toBeOnTheScreen();
 });
 

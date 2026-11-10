@@ -2,9 +2,12 @@ package show_test
 
 import (
 	"fmt"
+	"net/http"
+	"slices"
 	"testing"
 	"time"
 
+	"github.com/glumpo/pileup/core/diag"
 	"github.com/glumpo/pileup/core/node"
 	"github.com/glumpo/pileup/core/show"
 )
@@ -141,4 +144,74 @@ func TestLoadRetryFollowsCursorAndEndsWithShow(t *testing.T) {
 	eventually(t, "failed LOAD repeated", func() bool { return len(urls(rx)) >= n+2 })
 	a.show.Stop()
 	noMoreLoads(t, rx)
+}
+
+func TestShowReconnectsToScreenWithGrowingPauses(t *testing.T) {
+	a := newPhone(t, "android", node.DefaultBudget)
+	p := pileOf(t, a)
+	a.lib.photo("P0", 0)
+	a.lib.photo("P1", 1)
+	a.share(p)
+	rx := newReceiver(t)
+	rx.fetching()
+	must(t)(a.show.Start(p.ID, a.tv(rx), nil))
+	first := rx.waitLoad(t, 1).url
+
+	rx.refusing(true)
+	dropped := time.Now()
+	rx.drop()
+	eventually(t, "reconnecting in state", func() bool { return rendererError(t, a.show) == "reconnecting" })
+	if st := must(t)(a.show.Next()); current(st) != "P1" || st.Error == nil || st.Error.Code != "reconnecting" {
+		t.Fatalf("next while reconnecting: %+v", st)
+	}
+	if resp, err := http.Get(first); err == nil {
+		resp.Body.Close()
+		t.Fatalf("media is served while the screen is disconnected: status %d", resp.StatusCode)
+	}
+	eventually(t, "two refused attempts", func() bool { return len(rx.dialed()) == 3 })
+	rx.refusing(false)
+	eventually(t, "current file shown after reconnecting", func() bool {
+		shown := rx.displayed()
+		return len(shown) == 2 && shown[1] == display("P1")
+	})
+	eventually(t, "error cleared", func() bool { return rendererError(t, a.show) == "" })
+	dials := rx.dialed()
+	if len(dials) != 4 {
+		t.Fatalf("%d connections to the screen, want 4", len(dials))
+	}
+	prev := dropped
+	for i, pause := range []time.Duration{time.Second, 2 * time.Second, 4 * time.Second} {
+		if gap := dials[i+1].Sub(prev); gap < pause || gap > pause+time.Second {
+			t.Fatalf("attempt %d after %v, want %v", i+1, gap, pause)
+		}
+		prev = dials[i+1]
+	}
+	if !slices.ContainsFunc(a.Diag().Events(), func(e diag.Event) bool {
+		return e.Kind == diag.Renderer && e.Message == "reconnected to the screen"
+	}) {
+		t.Fatal("reconnect is not in diag")
+	}
+}
+
+func TestStoppedShowStopsReconnecting(t *testing.T) {
+	a := newPhone(t, "android", node.DefaultBudget)
+	p := pileOf(t, a)
+	a.lib.photo("P0", 0)
+	a.share(p)
+	rx := newReceiver(t)
+	must(t)(a.show.Start(p.ID, a.tv(rx), nil))
+	rx.waitLoad(t, 1)
+
+	rx.refusing(true)
+	rx.drop()
+	eventually(t, "first attempt to reconnect", func() bool { return len(rx.dialed()) == 2 })
+	stopped := time.Now()
+	a.show.Stop()
+	if d := time.Since(stopped); d > time.Second {
+		t.Fatalf("stop took %v", d)
+	}
+	time.Sleep(3 * time.Second)
+	if n := len(rx.dialed()); n != 2 {
+		t.Fatalf("%d connections to the screen after stop, want 2", n)
+	}
 }

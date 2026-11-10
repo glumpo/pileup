@@ -508,10 +508,11 @@ func TestCastErrorsAndDisconnectAreReported(t *testing.T) {
 	eventually(t, "playback error in state", fault("playback_failed"))
 	eventually(t, "playback error in diag", logged("playback"))
 
+	rx.refusing(true)
 	rx.drop()
-	eventually(t, "disconnect in state", fault("disconnected"))
+	eventually(t, "disconnect in state", fault("reconnecting"))
 	eventually(t, "disconnect in diag", logged("connection"))
-	if st := must(t)(a.show.Prev()); current(st) != "P3" || st.Error == nil || st.Error.Code != "disconnected" {
+	if st := must(t)(a.show.Prev()); current(st) != "P3" || st.Error == nil || st.Error.Code != "reconnecting" {
 		t.Fatalf("after disconnect: %+v", st)
 	}
 

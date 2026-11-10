@@ -36,6 +36,8 @@ type receiver struct {
 	addr     string
 	mu       sync.Mutex
 	conns    []net.Conn
+	dials    []time.Time
+	refuse   bool
 	fail     bool
 	fetch    bool
 	idle     bool
@@ -73,8 +75,16 @@ func newReceiver(t *testing.T) *receiver {
 				return
 			}
 			r.mu.Lock()
-			r.conns = append(r.conns, c)
+			r.dials = append(r.dials, time.Now())
+			refuse := r.refuse
+			if !refuse {
+				r.conns = append(r.conns, c)
+			}
 			r.mu.Unlock()
+			if refuse {
+				c.Close()
+				continue
+			}
 			go r.serve(c)
 		}
 	}()
@@ -192,6 +202,18 @@ func (r *receiver) failLoads(fail bool) {
 	r.mu.Lock()
 	r.fail = fail
 	r.mu.Unlock()
+}
+
+func (r *receiver) refusing(refuse bool) {
+	r.mu.Lock()
+	r.refuse = refuse
+	r.mu.Unlock()
+}
+
+func (r *receiver) dialed() []time.Time {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	return append([]time.Time(nil), r.dials...)
 }
 
 func (r *receiver) fetching() {
