@@ -43,7 +43,7 @@ func (p *pauses) list() []time.Duration {
 	return slices.Clone(p.got)
 }
 
-const runaway = 500
+const runaway = 160
 
 var errRunaway = errors.New("series does not end")
 
@@ -175,7 +175,11 @@ func received(t *testing.T, ch <-chan struct{}, what string) {
 
 func portOf(addr string) int { return int(netip.MustParseAddrPort(addr).Port()) }
 
-func TestAmbiguousFailuresAreRetriedHundredTimesWithLinearPauses(t *testing.T) {
+func slow(times int) []time.Duration {
+	return slices.Repeat([]time.Duration{30 * time.Second}, times)
+}
+
+func TestAmbiguousFailuresAreRetriedWithoutEnd(t *testing.T) {
 	ps := instantPauses(t)
 	refusing := serveRefusing(t)
 	s := newSaved(t)
@@ -183,11 +187,11 @@ func TestAmbiguousFailuresAreRetriedHundredTimesWithLinearPauses(t *testing.T) {
 	n := s.open(t)
 
 	exhausted(n, s.id)
-	if got := refusing.accepted.Load(); got != 101 {
-		t.Errorf("%d connection attempts, want the first one and 100 retries", got)
+	if got := refusing.accepted.Load(); got != runaway+1 {
+		t.Errorf("%d connection attempts, want retries until the test stops them after %d pauses", got, runaway)
 	}
-	if got := ps.list(); !slices.Equal(got, linear(1, 100)) {
-		t.Errorf("pauses %v, want 10ms, 20ms … 1s", got)
+	if got, want := ps.list(), slices.Concat(linear(1, 100), slow(runaway+1-100)); !slices.Equal(got, want) {
+		t.Errorf("pauses %v, want 10ms, 20ms … 1s and then 30s each", got)
 	}
 }
 
@@ -250,10 +254,10 @@ func TestSeriesRestartsOnlyAfterSuccessfulSync(t *testing.T) {
 	n := s.open(t)
 
 	exhausted(n, s.id)
-	if got := announces.Load(); got != 151 {
-		t.Errorf("%d attempts, want 51 until the successful round and 100 retries after it", got)
+	if got := announces.Load(); got != runaway+1 {
+		t.Errorf("%d attempts, want retries until the test stops them after %d pauses", got, runaway)
 	}
-	if got, want := ps.list(), append(linear(1, 50), linear(1, 100)...); !slices.Equal(got, want) {
+	if got, want := ps.list(), slices.Concat(linear(1, 50), linear(1, 100), slow(runaway+1-150)); !slices.Equal(got, want) {
 		t.Errorf("pauses %v, want %v", got, want)
 	}
 }
@@ -327,8 +331,8 @@ func TestRepeatedFoundStartsNoParallelLoops(t *testing.T) {
 	}
 }
 
-func TestOnlyNewDiscoveryStartsNewSeries(t *testing.T) {
-	instantPauses(t)
+func TestFoundAfterLostStartsNewLoop(t *testing.T) {
+	pausing := endlessPauses(t)
 	var refusing *counting
 	c := discover(t, func(id, secret []byte) string {
 		refusing = serveRefusing(t)
@@ -338,21 +342,18 @@ func TestOnlyNewDiscoveryStartsNewSeries(t *testing.T) {
 	advertise := func() {
 		c.lan.Advertise("_pileup._tcp", "pileup-candidate", portOf(addr), txt("pile="+pileHash(c.pile.ID)))
 	}
-	exhausted(c.n, c.pile.ID)
-	if got := refusing.accepted.Load(); got != 101 {
-		t.Fatalf("%d attempts in the first series, want 101", got)
-	}
-
+	received(t, pausing, "pause after the first attempt")
 	advertise()
-	if got := c.n.Dialing(c.pile.ID); len(got) != 0 {
-		t.Fatalf("repeated Found started %v", got)
+	if got := refusing.accepted.Load(); got != 1 {
+		t.Fatalf("%d attempts after a repeated Found, want 1", got)
 	}
 
 	c.lan.Stop()
+	stopped(t, c.n, c.pile.ID)
 	advertise()
-	exhausted(c.n, c.pile.ID)
-	if got := refusing.accepted.Load(); got != 202 {
-		t.Errorf("%d attempts after both series, want 202", got)
+	received(t, pausing, "pause after the attempt of the new loop")
+	if got := refusing.accepted.Load(); got != 2 {
+		t.Errorf("%d attempts after Found that followed Lost, want 2", got)
 	}
 }
 
@@ -394,26 +395,110 @@ func TestLostKeepsConnectionToConfirmedMember(t *testing.T) {
 	}
 }
 
-func TestReturningMemberIsSyncedAfterSeriesEnded(t *testing.T) {
-	instantPauses(t)
-	dirB := t.TempDir()
-	lib := shelf(photo("IMG_1", "2026-07-02T10:00:00Z"))
-	anya := open(t, t.TempDir(), "android")
-	borya := openWith(t, dirB, "ios", lib)
-	p := create(t, anya, "Грузия", "Аня")
-	join(t, borya, inviteTo(t, anya, p), "Боря")
-	waitConverged(t, p.ID, node.Pile{ID: p.ID, Name: "Грузия", Members: map[op.Author]state.Member{
-		anya.Author():  {Name: "Аня", Platform: "android"},
-		borya.Author(): {Name: "Боря", Platform: "ios"},
-	}}, anya, borya)
-	if err := borya.Close(); err != nil {
+func slowPauses(t *testing.T) (waiting <-chan struct{}, elapse func()) {
+	t.Helper()
+	at, gone := make(chan struct{}, 1), make(chan struct{})
+	t.Cleanup(node.SetPause(func(ctx context.Context, d time.Duration) error {
+		if d < 30*time.Second {
+			return ctx.Err()
+		}
+		signal(at)
+		select {
+		case <-gone:
+			return nil
+		case <-ctx.Done():
+			return ctx.Err()
+		}
+	}))
+	return at, func() { close(gone) }
+}
+
+func TestMemberIsRetriedAfterLongAbsence(t *testing.T) {
+	waiting, elapse := slowPauses(t)
+	s := newSaved(t)
+	o := newOwner(t, s.id, s.secret)
+	at := o.serve(t, nil)
+	s.write(t, s.history(t, 1), at.addr())
+	n := s.open(t)
+	lostAndBack(t, s, o, n, at, waiting)
+	elapse()
+	eventually(t, "the member is synced again", func() bool { return n.Online(s.id)[o.author()] })
+}
+
+func lostAndBack(t *testing.T, s saved, o owner, n *node.Node, at *site, pausing <-chan struct{}) {
+	t.Helper()
+	syncedWith(t, n, s.id, o)
+	at.stop()
+	received(t, pausing, "pause after the connection was lost")
+	serveOn(t, listenAt(t, at.addr()), o.key, s.id, s.secret, o.raws, nil)
+}
+
+func TestIncomingAnnounceCutsThePause(t *testing.T) {
+	pausing := endlessPauses(t)
+	s := newSaved(t)
+	o := newOwner(t, s.id, s.secret)
+	at := o.serve(t, nil)
+	s.write(t, s.history(t, 1), at.addr())
+	n := s.open(t)
+	lostAndBack(t, s, o, n, at, pausing)
+
+	o.announce(t, nodeAddr(t, n, s.id), portOf(at.addr()))
+	eventually(t, "the member is synced without waiting for the pause", func() bool { return n.Online(s.id)[o.author()] })
+}
+
+func TestReconnectRetriesNow(t *testing.T) {
+	t.Run("loop in a pause", func(t *testing.T) {
+		pausing := endlessPauses(t)
+		s := newSaved(t)
+		o := newOwner(t, s.id, s.secret)
+		at := o.serve(t, nil)
+		s.write(t, s.history(t, 1), at.addr())
+		n := s.open(t)
+		lostAndBack(t, s, o, n, at, pausing)
+
+		n.Reconnect("requested by the test")
+		eventually(t, "the member is synced without waiting for the pause", func() bool { return n.Online(s.id)[o.author()] })
+		eventually(t, "the reconnect is logged", logged(n, diag.Connection, node.Pile{}, "", "reconnect, requested by the test"))
+	})
+	t.Run("saved address without a loop", func(t *testing.T) {
+		_, edKey, _ := ed25519.GenerateKey(nil)
+		impostor := serveImpostor(t, selfSigned(t, edKey))
+		s := newSaved(t)
+		s.write(t, s.history(t, 1), impostor.Addr().String())
+		n := s.open(t)
+		stopped(t, n, s.id)
+
+		n.Reconnect("requested by the test")
+		eventually(t, "a new attempt to the saved address", func() bool { return impostor.accepted.Load() == 2 })
+	})
+}
+
+func TestNetworkChangeReconnects(t *testing.T) {
+	pausing := endlessPauses(t)
+	t.Cleanup(node.SetNetworkCheck(10 * time.Millisecond))
+	var mu sync.Mutex
+	current := loopback()
+	addrs := func() []netip.Addr {
+		mu.Lock()
+		defer mu.Unlock()
+		return slices.Clone(current)
+	}
+	s := newSaved(t)
+	o := newOwner(t, s.id, s.secret)
+	at := o.serve(t, nil)
+	s.write(t, s.history(t, 1), at.addr())
+	n, err := node.Open(node.Config{Dir: s.dir, Keystore: device.File(filepath.Join(s.dir, "device.key")), Platform: "android", Addrs: addrs})
+	if err != nil {
 		t.Fatal(err)
 	}
-	exhausted(anya, p.ID)
+	t.Cleanup(func() { n.Close() })
+	lostAndBack(t, s, o, n, at, pausing)
 
-	borya = openWith(t, dirB, "ios", lib)
-	choose(t, borya, p.ID, "2026-07-01T00:00:00Z", "2026-07-10T00:00:00Z")
-	eventually(t, "Аня receives the file of Боря", func() bool { return len(assetsOn(t, anya, p.ID)) == 1 })
+	mu.Lock()
+	current = append(current, netip.MustParseAddr("192.168.1.20"))
+	mu.Unlock()
+	eventually(t, "the member is synced without waiting for the pause", func() bool { return n.Online(s.id)[o.author()] })
+	eventually(t, "the reconnect is logged", logged(n, diag.Connection, node.Pile{}, "", "reconnect, network addresses changed"))
 }
 
 func TestCloseCancelsConnectionLoops(t *testing.T) {

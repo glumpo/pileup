@@ -88,6 +88,7 @@ type pile struct {
 
 type loop struct {
 	cancel  context.CancelFunc
+	kick    context.CancelFunc
 	live    bool
 	failing bool
 }
@@ -153,6 +154,7 @@ func Open(cfg Config) (*Node, error) {
 		return nil, err
 	}
 	n.discover()
+	n.watchNetwork()
 	return n, nil
 }
 
@@ -385,7 +387,7 @@ func (n *Node) announced(p *pile, w http.ResponseWriter, r *http.Request) {
 	fresh, err := n.admit(p, addr, asker)
 	var others []listedAddr
 	if err == nil {
-		n.dial(p, addr, func() {})
+		n.hurry(p, addr)
 		others = p.listing(asker)
 	}
 	n.mu.Unlock()
@@ -485,8 +487,14 @@ func (n *Node) dial(p *pile, addr string, release func()) {
 
 func (n *Node) connect(ctx context.Context, p *pile, l *loop, addr string, release func()) {
 	for retry := 0; ; retry++ {
-		if retry > 0 && pause(ctx, time.Duration(retry)*backoff) != nil {
-			return
+		if retry > 0 {
+			kicked, err := n.rest(ctx, l, delay(retry))
+			if err != nil {
+				return
+			}
+			if kicked {
+				retry = 0
+			}
 		}
 		synced, err := n.attempt(ctx, p, l, addr, release)
 		release()
@@ -496,7 +504,7 @@ func (n *Node) connect(ctx context.Context, p *pile, l *loop, addr string, relea
 		if ctx.Err() != nil || errors.Is(err, peer.ErrCertificate) || errors.Is(err, peer.ErrMembership) || errors.Is(err, errOwnAddress) {
 			return
 		}
-		if n.failed(p, l, addr) || retry == retries {
+		if n.failed(p, l, addr) {
 			return
 		}
 	}

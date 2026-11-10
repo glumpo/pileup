@@ -12,6 +12,12 @@ func SetPause(f func(ctx context.Context, d time.Duration) error) (restore func(
 	return func() { pause = old }
 }
 
+func SetNetworkCheck(d time.Duration) (restore func()) {
+	old := networkCheck
+	networkCheck = d
+	return func() { networkCheck = old }
+}
+
 func (n *Node) Dialing(pileID []byte) []string {
 	p, err := n.find(pileID)
 	if err != nil {
