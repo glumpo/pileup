@@ -331,15 +331,12 @@ func (n *Node) serve(p *pile, ln net.Listener) {
 func (n *Node) tracked(h http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		n.mu.Lock()
-		closed := n.ctx.Err() != nil
-		if !closed {
-			n.wg.Add(1)
+		if n.ctx.Err() != nil {
+			n.mu.Unlock()
+			panic(http.ErrAbortHandler)
 		}
+		n.wg.Add(1)
 		n.mu.Unlock()
-		if closed {
-			http.Error(w, "node is closed", http.StatusServiceUnavailable)
-			return
-		}
 		defer n.wg.Done()
 		h.ServeHTTP(w, r)
 	})
