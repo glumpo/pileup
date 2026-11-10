@@ -43,6 +43,8 @@ var (
 
 var headerTimeout, readIdle = timeout, 10 * time.Second
 
+var brokenPause = 5 * time.Minute
+
 type RenditionMaker interface {
 	Rendition(localID string, tier int) ([]byte, error)
 	OriginalSize(localID string) (int64, error)

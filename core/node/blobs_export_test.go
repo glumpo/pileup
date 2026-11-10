@@ -12,3 +12,9 @@ func SetFetchTimeouts(headers, idle time.Duration) (restore func()) {
 	headerTimeout, readIdle = headers, idle
 	return func() { headerTimeout, readIdle = oldHeaders, oldIdle }
 }
+
+func SetBrokenPause(d time.Duration) (restore func()) {
+	old := brokenPause
+	brokenPause = d
+	return func() { brokenPause = old }
+}
