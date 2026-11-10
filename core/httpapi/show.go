@@ -24,10 +24,11 @@ type rendererError struct {
 }
 
 type hint struct {
-	Author   string `json:"author"`
-	Name     string `json:"name"`
-	Platform string `json:"platform"`
-	Reason   string `json:"reason"`
+	Author    string `json:"author"`
+	Name      string `json:"name"`
+	Platform  string `json:"platform"`
+	Reason    string `json:"reason"`
+	LastError string `json:"last_error,omitempty"`
 }
 
 type showState struct {
@@ -44,7 +45,7 @@ type showState struct {
 }
 
 func toHint(h show.Hint) hint {
-	return hint{Author: hex.EncodeToString(h.Member[:]), Name: h.Name, Platform: h.Platform, Reason: h.Reason}
+	return hint{Author: hex.EncodeToString(h.Member[:]), Name: h.Name, Platform: h.Platform, Reason: h.Reason, LastError: h.LastError}
 }
 
 func toShowItem(a state.Asset) showItem {

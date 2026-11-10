@@ -218,7 +218,7 @@ func (l *loader) hint(a op.Author) Hint {
 	if !l.online[a] {
 		reason = Unreachable
 	}
-	return Hint{Member: a, Name: m.Name, Platform: m.Platform, Reason: reason}
+	return Hint{Member: a, Name: m.Name, Platform: m.Platform, Reason: reason, LastError: l.n.Presence(l.pile, a).LastError}
 }
 
 func (l *loader) status(extra ...op.Author) ([]state.Asset, []Hint) {

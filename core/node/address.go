@@ -88,6 +88,7 @@ func (p *pile) drop(a string) {
 		delete(p.loops, a)
 	}
 	delete(p.peers, a)
+	delete(p.faults, a)
 }
 
 func (p *pile) supersede(who op.Author) []string {

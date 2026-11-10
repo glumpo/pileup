@@ -83,8 +83,10 @@ type pile struct {
 	owners  *http.Client
 	stream  *http.Client
 	online  map[op.Author]int
+	seen    map[op.Author]time.Time
 	addrs   map[op.Author]string
 	peers   map[string]op.Author
+	faults  map[string]string
 	loops   map[string]*loop
 }
 
@@ -309,7 +311,7 @@ func (n *Node) start(e entry, addrs map[op.Author]string, changes ...op.Change) 
 	e.Port = uint16(ln.Addr().(*net.TCPAddr).Port)
 	n.diag.Add(diag.Connection, e.ID, "", fmt.Sprintf("listening on port %d", e.Port))
 	e.Peers = nil
-	p := &pile{entry: e, store: s, replica: replica.New(s, n.key, e.ID, e.Secret), online: map[op.Author]int{}, addrs: addrs, peers: peers, loops: map[string]*loop{}}
+	p := &pile{entry: e, store: s, replica: replica.New(s, n.key, e.ID, e.Secret), online: map[op.Author]int{}, seen: map[op.Author]time.Time{}, addrs: addrs, peers: peers, faults: map[string]string{}, loops: map[string]*loop{}}
 	p.owners = n.owners(p)
 	p.stream = &http.Client{Transport: p.owners.Transport}
 	for a := range p.peers {
@@ -407,6 +409,7 @@ func (n *Node) learn(p *pile, l *loop, who op.Author, addr string) {
 	n.mu.Lock()
 	was, known := p.peers[addr]
 	p.peers[addr] = who
+	delete(p.faults, addr)
 	l.live, l.failing = true, false
 	p.online[who]++
 	prev := p.addrs[who]
@@ -434,6 +437,7 @@ func (n *Node) left(p *pile, l *loop, who op.Author) {
 	n.mu.Lock()
 	defer n.mu.Unlock()
 	l.live = false
+	p.seen[who] = time.Now()
 	p.online[who]--
 	if p.online[who] == 0 {
 		delete(p.online, who)
@@ -503,7 +507,11 @@ func (n *Node) connect(ctx context.Context, p *pile, l *loop, addr string, relea
 		if synced {
 			retry = 0
 		}
-		if ctx.Err() != nil || errors.Is(err, peer.ErrCertificate) || errors.Is(err, peer.ErrMembership) || errors.Is(err, errOwnAddress) {
+		if ctx.Err() != nil {
+			return
+		}
+		n.fault(p, addr, err)
+		if errors.Is(err, peer.ErrCertificate) || errors.Is(err, peer.ErrMembership) || errors.Is(err, errOwnAddress) {
 			return
 		}
 		if n.failed(p, l, addr) {

@@ -24,7 +24,7 @@ func WithNode(token string, n *node.Node, h *show.Host) http.Handler {
 		}
 		out := make([]pile, 0, len(ps))
 		for _, p := range ps {
-			out = append(out, toJSON(p))
+			out = append(out, toJSON(n, p))
 		}
 		reply(w, http.StatusOK, out)
 	})
@@ -38,7 +38,7 @@ func WithNode(token string, n *node.Node, h *show.Host) http.Handler {
 			fail(w, err)
 			return
 		}
-		reply(w, http.StatusCreated, toJSON(p))
+		reply(w, http.StatusCreated, toJSON(n, p))
 	})
 	mux.HandleFunc("GET /piles/{id}/invite", func(w http.ResponseWriter, r *http.Request) {
 		id, err := hex.DecodeString(r.PathValue("id"))
@@ -63,7 +63,7 @@ func WithNode(token string, n *node.Node, h *show.Host) http.Handler {
 			fail(w, err)
 			return
 		}
-		reply(w, http.StatusCreated, toJSON(p))
+		reply(w, http.StatusCreated, toJSON(n, p))
 	})
 	media(mux, n)
 	blobs(mux, n)
@@ -77,9 +77,13 @@ func WithNode(token string, n *node.Node, h *show.Host) http.Handler {
 }
 
 type member struct {
+	Key        string `json:"key"`
 	Name       string `json:"name"`
 	Platform   string `json:"platform"`
 	AppVersion string `json:"app_version"`
+	Online     bool   `json:"online"`
+	LastSeen   *int64 `json:"last_seen"`
+	LastError  string `json:"last_error,omitempty"`
 }
 
 type pile struct {
@@ -88,7 +92,7 @@ type pile struct {
 	Members []member `json:"members"`
 }
 
-func toJSON(p node.Pile) pile {
+func toJSON(n *node.Node, p node.Pile) pile {
 	out := pile{ID: hex.EncodeToString(p.ID), Name: p.Name, Members: []member{}}
 	authors := make([]op.Author, 0, len(p.Members))
 	for a := range p.Members {
@@ -96,8 +100,13 @@ func toJSON(p node.Pile) pile {
 	}
 	slices.SortFunc(authors, func(x, y op.Author) int { return bytes.Compare(x[:], y[:]) })
 	for _, a := range authors {
-		m := p.Members[a]
-		out.Members = append(out.Members, member{Name: m.Name, Platform: m.Platform, AppVersion: m.AppVersion})
+		m, pr := p.Members[a], n.Presence(p.ID, a)
+		var seen *int64
+		if !pr.LastSeen.IsZero() {
+			ms := pr.LastSeen.UnixMilli()
+			seen = &ms
+		}
+		out.Members = append(out.Members, member{Key: hex.EncodeToString(a[:]), Name: m.Name, Platform: m.Platform, AppVersion: m.AppVersion, Online: pr.Online, LastSeen: seen, LastError: pr.LastError})
 	}
 	return out
 }
