@@ -29,6 +29,7 @@ const (
 )
 
 const (
+	DefaultBudget = 1 << 30
 	Immutable     = "max-age=31536000, immutable"
 	fetchers      = 5
 	originalChunk = 1 << 20
@@ -62,16 +63,28 @@ func (n *Node) Blob(ctx context.Context, pileID, assetID, revision []byte, tier 
 }
 
 func (n *Node) open(ctx context.Context, p *pile, assetID, revision []byte, tier int) (*os.File, blob.Hash, error) {
-	h, err := n.blob(ctx, p, assetID, revision, tier)
+	a, err := p.asset(assetID, revision)
 	if err != nil {
 		return nil, blob.Hash{}, err
 	}
-	f, err := n.blobs.Open(h)
-	return f, h, err
+	load := n.fetch(p, a.Owner, assetID, revision, tier)
+	if a.Owner == n.Author() {
+		load = n.render(p, assetID, tier)
+	}
+	return n.blobs.Get(ctx, blob.Request{
+		Pile:    string(p.ID),
+		Key:     key(a.Owner, assetID, revision, tier),
+		TakenAt: a.Meta.TakenAt,
+		Valid: func() error {
+			_, err := p.asset(assetID, revision)
+			return err
+		},
+		Load: load,
+	})
 }
 
-func ref(owner op.Author, assetID, revision []byte, tier int) string {
-	return fmt.Sprintf("%x/%x/%x/%d", owner[:], assetID, revision, tier)
+func key(owner op.Author, assetID, revision []byte, tier int) blob.Key {
+	return blob.Key{Owner: string(owner[:]), Asset: string(assetID), Revision: string(revision), Tier: tier}
 }
 
 func (p *pile) asset(assetID, revision []byte) (state.Asset, error) {
@@ -82,85 +95,61 @@ func (p *pile) asset(assetID, revision []byte) (state.Asset, error) {
 	return a, err
 }
 
-func (n *Node) blob(ctx context.Context, p *pile, assetID, revision []byte, tier int) (blob.Hash, error) {
-	a, err := p.asset(assetID, revision)
-	if err != nil {
-		return blob.Hash{}, err
-	}
-	key := ref(a.Owner, assetID, revision, tier)
-	if h, ok, err := n.stored(key); ok || err != nil {
-		return h, err
-	}
-	var h blob.Hash
-	if a.Owner == n.Author() {
-		n.rendering.Lock()
-		defer n.rendering.Unlock()
-		if h, ok, err := n.stored(key); ok || err != nil {
-			return h, err
-		}
-		h, err = n.render(p, assetID, tier)
-		n.report(diag.Media, p.ID, "", fmt.Sprintf("render %x T%d", assetID, tier), err)
-	} else {
-		h, err = n.fetch(ctx, p, a.Owner, assetID, revision, tier)
-		n.report(diag.Media, p.ID, hex.EncodeToString(a.Owner[:]), fmt.Sprintf("fetch %x T%d", assetID, tier), err)
-	}
-	if err == nil {
-		err = n.blobs.SetRef(key, h)
-	}
-	return h, err
-}
-
-func (n *Node) stored(key string) (blob.Hash, bool, error) {
-	h, ok, err := n.blobs.Ref(key)
-	if ok && err == nil {
-		ok, err = n.blobs.Has(h)
-	}
-	return h, ok, err
-}
-
-func (n *Node) refOf(pileID, assetID, revision []byte, tier int) (string, error) {
+func (n *Node) Cached(pileID, assetID, revision []byte, tier int) (int64, bool) {
 	p, err := n.find(pileID)
 	if err != nil {
-		return "", err
+		return 0, false
 	}
 	a, err := p.asset(assetID, revision)
 	if err != nil {
-		return "", err
+		return 0, false
 	}
-	return ref(a.Owner, assetID, revision, tier), nil
+	held, err := n.blobs.Held(string(p.ID), tier)
+	if err != nil {
+		return 0, false
+	}
+	k := key(a.Owner, assetID, revision, tier)
+	for _, h := range held {
+		if h.Key == k {
+			return h.Size, true
+		}
+	}
+	return 0, false
 }
 
-func (n *Node) Cached(pileID, assetID, revision []byte, tier int) (int64, bool) {
-	key, err := n.refOf(pileID, assetID, revision, tier)
-	if err != nil {
-		return 0, false
-	}
-	h, ok, err := n.blobs.Ref(key)
-	if !ok || err != nil {
-		return 0, false
-	}
-	f, err := n.blobs.Open(h)
-	if err != nil {
-		return 0, false
-	}
-	defer f.Close()
-	info, err := f.Stat()
-	if err != nil {
-		return 0, false
-	}
-	return info.Size(), true
+type Display struct {
+	AssetID  []byte
+	Revision []byte
+	Size     int64
 }
 
-func (n *Node) Evict(pileID, assetID, revision []byte, tier int) error {
-	key, err := n.refOf(pileID, assetID, revision, tier)
+func (n *Node) Displays(pileID []byte) ([]Display, error) {
+	p, err := n.find(pileID)
+	if err != nil {
+		return nil, err
+	}
+	held, err := n.blobs.Held(string(p.ID), T2)
+	out := make([]Display, len(held))
+	for i, h := range held {
+		out[i] = Display{AssetID: []byte(h.Key.Asset), Revision: []byte(h.Key.Revision), Size: h.Size}
+	}
+	return out, err
+}
+
+func (n *Node) Protect(pileID []byte, window []state.Asset) error {
+	p, err := n.find(pileID)
 	if err != nil {
 		return err
 	}
-	h, ok, err := n.blobs.Ref(key)
-	if !ok || err != nil {
-		return err
+	keys := make([]blob.Key, len(window))
+	for i, a := range window {
+		keys[i] = key(a.Owner, a.Meta.AssetID, a.Meta.Revision, T2)
 	}
-	return errors.Join(n.blobs.RemoveRef(key), n.blobs.Remove(h))
+	return n.blobs.Protect(string(p.ID), keys)
+}
+
+func (n *Node) Budget() int64 {
+	return n.cfg.Budget
 }
 
 func (n *Node) localID(p *pile, assetID []byte) (string, error) {
@@ -176,36 +165,51 @@ func (n *Node) localID(p *pile, assetID []byte) (string, error) {
 	return local, nil
 }
 
-func (n *Node) render(p *pile, assetID []byte, tier int) (blob.Hash, error) {
-	local, err := n.localID(p, assetID)
-	if err != nil {
-		return blob.Hash{}, err
+func (n *Node) render(p *pile, assetID []byte, tier int) blob.Load {
+	return func(_ context.Context, w io.Writer) error {
+		local, err := n.localID(p, assetID)
+		if err != nil {
+			return err
+		}
+		n.rendering.Lock()
+		b, err := n.cfg.Renditions.Rendition(local, tier)
+		n.rendering.Unlock()
+		n.report(diag.Media, p.ID, "", fmt.Sprintf("render %x T%d", assetID, tier), err)
+		if err != nil {
+			return err
+		}
+		_, err = w.Write(b)
+		return err
 	}
-	b, err := n.cfg.Renditions.Rendition(local, tier)
-	if err != nil {
-		return blob.Hash{}, err
-	}
-	return n.blobs.Put(bytes.NewReader(b))
 }
 
-func (n *Node) fetch(ctx context.Context, p *pile, owner op.Author, assetID, revision []byte, tier int) (blob.Hash, error) {
+func (n *Node) fetch(p *pile, owner op.Author, assetID, revision []byte, tier int) blob.Load {
+	return func(ctx context.Context, w io.Writer) error {
+		err := n.download(ctx, p, owner, assetID, revision, tier, w)
+		n.report(diag.Media, p.ID, hex.EncodeToString(owner[:]), fmt.Sprintf("fetch %x T%d", assetID, tier), err)
+		return err
+	}
+}
+
+func (n *Node) download(ctx context.Context, p *pile, owner op.Author, assetID, revision []byte, tier int, w io.Writer) error {
 	u := fmt.Sprintf("http://%x/blob/%x/%x/%d", owner[:], assetID, revision, tier)
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, u, nil)
 	if err != nil {
-		return blob.Hash{}, err
+		return err
 	}
 	resp, err := p.owners.Do(req)
 	if err != nil {
-		return blob.Hash{}, fmt.Errorf("%w: %w", ErrUnavailable, err)
+		return fmt.Errorf("%w: %w", ErrUnavailable, err)
 	}
 	defer resp.Body.Close()
 	switch resp.StatusCode {
 	case http.StatusOK:
-		return n.blobs.Put(resp.Body)
+		_, err = io.Copy(w, resp.Body)
+		return err
 	case http.StatusNotFound:
-		return blob.Hash{}, ErrUnknownAsset
+		return ErrUnknownAsset
 	}
-	return blob.Hash{}, fmt.Errorf("%w: %w: %s", ErrUnavailable, ErrRefused, resp.Status)
+	return fmt.Errorf("%w: %w: %s", ErrUnavailable, ErrRefused, resp.Status)
 }
 
 func (n *Node) owners(p *pile) *http.Client {
@@ -408,6 +412,15 @@ func (n *Node) fetchThumbnails(p *pile) bool {
 	if err != nil {
 		return false
 	}
+	current := map[blob.Key]bool{}
+	for _, a := range v.Assets {
+		current[key(a.Owner, a.Meta.AssetID, a.Meta.Revision, 0)] = true
+	}
+	err = n.blobs.Retain(string(p.ID), func(k blob.Key) bool {
+		k.Tier = 0
+		return current[k]
+	})
+	n.report(diag.Media, p.ID, "", "cache cleanup", err)
 	var mu sync.Mutex
 	done, offline := true, map[op.Author]bool{}
 	todo := make(chan state.Asset)
@@ -421,7 +434,10 @@ func (n *Node) fetchThumbnails(p *pile) bool {
 				if skip {
 					continue
 				}
-				_, err := n.blob(n.ctx, p, a.Meta.AssetID, a.Meta.Revision, T1)
+				f, _, err := n.open(n.ctx, p, a.Meta.AssetID, a.Meta.Revision, T1)
+				if err == nil {
+					f.Close()
+				}
 				mu.Lock()
 				if err != nil {
 					done = false

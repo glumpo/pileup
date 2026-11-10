@@ -49,18 +49,16 @@ type Estimate struct {
 }
 
 type loader struct {
-	n      *node.Node
-	pile   []byte
-	self   op.Author
-	budget int64
-	ctx    context.Context
-	wg     *sync.WaitGroup
+	n    *node.Node
+	pile []byte
+	self op.Author
+	ctx  context.Context
+	wg   *sync.WaitGroup
 
 	mu      sync.Mutex
 	members map[op.Author]state.Member
 	items   []state.Asset
 	index   map[string]int
-	checked map[string]bool
 	pins    map[string]bool
 	pinned  map[string]bool
 	online  map[op.Author]bool
@@ -87,12 +85,6 @@ func (l *loader) setItems(p node.Pile, items []state.Asset) {
 		k := key(a)
 		l.index[k] = i
 		planned[i] = prefetch.Item{ID: k, TakenAt: a.Meta.TakenAt, Source: source(a.Owner)}
-		if !l.checked[k] {
-			l.checked[k] = true
-			if size, ok := l.n.Cached(l.pile, a.Meta.AssetID, a.Meta.Revision, node.T2); ok {
-				l.cache.Loaded(k, size)
-			}
-		}
 	}
 	l.cache.SetItems(planned)
 	l.setOnline(l.n.Online(l.pile))
@@ -192,7 +184,7 @@ func (l *loader) estimate(member []byte) Estimate {
 	if count > 0 {
 		typical = total / int64(count)
 	}
-	e := Estimate{Budget: l.budget}
+	e := Estimate{Budget: l.n.Budget()}
 	for _, a := range l.items {
 		inScope := member == nil || bytes.Equal(a.Owner[:], member)
 		if !inScope && !l.pinned[key(a)] {
@@ -212,7 +204,7 @@ func (l *loader) estimate(member []byte) Estimate {
 			e.Bytes += typical
 		}
 	}
-	e.OverBudget = after > l.budget
+	e.OverBudget = after > e.Budget
 	if free, err := l.n.Free(); err == nil {
 		e.Free = &free
 	}
@@ -261,14 +253,24 @@ func (l *loader) plan() {
 	if l.ctx.Err() != nil {
 		return
 	}
-	load, evict := l.cache.Plan(time.Now())
-	for _, k := range evict {
-		assetID, revision := parseKey(k)
-		if err := l.n.Evict(l.pile, assetID, revision, node.T2); err != nil {
-			l.n.Diag().Error(diag.Media, l.pile, "", fmt.Errorf("evict %x T2: %w", assetID, err))
-		}
+	var window []state.Asset
+	for _, k := range l.cache.Window() {
+		window = append(window, l.items[l.index[k]])
 	}
-	for _, k := range load {
+	if err := l.n.Protect(l.pile, window); err != nil {
+		l.n.Diag().Error(diag.Media, l.pile, "", fmt.Errorf("protect the window: %w", err))
+	}
+	displays, err := l.n.Displays(l.pile)
+	if err != nil {
+		l.n.Diag().Error(diag.Media, l.pile, "", fmt.Errorf("cached files: %w", err))
+		return
+	}
+	sizes := map[string]int64{}
+	for _, d := range displays {
+		sizes[hex.EncodeToString(d.AssetID)+"/"+hex.EncodeToString(d.Revision)] = d.Size
+	}
+	l.cache.SetCached(sizes)
+	for _, k := range l.cache.Plan(time.Now()) {
 		l.wg.Add(1)
 		go l.fetch(k, l.items[l.index[k]].Owner)
 	}
@@ -277,14 +279,9 @@ func (l *loader) plan() {
 func (l *loader) fetch(k string, owner op.Author) {
 	defer l.wg.Done()
 	assetID, revision := parseKey(k)
-	var size int64
 	f, _, err := l.n.Blob(l.ctx, l.pile, assetID, revision, node.T2)
 	if err == nil {
-		info, serr := f.Stat()
 		f.Close()
-		if err = serr; err == nil {
-			size = info.Size()
-		}
 	}
 	l.mu.Lock()
 	defer l.mu.Unlock()
@@ -293,7 +290,7 @@ func (l *loader) fetch(k string, owner op.Author) {
 	}
 	switch {
 	case err == nil:
-		l.cache.Loaded(k, size)
+		l.cache.Loaded(k)
 	case owner == l.self || errors.Is(err, node.ErrUnknownAsset) || errors.Is(err, node.ErrRefused):
 		l.cache.Broken(k)
 	default:

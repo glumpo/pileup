@@ -108,7 +108,7 @@ func errorCode(t *testing.T, body []byte) string {
 
 func TestThumbnailAndDisplayForUI(t *testing.T) {
 	n, p, photo := sourceWithPhoto(t)
-	srv := httptest.NewServer(httpapi.WithNode("secret", n, show.New(n, show.DefaultBudget)))
+	srv := httptest.NewServer(httpapi.WithNode("secret", n, show.New(n)))
 	t.Cleanup(srv.Close)
 
 	for _, tier := range []string{"1", "2"} {

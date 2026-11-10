@@ -11,7 +11,6 @@ import (
 	"github.com/glumpo/pileup/core/crdt/state"
 	"github.com/glumpo/pileup/core/httpapi"
 	"github.com/glumpo/pileup/core/node"
-	"github.com/glumpo/pileup/core/show"
 )
 
 func (ph *phone) read(p node.Pile, local string, tier int) string {
@@ -45,7 +44,7 @@ func (ph *phone) evictFirst(p node.Pile, first, second string) {
 }
 
 func TestEvictionInOnePileKeepsDisplayPinnedInAnother(t *testing.T) {
-	a, b := newPhone(t, "ios", show.DefaultBudget), newPhone(t, "android", int64(len(display("X"))))
+	a, b := newPhone(t, "ios", node.DefaultBudget), newPhone(t, "android", int64(len(display("X"))))
 	p, q := pileOf(t, a, b), pileOf(t, a, b)
 	a.lib.photo("X", 0)
 	a.lib.photo("Y", 1)
@@ -74,7 +73,7 @@ func TestEvictionInOnePileKeepsDisplayPinnedInAnother(t *testing.T) {
 }
 
 func TestEvictedDisplayKeepsThumbnailWithSameBytes(t *testing.T) {
-	a, b := newPhone(t, "ios", show.DefaultBudget), newPhone(t, "android", int64(len(display("Y"))))
+	a, b := newPhone(t, "ios", node.DefaultBudget), newPhone(t, "android", int64(len(display("Y"))))
 	p := pileOf(t, a, b)
 	a.lib.content["X"] = "tiny X"
 	a.lib.photo("X", 0)
@@ -93,7 +92,7 @@ func TestEvictedDisplayKeepsThumbnailWithSameBytes(t *testing.T) {
 }
 
 func TestEvictedFileKeepsOtherFileWithSameBytes(t *testing.T) {
-	a, b := newPhone(t, "ios", show.DefaultBudget), newPhone(t, "android", int64(len("same bytes")))
+	a, b := newPhone(t, "ios", node.DefaultBudget), newPhone(t, "android", int64(len("same bytes")))
 	p := pileOf(t, a, b)
 	a.lib.content["X"] = "same bytes"
 	a.lib.content["Z"] = "same bytes"
@@ -125,7 +124,7 @@ func (ph *phone) view(ui string, p node.Pile, a state.Asset) string {
 }
 
 func TestDisplaysOpenedInViewerAreKeptWithinBudget(t *testing.T) {
-	a, b := newPhone(t, "ios", show.DefaultBudget), newPhone(t, "android", 2*int64(len(display("P0"))))
+	a, b := newPhone(t, "ios", node.DefaultBudget), newPhone(t, "android", 2*int64(len(display("P0"))))
 	p := pileOf(t, a, b)
 	var locals []string
 	for i := range 5 {
@@ -150,4 +149,70 @@ func TestDisplaysOpenedInViewerAreKeptWithinBudget(t *testing.T) {
 		}
 		return true
 	})
+}
+
+func TestViewerShowAndPinsShareOneAccounting(t *testing.T) {
+	a, b, c := newPhone(t, "ios", node.DefaultBudget), newPhone(t, "android", 4*int64(len(display("A0")))), newPhone(t, "ios", node.DefaultBudget)
+	p := pileOf(t, a, b, c)
+	a.lib.photo("A0", 0)
+	a.lib.photo("A1", 1)
+	c.lib.photo("C0", 2)
+	a.lib.photo("A2", 3)
+	a.lib.photo("A3", 4)
+	a.share(p)
+	c.share(p)
+	waitTimeline(t, p, 5, b)
+	ui := httptest.NewServer(httpapi.WithNode("ui", b.Node, b.show))
+	t.Cleanup(ui.Close)
+
+	if _, err := b.show.Pin(p.ID, member(c)); err != nil {
+		t.Fatal(err)
+	}
+	eventually(t, "pinned file loaded", func() bool { return counts(progressOf(t, b, p.ID)["участник 1"]) == [3]int{1, 1, 0} })
+	b.view(ui.URL, p, b.asset(p, "A0"))
+	b.view(ui.URL, p, b.asset(p, "C0"))
+	rx := newReceiver(t)
+	must(t)(b.show.Start(p.ID, b.tv(rx), b.asset(p, "A2").Meta.AssetID))
+	eventually(t, "window cached", func() bool { return b.cached(p, "A2") && b.cached(p, "A3") })
+	b.view(ui.URL, p, b.asset(p, "A2"))
+
+	for l, want := range map[string]bool{"A0": true, "A1": false, "C0": true, "A2": true, "A3": true} {
+		if b.cached(p, l) != want {
+			t.Fatalf("%s cached %v, want %v", l, !want, want)
+		}
+	}
+	if n, m := a.lib.displayed("A2"), c.lib.displayed("C0"); n != 1 || m != 1 {
+		t.Fatalf("sources rendered A2 %d and C0 %d times, want once each", n, m)
+	}
+}
+
+func TestViewerCacheAccountingSurvivesRestart(t *testing.T) {
+	size := int64(len(display("P0")))
+	a := newPhone(t, "ios", node.DefaultBudget)
+	dir, lib := t.TempDir(), newLibrary()
+	b := openPhone(t, dir, "android", lib, 2*size)
+	p := pileOf(t, a, b)
+	for i := range 3 {
+		a.lib.photo(fmt.Sprintf("P%d", i), i)
+	}
+	a.share(p)
+	waitTimeline(t, p, 3, b)
+	ui := httptest.NewServer(httpapi.WithNode("ui", b.Node, b.show))
+	b.view(ui.URL, p, b.asset(p, "P0"))
+	b.view(ui.URL, p, b.asset(p, "P1"))
+	ui.Close()
+	b.show.Close()
+	if err := b.Close(); err != nil {
+		t.Fatal(err)
+	}
+
+	b = openPhone(t, dir, "android", lib, 2*size)
+	ui = httptest.NewServer(httpapi.WithNode("ui", b.Node, b.show))
+	t.Cleanup(ui.Close)
+	b.view(ui.URL, p, b.asset(p, "P2"))
+	for i, want := range []bool{false, true, true} {
+		if l := fmt.Sprintf("P%d", i); b.cached(p, l) != want {
+			t.Fatalf("%s cached %v after restart, want %v", l, !want, want)
+		}
+	}
 }

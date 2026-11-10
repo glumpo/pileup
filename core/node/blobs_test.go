@@ -622,53 +622,66 @@ func TestMembersJoinedThroughOneInviterFetchEachOthersThumbnails(t *testing.T) {
 	}
 }
 
-func TestDisplayCachedOnMemberCanBeEvictedAndFetchedAgain(t *testing.T) {
+func TestDisplayCachedOnMemberIsEvictedOverBudgetAndFetchedAgain(t *testing.T) {
 	ma := newMedia()
-	a, b := openSource(t, t.TempDir(), "ios", ma), open(t, t.TempDir(), "android")
+	a := openSource(t, t.TempDir(), "ios", ma)
+	dir := t.TempDir()
+	want := rendition("IMG_1", node.T2)
+	b, err := node.Open(node.Config{
+		Dir:      dir,
+		Keystore: device.File(filepath.Join(dir, "device.key")),
+		Platform: "android",
+		Addrs:    loopback,
+		Budget:   int64(len(want)),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { b.Close() })
 	p := create(t, a, "Грузия", "Аня")
 	ma.add(photo("IMG_1", day), []byte("jpeg"))
-	img := share(t, a, p)["IMG_1"]
+	ma.add(photo("IMG_2", "2026-07-03T10:00:00Z"), []byte("jpeg"))
+	shared := share(t, a, p)
+	img, later := shared["IMG_1"], shared["IMG_2"]
 	join(t, b, inviteTo(t, a, p), "Боря")
 	eventually(t, "b stores T1", func() bool { return b.Stored(p.ID, img.AssetID, img.Revision, node.T1) })
 
 	if _, ok := b.Cached(p.ID, img.AssetID, img.Revision, node.T2); ok {
 		t.Fatal("T2 cached before any request")
 	}
-	f, _, err := b.Blob(context.Background(), p.ID, img.AssetID, img.Revision, node.T2)
-	if err != nil {
-		t.Fatal(err)
+	read := func(m op.AssetMeta) []byte {
+		t.Helper()
+		f, _, err := b.Blob(context.Background(), p.ID, m.AssetID, m.Revision, node.T2)
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer f.Close()
+		got, err := io.ReadAll(f)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return got
 	}
-	f.Close()
-	want := rendition("IMG_1", node.T2)
+	read(img)
 	if size, ok := b.Cached(p.ID, img.AssetID, img.Revision, node.T2); !ok || size != int64(len(want)) {
 		t.Fatalf("cached T2: %d, %v; want %d bytes", size, ok, len(want))
 	}
 
-	for range 2 {
-		if err := b.Evict(p.ID, img.AssetID, img.Revision, node.T2); err != nil {
-			t.Fatal(err)
-		}
-	}
+	read(later)
 	if _, ok := b.Cached(p.ID, img.AssetID, img.Revision, node.T2); ok {
-		t.Fatal("T2 cached after eviction")
+		t.Fatal("earlier T2 cached over the budget")
+	}
+	if _, ok := b.Cached(p.ID, later.AssetID, later.Revision, node.T2); !ok {
+		t.Fatal("later T2 is not cached")
 	}
 	if _, ok := b.Cached(p.ID, img.AssetID, img.Revision, node.T1); !ok {
 		t.Fatal("T1 evicted together with T2")
 	}
-	f, _, err = b.Blob(context.Background(), p.ID, img.AssetID, img.Revision, node.T2)
-	if err != nil {
-		t.Fatal(err)
+	if got := read(img); !bytes.Equal(got, want) {
+		t.Fatalf("T2 after eviction: %q", got)
 	}
-	got, err := io.ReadAll(f)
-	f.Close()
-	if err != nil || !bytes.Equal(got, want) {
-		t.Fatalf("T2 after eviction: %q, %v", got, err)
-	}
-	if _, ok := b.Cached(p.ID, img.AssetID, img.Revision, node.T2); !ok {
-		t.Fatal("T2 fetched again is not cached")
-	}
-	if err := b.Evict([]byte("no such pile"), img.AssetID, img.Revision, node.T2); !errors.Is(err, node.ErrUnknownPile) {
-		t.Fatalf("evict in unknown pile: %v", err)
+	if _, ok := b.Cached(p.ID, later.AssetID, later.Revision, node.T2); !ok {
+		t.Fatal("later T2 evicted by an earlier one")
 	}
 }
 

@@ -59,7 +59,7 @@ func hostIn(t *testing.T, platform string) (client, *room, pile, []item) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	h := show.New(n, show.DefaultBudget)
+	h := show.New(n)
 	t.Cleanup(func() {
 		h.Close()
 		n.Close()

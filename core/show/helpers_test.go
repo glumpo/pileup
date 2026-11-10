@@ -156,11 +156,12 @@ func openPhone(t *testing.T, dir, platform string, lib *library, budget int64) *
 		Media:      lib,
 		Renditions: lib,
 		Discovery:  l,
+		Budget:     budget,
 	})
 	if err != nil {
 		t.Fatal(err)
 	}
-	h := show.New(n, budget)
+	h := show.New(n)
 	t.Cleanup(func() {
 		h.Close()
 		n.Close()
