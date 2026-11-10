@@ -69,6 +69,18 @@ export function Remote({
   const author = names.get(current.author);
   const rendererError = state.renderer_error;
 
+  if (state.total === 0) {
+    return (
+      <Screen title={`На экране «${state.screen.name}»`}>
+        <ScrollView contentContainerStyle={styles.body}>
+          <Text style={{ fontSize: 17, fontWeight: '600' }}>В pile не осталось файлов</Text>
+          <ErrorText error={error} />
+          <Button title="Остановить показ" onPress={stop} />
+        </ScrollView>
+      </Screen>
+    );
+  }
+
   return (
     <Screen title={`На экране «${state.screen.name}»`}>
       <ScrollView contentContainerStyle={styles.body}>
