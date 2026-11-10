@@ -1,4 +1,4 @@
-import { ReactNode } from 'react';
+import { Component, ReactNode } from 'react';
 import { Pressable, StyleSheet, Text, TextInput, TextInputProps, View } from 'react-native';
 
 import { ApiError } from './api';
@@ -77,6 +77,29 @@ export function Field(props: TextInputProps & { label: string }) {
       {...props}
     />
   );
+}
+
+export class Boundary extends Component<
+  { item: unknown; fallback: ReactNode; children: ReactNode },
+  { failed: boolean }
+> {
+  state = { failed: false };
+
+  static getDerivedStateFromError() {
+    return { failed: true };
+  }
+
+  componentDidCatch(error: unknown) {
+    console.warn('render', error);
+  }
+
+  componentDidUpdate(prev: { item: unknown }) {
+    if (this.state.failed && prev.item !== this.props.item) this.setState({ failed: false });
+  }
+
+  render() {
+    return this.state.failed ? this.props.fallback : this.props.children;
+  }
 }
 
 export function ErrorText({ error }: { error?: string }) {

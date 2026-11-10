@@ -36,9 +36,8 @@ export function PileScreen({
       setSources([...names].map(([author, name]) => ({ author, name })));
     }, (e) => setError(describe(e)));
     try {
-      const [piles, inv] = await Promise.all([api.piles(), api.invite(initial.id)]);
+      const piles = await api.piles();
       setPile(piles.find((p) => p.id === initial.id) ?? initial);
-      setInvite(inv);
     } catch (e) {
       setError(describe(e));
     }
@@ -47,6 +46,15 @@ export function PileScreen({
   useEffect(() => {
     load();
   }, [load]);
+
+  async function showInvite() {
+    setError(undefined);
+    try {
+      setInvite(await api.invite(initial.id));
+    } catch (e) {
+      setError(describe(e));
+    }
+  }
 
   async function refresh() {
     setRefreshing(true);
@@ -78,15 +86,17 @@ export function PileScreen({
         ))}
         <Button title="Загрузить вообще всё" onPress={() => pins.ask()} />
         <PinsPanel pins={pins} />
-        {invite && (
+        <Text style={{ fontSize: 17, fontWeight: '600' }}>Пригласить</Text>
+        {invite ? (
           <>
-            <Text style={{ fontSize: 17, fontWeight: '600' }}>Пригласить</Text>
             <QR text={invite} size={width - 32} />
             <Text selectable style={styles.muted}>
               {invite}
             </Text>
             <Button title="Отправить приглашение" onPress={() => Share.share({ message: invite })} />
           </>
+        ) : (
+          <Button title="Показать приглашение" onPress={showInvite} />
         )}
       </ScrollView>
     </Screen>
