@@ -109,7 +109,7 @@ func Open(dir string, budget int64) (*Store, error) {
 	if err := os.MkdirAll(tmp, 0o700); err != nil {
 		return nil, err
 	}
-	db, err := sql.Open("sqlite", filepath.Join(dir, "cache.db")+"?_pragma=journal_mode(WAL)&_pragma=synchronous(FULL)")
+	db, err := sql.Open("sqlite", filepath.Join(dir, "cache.db")+"?_pragma=journal_mode(WAL)&_pragma=synchronous(NORMAL)")
 	if err != nil {
 		return nil, err
 	}

@@ -275,7 +275,7 @@ func (i idle) Read(b []byte) (int, error) {
 }
 
 func (n *Node) owners(p *pile) *http.Client {
-	tr := &http.Transport{DialContext: func(ctx context.Context, _, addr string) (net.Conn, error) {
+	tr := &http.Transport{MaxIdleConnsPerHost: 8, DialContext: func(ctx context.Context, _, addr string) (net.Conn, error) {
 		return n.dialOwner(ctx, p, addr)
 	}}
 	context.AfterFunc(n.ctx, tr.CloseIdleConnections)
