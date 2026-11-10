@@ -3,6 +3,7 @@ import { ScrollView, Text, View } from 'react-native';
 
 import { Api, Hint, Pile, ShowState, TimelineItem } from '../api';
 import { PinsPanel, usePins } from '../Pins';
+import { adviceFor } from '../presence';
 import { Preview } from '../Preview';
 import { dayOf, timeOf } from '../time';
 import { Button, describe, ErrorText, Screen, styles } from '../ui';
@@ -14,9 +15,9 @@ const rendererErrors: Record<string, string> = {
   reconnecting: 'Переподключаемся к экрану…',
 };
 
-function hintText({ name, platform, reason }: Hint): string {
+function hintText({ name, platform, reason, last_error }: Hint): string {
   const phone = `${platform === 'ios' ? 'iPhone' : 'телефон'}: ${name}`;
-  const advice = 'Возможно, погас экран — попросите разблокировать телефон и открыть Pileup.';
+  const advice = adviceFor(last_error);
   return reason === 'timeout' ? `Медленно отвечает ${phone}. ${advice}` : `Нет ответа от ${phone}. ${advice}`;
 }
 
@@ -67,7 +68,8 @@ export function Remote({
   const { current } = state;
   const item = byId.get(current.id);
   const author = names.get(current.author);
-  const rendererError = state.renderer_error;
+  const ownerAway = state.hints.some((h) => h.author === current.author);
+  const rendererError = state.renderer_error?.code === 'load_failed' && ownerAway ? undefined : state.renderer_error;
 
   if (state.total === 0) {
     return (

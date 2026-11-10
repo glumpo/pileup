@@ -54,7 +54,11 @@ test('the state of members follows their connection while the pile screen is ope
 
   Object.assign(borya, { online: false, last_error: 'refused' });
   expect(
-    await screen.findByText('Боря — нет связи с 14:05. Pileup закрыт — попросите открыть Pileup.', {}, { timeout: 5000 }),
+    await screen.findByText(
+      'Боря — нет связи с 14:05. Pileup закрыт — попросите открыть Pileup.',
+      {},
+      { timeout: 5000 },
+    ),
   ).toBeOnTheScreen();
   expect(screen.queryByText('Боря — на связи')).toBeNull();
 });

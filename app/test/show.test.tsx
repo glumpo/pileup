@@ -296,7 +296,9 @@ test('a file the screen could not open while its owner does not answer is explai
   show.waiting = [items[0]];
   show.hints = [{ ...anyaAway, last_error: 'refused' }];
   const banner = await screen.findByTestId('waiting', {}, { timeout: 3000 });
-  expect(within(banner).getByText('Нет ответа от iPhone: Аня. Pileup закрыт — попросите открыть Pileup.')).toBeOnTheScreen();
+  expect(
+    within(banner).getByText('Нет ответа от iPhone: Аня. Pileup закрыт — попросите открыть Pileup.'),
+  ).toBeOnTheScreen();
   expect(screen.queryByText(/Экран не смог открыть этот файл/)).toBeNull();
 
   show.waiting = [items[1]];

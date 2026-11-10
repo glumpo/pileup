@@ -3,6 +3,7 @@ import { RefreshControl, ScrollView, Share, Text, useWindowDimensions, View } fr
 
 import { Api, Pile } from '../api';
 import { PinsPanel, Source, usePins } from '../Pins';
+import { presenceOf } from '../presence';
 import { QR } from '../QR';
 import { Button, describe, ErrorText, Screen, styles } from '../ui';
 
@@ -47,6 +48,18 @@ export function PileScreen({
     load();
   }, [load]);
 
+  useEffect(() => {
+    const timer = setInterval(
+      () =>
+        api.piles().then(
+          (piles) => setPile((p) => piles.find((x) => x.id === p.id) ?? p),
+          (e) => setError(describe(e)),
+        ),
+      3000,
+    );
+    return () => clearInterval(timer);
+  }, [api]);
+
   async function showInvite() {
     setError(undefined);
     try {
@@ -68,7 +81,10 @@ export function PileScreen({
         contentContainerStyle={[styles.body, { alignItems: 'stretch' }]}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={refresh} />}
       >
-        <Text style={styles.muted}>Участники: {pile.members.map((m) => m.name).join(', ')}</Text>
+        <Text style={{ fontSize: 17, fontWeight: '600' }}>Участники</Text>
+        {pile.members.map((m) => (
+          <Text key={m.key}>{presenceOf(m)}</Text>
+        ))}
         <Button title="Хронология" onPress={() => onTimeline(pile)} />
         <Button title="Мои файлы" onPress={() => onSelection(pile)} />
         <Button title="Показать на экране" onPress={() => onShow(pile)} />
