@@ -23,7 +23,7 @@ func author(k ed25519.PrivateKey) op.Author {
 }
 
 func join(k ed25519.PrivateKey) op.Join {
-	return op.Join{Name: "Аня", Platform: "ios", Proof: op.JoinProof(secret, author(k))}
+	return op.Join{Name: "Аня", Platform: "ios", AppVersion: "1.4.0", Proof: op.JoinProof(secret, author(k))}
 }
 
 func mustDecode(t testing.TB, raw []byte) op.Op {
@@ -43,7 +43,6 @@ func body(k ed25519.PrivateKey, seq uint64, prev []byte, lamport uint64, typ op.
 		Prev:     prev,
 		Lamport:  lamport,
 		WallTime: 1700000000000,
-		Schema:   op.Schema,
 		Type:     typ,
 		Payload:  payload,
 	}
@@ -56,4 +55,24 @@ func mustMarshal(t testing.TB, v any) []byte {
 		t.Fatal(err)
 	}
 	return b
+}
+
+type wireBody struct {
+	PileID   []byte  `cbor:"1,keyasint"`
+	Author   []byte  `cbor:"2,keyasint"`
+	Seq      uint64  `cbor:"3,keyasint"`
+	Prev     []byte  `cbor:"4,keyasint,omitempty"`
+	Lamport  uint64  `cbor:"5,keyasint"`
+	WallTime int64   `cbor:"6,keyasint"`
+	Schema   *uint64 `cbor:"7,keyasint,omitempty"`
+	Type     op.Type `cbor:"8,keyasint"`
+	Payload  []byte  `cbor:"9,keyasint"`
+}
+
+func signWire(t testing.TB, k ed25519.PrivateKey, b wireBody) []byte {
+	t.Helper()
+	a := author(k)
+	b.PileID, b.Author = pile, a[:]
+	body := mustMarshal(t, b)
+	return mustMarshal(t, envelope{Body: body, Sig: ed25519.Sign(k, body)})
 }

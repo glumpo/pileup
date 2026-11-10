@@ -40,6 +40,7 @@ func TestCheck(t *testing.T) {
 		want error
 	}{
 		{"join at seq 1", first, op.Head{}, nil},
+		{"join without app version", mustDecode(t, op.New(k, pile, op.Head{}, 1, 0, op.Join{Name: "Аня", Platform: "ios", Proof: op.JoinProof(secret, author(k))})), op.Head{}, nil},
 		{"next op", second, first.Head(), nil},
 		{"unknown type after join", signed(body(k, 2, first.ID[:], 6, 999, nil)), first.Head(), nil},
 		{"lamport may jump", mustDecode(t, op.New(k, pile, first.Head(), 1000, 0, op.MemberSet{})), first.Head(), nil},

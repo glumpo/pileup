@@ -30,9 +30,10 @@ CREATE TABLE IF NOT EXISTS pile (
 );
 INSERT INTO pile SELECT 0, '', 0, x'' WHERE NOT EXISTS (SELECT 1 FROM pile);
 CREATE TABLE IF NOT EXISTS members (
-	author   BLOB PRIMARY KEY,
-	name     TEXT NOT NULL,
-	platform TEXT NOT NULL
+	author      BLOB PRIMARY KEY,
+	name        TEXT NOT NULL,
+	platform    TEXT NOT NULL,
+	app_version TEXT NOT NULL DEFAULT ''
 ) WITHOUT ROWID;
 CREATE TABLE IF NOT EXISTS claims (
 	asset_id      BLOB NOT NULL,
@@ -60,7 +61,20 @@ func Open(path string, pileID, secret []byte) (*Store, error) {
 		db.Close()
 		return nil, err
 	}
+	if err := addAppVersion(db); err != nil {
+		db.Close()
+		return nil, err
+	}
 	return &Store{db: db, pileID: pileID, validator: op.NewValidator(pileID, secret)}, nil
+}
+
+func addAppVersion(db *sql.DB) error {
+	var n int
+	if err := db.QueryRow(`SELECT count(*) FROM pragma_table_info('members') WHERE name = 'app_version'`).Scan(&n); err != nil || n > 0 {
+		return err
+	}
+	_, err := db.Exec(`ALTER TABLE members ADD COLUMN app_version TEXT NOT NULL DEFAULT ''`)
+	return err
 }
 
 func (s *Store) Close() error { return s.db.Close() }
@@ -140,7 +154,7 @@ func reduce(tx *sql.Tx, o op.Op) error {
 			WHERE ?2 > name_lamport OR ?2 = name_lamport AND ?3 > name_author`, c.Name, o.Lamport, a)
 		return err
 	case op.Join:
-		_, err := tx.Exec(`INSERT OR REPLACE INTO members (author, name, platform) VALUES (?, ?, ?)`, a, c.Name, c.Platform)
+		_, err := tx.Exec(`INSERT OR REPLACE INTO members (author, name, platform, app_version) VALUES (?, ?, ?, ?)`, a, c.Name, c.Platform, c.AppVersion)
 		return err
 	case op.MemberSet:
 		_, err := tx.Exec(`INSERT INTO members (author, name, platform) VALUES (?, ?, '')
@@ -232,10 +246,10 @@ func (s *Store) View() (state.View, error) {
 	if err := tx.QueryRow(`SELECT l, name FROM pile`).Scan(&v.Lamport, &v.PileName); err != nil {
 		return state.View{}, err
 	}
-	err = each(tx, `SELECT author, name, platform FROM members`, func(scan func(...any) error) error {
+	err = each(tx, `SELECT author, name, platform, app_version FROM members`, func(scan func(...any) error) error {
 		var a []byte
 		var m state.Member
-		if err := scan(&a, &m.Name, &m.Platform); err != nil {
+		if err := scan(&a, &m.Name, &m.Platform, &m.AppVersion); err != nil {
 			return err
 		}
 		v.Members[op.Author(a)] = m

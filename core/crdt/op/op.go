@@ -9,8 +9,6 @@ import (
 	"github.com/fxamacker/cbor/v2"
 )
 
-const Schema = 1
-
 type Type uint64
 
 type Author [ed25519.PublicKeySize]byte
@@ -34,7 +32,6 @@ type Body struct {
 	Prev     []byte `cbor:"4,keyasint,omitempty"`
 	Lamport  uint64 `cbor:"5,keyasint"`
 	WallTime int64  `cbor:"6,keyasint"`
-	Schema   uint64 `cbor:"7,keyasint"`
 	Type     Type   `cbor:"8,keyasint"`
 	Payload  []byte `cbor:"9,keyasint"`
 }
@@ -108,7 +105,6 @@ func New(key ed25519.PrivateKey, pileID []byte, head Head, lamport uint64, wallT
 		Seq:      head.Seq + 1,
 		Lamport:  lamport,
 		WallTime: wallTime,
-		Schema:   Schema,
 		Type:     c.Type(),
 		Payload:  marshal(c),
 	}

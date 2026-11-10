@@ -8,6 +8,7 @@ import (
 	"net/netip"
 	"path/filepath"
 	"reflect"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -20,8 +21,9 @@ import (
 )
 
 type member struct {
-	Name     string `json:"name"`
-	Platform string `json:"platform"`
+	Name       string `json:"name"`
+	Platform   string `json:"platform"`
+	AppVersion string `json:"app_version"`
 }
 
 type pile struct {
@@ -39,10 +41,11 @@ func start(t *testing.T, platform string) client {
 	t.Helper()
 	dir := t.TempDir()
 	n, err := node.Open(node.Config{
-		Dir:      dir,
-		Keystore: device.File(filepath.Join(dir, "device.key")),
-		Platform: platform,
-		Addrs:    func() []netip.Addr { return []netip.Addr{netip.MustParseAddr("127.0.0.1")} },
+		Dir:        dir,
+		Keystore:   device.File(filepath.Join(dir, "device.key")),
+		Platform:   platform,
+		AppVersion: "1.4." + platform,
+		Addrs:      func() []netip.Addr { return []netip.Addr{netip.MustParseAddr("127.0.0.1")} },
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -137,7 +140,7 @@ func TestPileEndpointsRequireToken(t *testing.T) {
 func TestCreateListAndJoinByInvite(t *testing.T) {
 	a, b := start(t, "android"), start(t, "ios")
 	p := a.create("Грузия", "Аня")
-	want := pile{ID: p.ID, Name: "Грузия", Members: []member{{"Аня", "android"}}}
+	want := pile{ID: p.ID, Name: "Грузия", Members: []member{{"Аня", "android", "1.4.android"}}}
 	if !reflect.DeepEqual(p, want) {
 		t.Fatalf("created %+v, want %+v", p, want)
 	}
@@ -159,6 +162,9 @@ func TestCreateListAndJoinByInvite(t *testing.T) {
 	for {
 		pa, pb := a.piles(), b.piles()
 		if len(pa) == 1 && len(pa[0].Members) == 2 && reflect.DeepEqual(pa, pb) && pb[0].Name == "Грузия" {
+			if !slices.Contains(pa[0].Members, member{"Боря", "ios", "1.4.ios"}) {
+				t.Fatalf("joiner listed as %+v", pa[0].Members)
+			}
 			break
 		}
 		if time.Now().After(deadline) {

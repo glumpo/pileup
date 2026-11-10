@@ -134,12 +134,12 @@ func TestUnknownTypeIsStoredAndForwardedWithoutEffect(t *testing.T) {
 func TestMembers(t *testing.T) {
 	a, b := newNode(1), newNode(2)
 	a.join(t, "Аня", "ios")
-	b.join(t, "Боря", "android")
+	b.create(t, op.Join{Name: "Боря", Platform: "android", AppVersion: "1.4.0", Proof: op.JoinProof(secret, b.author())})
 	b.create(t, op.MemberSet{Name: "Борис"})
 	a.pull(t, b.State)
 	want := map[op.Author]state.Member{
 		a.author(): {Name: "Аня", Platform: "ios"},
-		b.author(): {Name: "Борис", Platform: "android"},
+		b.author(): {Name: "Борис", Platform: "android", AppVersion: "1.4.0"},
 	}
 	if got := a.View().Members; !reflect.DeepEqual(got, want) {
 		t.Errorf("members = %v, want %v", got, want)

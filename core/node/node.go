@@ -54,6 +54,7 @@ type Config struct {
 	Addrs    func() []netip.Addr
 	Media    MediaProvider
 
+	AppVersion string
 	Renditions RenditionMaker
 	Discovery  DiscoveryProvider
 }
@@ -500,7 +501,7 @@ func (n *Node) save() error {
 }
 
 func (n *Node) join(secret []byte, member string) op.Join {
-	return op.Join{Name: member, Platform: n.cfg.Platform, Proof: op.JoinProof(secret, n.Author())}
+	return op.Join{Name: member, Platform: n.cfg.Platform, AppVersion: n.cfg.AppVersion, Proof: op.JoinProof(secret, n.Author())}
 }
 
 func (p *pile) info() (Pile, error) {

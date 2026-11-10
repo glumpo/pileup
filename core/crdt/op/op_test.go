@@ -6,6 +6,7 @@ import (
 	"crypto/sha256"
 	"errors"
 	"reflect"
+	"slices"
 	"testing"
 
 	"github.com/fxamacker/cbor/v2"
@@ -45,7 +46,7 @@ func TestNewProducesSignedEnvelope(t *testing.T) {
 		t.Error("raw bytes changed")
 	}
 	if !bytes.Equal(o.PileID, pile) || o.Author != author(k) || o.Seq != 2 || o.Lamport != 7 ||
-		o.WallTime != 1700000000123 || o.Schema != op.Schema || o.Type != op.TypePileCreate {
+		o.WallTime != 1700000000123 || o.Type != op.TypePileCreate {
 		t.Errorf("unexpected body %+v", o.Body)
 	}
 	if !bytes.Equal(o.Prev, first.ID[:]) {
@@ -113,7 +114,6 @@ func TestAnySingleByteChangeIsRejected(t *testing.T) {
 type reversedBody struct {
 	Payload  []byte  `cbor:"9,keyasint"`
 	Type     op.Type `cbor:"8,keyasint"`
-	Schema   uint64  `cbor:"7,keyasint"`
 	WallTime int64   `cbor:"6,keyasint"`
 	Lamport  uint64  `cbor:"5,keyasint"`
 	Seq      uint64  `cbor:"3,keyasint"`
@@ -130,7 +130,7 @@ func TestSignatureIsVerifiedOverBodyAsReceived(t *testing.T) {
 		t.Fatal(err)
 	}
 	body, err := cbor.Marshal(reversedBody{
-		Payload: payload, Type: op.TypePileCreate, Schema: op.Schema, WallTime: 5,
+		Payload: payload, Type: op.TypePileCreate, WallTime: 5,
 		Lamport: 3, Seq: 1, Author: a[:], PileID: pile, Future: "field from a newer version",
 	})
 	if err != nil {
@@ -170,14 +170,7 @@ func TestMalformedPayloadOfKnownTypeIsRejected(t *testing.T) {
 
 func TestUnknownTypeIsDecodedWithoutChange(t *testing.T) {
 	k := key(1)
-	for _, b := range []op.Body{
-		body(k, 1, nil, 1, 999, []byte{0xff, 0x00}),
-		func() op.Body {
-			b := body(k, 1, nil, 1, op.TypePileCreate, []byte{0xff})
-			b.Schema = op.Schema + 1
-			return b
-		}(),
-	} {
+	for _, b := range []op.Body{body(k, 1, nil, 1, 999, []byte{0xff, 0x00})} {
 		raw := op.Sign(k, b)
 		o := mustDecode(t, raw)
 		if o.Change != nil || o.Type != b.Type || !bytes.Equal(o.Payload, b.Payload) || !bytes.Equal(o.Raw, raw) {
@@ -215,5 +208,86 @@ func TestMalformedEncodingIsRejected(t *testing.T) {
 		if _, err := op.Decode(raw); !errors.Is(err, op.ErrDecode) {
 			t.Errorf("%s: err = %v, want ErrDecode", name, err)
 		}
+	}
+}
+
+func TestNewWritesNoSchemaField(t *testing.T) {
+	k := key(1)
+	first := op.New(k, pile, op.Head{}, 1, 1700000000000, join(k))
+	second := op.New(k, pile, mustDecode(t, first).Head(), 2, 1700000000001, op.MemberSet{Name: "Аня"})
+	for _, c := range []struct {
+		raw  []byte
+		keys []int
+	}{
+		{first, []int{1, 2, 3, 5, 6, 8, 9}},
+		{second, []int{1, 2, 3, 4, 5, 6, 8, 9}},
+	} {
+		var fields map[int]cbor.RawMessage
+		if err := cbor.Unmarshal(split(t, c.raw).Body, &fields); err != nil {
+			t.Fatal(err)
+		}
+		var keys []int
+		for k := range fields {
+			keys = append(keys, k)
+		}
+		slices.Sort(keys)
+		if !slices.Equal(keys, c.keys) {
+			t.Errorf("body keys %v, want %v", keys, c.keys)
+		}
+	}
+}
+
+func TestSchemaFieldDoesNotSelectDecoding(t *testing.T) {
+	k := key(1)
+	changes := []op.Change{
+		op.PileCreate{Name: "Грузия"},
+		join(k),
+		op.MemberSet{Name: "Боря"},
+		op.AssetAdd{Assets: []op.AssetMeta{{AssetID: []byte{1}, Revision: []byte{2}, Kind: op.KindPhoto, MIME: "image/jpeg"}}},
+		op.AssetRemove{AssetIDs: [][]byte{{1}}},
+	}
+	one, two := uint64(1), uint64(2)
+	for _, c := range changes {
+		for _, schema := range []*uint64{nil, &one, &two} {
+			raw := signWire(t, k, wireBody{Seq: 1, Lamport: 1, Type: c.Type(), Payload: mustMarshal(t, c), Schema: schema})
+			o := mustDecode(t, raw)
+			if o.Type != c.Type() || !reflect.DeepEqual(o.Change, c) || !bytes.Equal(o.Raw, raw) {
+				t.Errorf("type %d, schema %v: change %#v, want %#v", c.Type(), schema, o.Change, c)
+			}
+		}
+	}
+	for _, schema := range []*uint64{nil, &one} {
+		raw := signWire(t, k, wireBody{Seq: 1, Lamport: 1, Type: op.TypePileCreate, Payload: []byte{0xff}, Schema: schema})
+		if _, err := op.Decode(raw); !errors.Is(err, op.ErrPayload) {
+			t.Errorf("schema %v, malformed payload: err = %v, want ErrPayload", schema, err)
+		}
+	}
+}
+
+func TestJoinUnknownKnownWithoutSchemaValidate(t *testing.T) {
+	v := op.NewValidator(pile, secret)
+	k := key(1)
+	var head op.Head
+	for i, c := range []struct {
+		typ     op.Type
+		payload []byte
+		want    op.Change
+	}{
+		{op.TypeJoin, mustMarshal(t, join(k)), join(k)},
+		{999, []byte{0xa1, 0x01, 0x63, 'n', 'e', 'w'}, nil},
+		{op.TypeMemberSet, mustMarshal(t, op.MemberSet{Name: "Аня"}), op.MemberSet{Name: "Аня"}},
+	} {
+		b := wireBody{Seq: head.Seq + 1, Lamport: uint64(i + 1), Type: c.typ, Payload: c.payload}
+		if head.Seq > 0 {
+			b.Prev = head.ID[:]
+		}
+		o := mustDecode(t, signWire(t, k, b))
+		if !reflect.DeepEqual(o.Change, c.want) {
+			t.Fatalf("op %d: change %#v, want %#v", i+1, o.Change, c.want)
+		}
+		if err := v.Check(o, head); err != nil {
+			t.Fatalf("op %d: %v", i+1, err)
+		}
+		head = o.Head()
 	}
 }

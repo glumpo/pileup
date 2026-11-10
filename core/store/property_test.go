@@ -33,7 +33,9 @@ func drawMeta(t *rapid.T, id string) op.AssetMeta {
 
 func drawChange(t *rapid.T, k ed25519.PrivateKey, joined bool) op.Change {
 	if !joined || rapid.IntRange(0, 20).Draw(t, "rejoin") == 0 {
-		return join(k, names.Draw(t, "join name"))
+		j := join(k, names.Draw(t, "join name"))
+		j.AppVersion = names.Draw(t, "app version")
+		return j
 	}
 	switch rapid.IntRange(0, 4).Draw(t, "change") {
 	case 0:

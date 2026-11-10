@@ -40,8 +40,9 @@ type View struct {
 }
 
 type Member struct {
-	Name     string
-	Platform string
+	Name       string
+	Platform   string
+	AppVersion string
 }
 
 type Asset struct {
@@ -93,7 +94,7 @@ func (s *State) reduce(o op.Op) {
 			s.name = register{lamport: o.Lamport, author: o.Author, value: c.Name}
 		}
 	case op.Join:
-		s.members[o.Author] = Member{Name: c.Name, Platform: c.Platform}
+		s.members[o.Author] = Member{Name: c.Name, Platform: c.Platform, AppVersion: c.AppVersion}
 	case op.MemberSet:
 		m := s.members[o.Author]
 		m.Name = c.Name

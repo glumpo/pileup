@@ -5,7 +5,7 @@ status: In Progress
 assignee:
   - '@claude'
 created_date: '2026-11-10T04:10:00Z'
-updated_date: '2026-11-10T04:39:00Z'
+updated_date: '2026-11-10T04:45:00Z'
 labels:
   - core
   - protocol
@@ -49,4 +49,8 @@ ordinal: 26000
 <!-- SECTION:NOTES:BEGIN -->
 R10 подтверждён с уточнением: входящая операция с Lamport 2^63−1 сохраняется и поднимает L; следующая локальная запись подписывает Lamport 2^63 и падает на INSERT с ошибкой драйвера (database/sql: uint64 values with high bit set are not supported) — явная ошибка, не тихая порча; входящие 2^63…2^64−1 тоже отвергаются только драйвером при INSERT, а не валидацией. Эталонная модель crdt/state принимала любые uint64 (расхождение со store), а clock.Next при 2^64−1 молча переполняется в 0. Диапазон: Seq и Lamport в [1, 2^63−1]; проверка в Validator.Check до сохранения (ErrRange, структурная ошибка по A6). При L = 2^63−1 вычисление L+1 в uint64 не переполняется, локальная запись явно отклоняется ErrRange, ничего не сохраняется.
 Красные тесты R10: TestSeqAndLamportStayWithinSignedInt64 (Check вернул nil для Lamport 2^63, 2^64−1, Join с 2^63, Seq 2^63), store TestLamportBoundIsCheckedBeforeStorage (ошибка драйвера вместо ErrRange), state TestLamportBoundIsCheckedBeforeApplying (Lamport 2^63 принят).
+
+R12 подтверждён: New пишет schema=1 (ключ 7), decodeChange распознаёт только schema=1; известная операция без schema становится неизвестной, а первая такая операция (Join) отвергается ErrJoin и блокирует журнал автора.
+Красные тесты R12 (на коде до изменения, после добавления полей-заглушек без поведения): TestNewWritesNoSchemaField (ключи тела [1 2 3 5 6 7 8 9]); TestSchemaFieldDoesNotSelectDecoding (все известные типы без schema и со schema=2 → Change=nil, битый payload без schema не отвергался); TestJoinUnknownKnownWithoutSchemaValidate (Join без schema не распознан); replica TestUnknownTypeIsRelayedVerbatimAndLaterOpsApply (ErrJoin на Join без schema); state TestMembers, store TestMemberKeepsAppVersionFromJoin и TestDatabaseOfPreviousVersionOpens, httpapi TestCreateListAndJoinByInvite, mobile TestMemberCarriesAppVersionFromNative (версия приложения не доходит до участника/API). TestLegacyVectorsWithSchemaStillApply и store TestLegacyOpsWithSchemaApply зелёные и до изменения (страховка перехода).
+Сделано: поле Schema и константа удалены из Body, выбор обработчика только по type; ключ 7 не занят, остальные номера не менялись; прежнее поле schema игнорируется как неизвестное (байты и подпись сохраняются). Join.AppVersion — CBOR-ключ 4, omitempty, внутри подписанного payload. Golden-векторы перегенерированы (тело без ключа 7, Join с app_version), прежние векторы со schema=1 сохранены в testdata/schema1 и проверяются: декодируются, проходят Validator.Check и применяются в store. state.Member и members.app_version (миграция: ALTER TABLE ADD COLUMN app_version DEFAULT '' для БД прежней версии), node.Config.AppVersion → Join, mobile.Start(dir, platform, appVersion, …), Kotlin передаёт versionName пакета; GET /piles: members[].app_version (пустая строка — версия неизвестна), openapi обновлён. iOS не подключён (модуль-заглушка), версию не передаёт.
 <!-- SECTION:NOTES:END -->

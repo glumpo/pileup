@@ -10,6 +10,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/fxamacker/cbor/v2"
 	"github.com/glumpo/pileup/core/crdt/op"
 )
 
@@ -80,7 +81,7 @@ func TestGoldenVectors(t *testing.T) {
 		} else {
 			built = op.Sign(k, op.Body{
 				PileID: pile, Author: author(k), Seq: seq, Prev: head.ID[:], Lamport: lamport,
-				WallTime: wall, Schema: op.Schema, Type: vec.typ, Payload: []byte{0xa1, 0x01, 0x63, 'n', 'e', 'w'},
+				WallTime: wall, Type: vec.typ, Payload: []byte{0xa1, 0x01, 0x63, 'n', 'e', 'w'},
 			})
 		}
 
@@ -104,7 +105,7 @@ func TestGoldenVectors(t *testing.T) {
 
 		o := mustDecode(t, stored)
 		if !bytes.Equal(o.PileID, pile) || o.Author != author(k) || o.Seq != seq || o.Lamport != lamport ||
-			o.WallTime != wall || o.Schema != op.Schema || o.Type != vec.typ {
+			o.WallTime != wall || o.Type != vec.typ {
 			t.Errorf("%s: body %+v", vec.name, o.Body)
 		}
 		if seq == 1 && len(o.Prev) != 0 || seq > 1 && !bytes.Equal(o.Prev, head.ID[:]) {
@@ -112,6 +113,48 @@ func TestGoldenVectors(t *testing.T) {
 		}
 		if !reflect.DeepEqual(o.Change, vec.change) {
 			t.Errorf("%s: change %#v, want %#v", vec.name, o.Change, vec.change)
+		}
+		if err := v.Check(o, head); err != nil {
+			t.Errorf("%s: %v", vec.name, err)
+		}
+		head = o.Head()
+	}
+}
+
+func TestLegacyVectorsWithSchemaStillApply(t *testing.T) {
+	k := key(1)
+	v := op.NewValidator(pile, secret)
+	var head op.Head
+	for i, vec := range goldenVectors() {
+		seq, lamport, wall := uint64(i+1), uint64(10*i+3), int64(1700000000000+i)
+		text, err := os.ReadFile(filepath.Join("testdata", "schema1", vec.name+".hex"))
+		if err != nil {
+			t.Fatal(err)
+		}
+		raw, err := hex.DecodeString(strings.TrimSpace(string(text)))
+		if err != nil {
+			t.Fatal(err)
+		}
+		var fields map[int]cbor.RawMessage
+		if err := cbor.Unmarshal(split(t, raw).Body, &fields); err != nil {
+			t.Fatal(err)
+		}
+		if !bytes.Equal(fields[7], []byte{0x01}) {
+			t.Fatalf("%s: not a legacy op with schema 1", vec.name)
+		}
+
+		o := mustDecode(t, raw)
+		want := vec.change
+		if j, ok := want.(op.Join); ok {
+			j.AppVersion = ""
+			want = j
+		}
+		if !bytes.Equal(o.PileID, pile) || o.Author != author(k) || o.Seq != seq || o.Lamport != lamport ||
+			o.WallTime != wall || o.Type != vec.typ || !bytes.Equal(o.Raw, raw) {
+			t.Errorf("%s: body %+v", vec.name, o.Body)
+		}
+		if !reflect.DeepEqual(o.Change, want) {
+			t.Errorf("%s: change %#v, want %#v", vec.name, o.Change, want)
 		}
 		if err := v.Check(o, head); err != nil {
 			t.Errorf("%s: %v", vec.name, err)

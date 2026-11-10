@@ -76,8 +76,9 @@ func WithNode(token string, n *node.Node, h *show.Host) http.Handler {
 }
 
 type member struct {
-	Name     string `json:"name"`
-	Platform string `json:"platform"`
+	Name       string `json:"name"`
+	Platform   string `json:"platform"`
+	AppVersion string `json:"app_version"`
 }
 
 type pile struct {
@@ -95,7 +96,7 @@ func toJSON(p node.Pile) pile {
 	slices.SortFunc(authors, func(x, y op.Author) int { return bytes.Compare(x[:], y[:]) })
 	for _, a := range authors {
 		m := p.Members[a]
-		out.Members = append(out.Members, member{Name: m.Name, Platform: m.Platform})
+		out.Members = append(out.Members, member{Name: m.Name, Platform: m.Platform, AppVersion: m.AppVersion})
 	}
 	return out
 }

@@ -17,9 +17,10 @@ type PileCreate struct {
 }
 
 type Join struct {
-	Name     string `cbor:"1,keyasint"`
-	Platform string `cbor:"2,keyasint"`
-	Proof    []byte `cbor:"3,keyasint"`
+	Name       string `cbor:"1,keyasint"`
+	Platform   string `cbor:"2,keyasint"`
+	Proof      []byte `cbor:"3,keyasint"`
+	AppVersion string `cbor:"4,keyasint,omitempty"`
 }
 
 type MemberSet struct {
@@ -86,9 +87,6 @@ type RawTime struct {
 }
 
 func decodeChange(b Body) (Change, error) {
-	if b.Schema != Schema {
-		return nil, nil
-	}
 	switch b.Type {
 	case TypePileCreate:
 		return decodeAs[PileCreate](b.Payload)

@@ -19,6 +19,11 @@ func goldenOps(f *testing.F) [][]byte {
 	if err != nil {
 		f.Fatal(err)
 	}
+	legacy, err := filepath.Glob(filepath.Join("testdata", "schema1", "*.hex"))
+	if err != nil {
+		f.Fatal(err)
+	}
+	paths = append(paths, legacy...)
 	var raws [][]byte
 	for _, p := range paths {
 		text, err := os.ReadFile(p)

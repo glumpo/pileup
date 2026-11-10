@@ -106,7 +106,7 @@ func newDevice(t *testing.T) *device {
 
 func start(t *testing.T, d *device) {
 	t.Helper()
-	if err := mobile.Start(d.dir, "android", d.keys, d.media, d.media, d.network, d.lan); err != nil {
+	if err := mobile.Start(d.dir, "android", "1.4.0", d.keys, d.media, d.media, d.network, d.lan); err != nil {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { mobile.Stop() })
@@ -376,5 +376,24 @@ func TestDiscoveryGoesThroughNativeProvider(t *testing.T) {
 	defer d.lan.mu.Unlock()
 	if !slices.Equal(d.lan.adverts, []string{"_pileup._tcp"}) || !d.lan.stopped {
 		t.Fatalf("advertised %v, stopped %v; want the pile advertised and discovery stopped", d.lan.adverts, d.lan.stopped)
+	}
+}
+
+func TestMemberCarriesAppVersionFromNative(t *testing.T) {
+	start(t, newDevice(t))
+	createPile(t, "Поездка")
+	code, body := call(t, http.MethodGet, "/piles", mobile.Token(), nil)
+	var ps []struct {
+		Members []struct {
+			Name       string `json:"name"`
+			Platform   string `json:"platform"`
+			AppVersion string `json:"app_version"`
+		} `json:"members"`
+	}
+	if err := json.Unmarshal(body, &ps); code != http.StatusOK || err != nil {
+		t.Fatalf("GET /piles: status = %d, body %s", code, body)
+	}
+	if len(ps) != 1 || len(ps[0].Members) != 1 || ps[0].Members[0].AppVersion != "1.4.0" || ps[0].Members[0].Platform != "android" {
+		t.Fatalf("piles = %s", body)
 	}
 }

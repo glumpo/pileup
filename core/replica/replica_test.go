@@ -2,6 +2,8 @@ package replica_test
 
 import (
 	"bytes"
+	"crypto/ed25519"
+	"crypto/sha256"
 	"encoding/hex"
 	"errors"
 	"net"
@@ -337,4 +339,67 @@ func TestEachRoundReportsReceivedOps(t *testing.T) {
 		}
 		return sum == 3
 	}, s)
+}
+
+func TestUnknownTypeIsRelayedVerbatimAndLaterOpsApply(t *testing.T) {
+	kx := key(4)
+	x := author(kx)
+	type wireBody struct {
+		PileID   []byte  `cbor:"1,keyasint"`
+		Author   []byte  `cbor:"2,keyasint"`
+		Seq      uint64  `cbor:"3,keyasint"`
+		Prev     []byte  `cbor:"4,keyasint,omitempty"`
+		Lamport  uint64  `cbor:"5,keyasint"`
+		WallTime int64   `cbor:"6,keyasint"`
+		Type     op.Type `cbor:"8,keyasint"`
+		Payload  []byte  `cbor:"9,keyasint"`
+	}
+	var journal [][]byte
+	var prev []byte
+	for i, c := range []struct {
+		typ    op.Type
+		change any
+	}{
+		{op.TypeJoin, op.Join{Name: "Вера", Platform: "ios", Proof: op.JoinProof(secret, x)}},
+		{999, map[int]any{1: "new", 2: []byte{1, 2, 3}}},
+		{op.TypeMemberSet, op.MemberSet{Name: "Вера К."}},
+	} {
+		payload, err := cbor.Marshal(c.change)
+		if err != nil {
+			t.Fatal(err)
+		}
+		body, err := cbor.Marshal(wireBody{PileID: pile, Author: x[:], Seq: uint64(i + 1), Prev: prev, Lamport: uint64(i + 1), WallTime: wallTime, Type: c.typ, Payload: payload})
+		if err != nil {
+			t.Fatal(err)
+		}
+		raw, err := cbor.Marshal([]any{body, ed25519.Sign(kx, body)})
+		if err != nil {
+			t.Fatal(err)
+		}
+		journal = append(journal, raw)
+		sum := sha256.Sum256(body)
+		prev = sum[:]
+	}
+
+	a, b := newNode(t, key(1), "Аня"), newNode(t, key(2), "Боря")
+	a.apply(t, journal...)
+	s := b.pull(t, a.serve(t, nil))
+	waitFor(t, "b got x's journal from a", func() bool { return b.vv(t)[x] == 3 }, s)
+
+	for _, n := range []*node{a, b} {
+		raws, err := n.store.Ops(x, 1)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if !reflect.DeepEqual(raws, journal) {
+			t.Fatal("stored journal differs from received bytes")
+		}
+		v, err := n.store.View()
+		if err != nil {
+			t.Fatal(err)
+		}
+		if m := v.Members[x]; m.Name != "Вера К." || m.Platform != "ios" {
+			t.Fatalf("member after Join, unknown op, MemberSet: %+v", m)
+		}
+	}
 }

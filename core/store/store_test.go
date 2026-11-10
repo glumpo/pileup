@@ -1,11 +1,15 @@
 package store_test
 
 import (
+	"bytes"
+	"database/sql"
+	"encoding/hex"
 	"errors"
 	"math"
 	"os"
 	"path/filepath"
 	"reflect"
+	"strings"
 	"testing"
 
 	"github.com/fxamacker/cbor/v2"
@@ -80,7 +84,7 @@ func TestOpsFromOtherEncodersAreReducedLikeReference(t *testing.T) {
 		}
 		raws = append(raws, op.Sign(k, op.Body{
 			PileID: pile, Author: author(k), Seq: head.Seq + 1, Prev: head.ID[:], Lamport: uint64(i + 2),
-			Schema: op.Schema, Type: typ, Payload: payload,
+			Type: typ, Payload: payload,
 		}))
 	}
 	for i, raw := range raws {
@@ -124,5 +128,96 @@ func TestLamportBoundIsCheckedBeforeStorage(t *testing.T) {
 	}
 	if v := view(t, s); v.Lamport != top || v.VV[author(a)] != 1 || v.Members[author(a)].Name != "Аня" {
 		t.Fatalf("failed local write changed state: %+v", v)
+	}
+}
+
+func TestMemberKeepsAppVersionFromJoin(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "pile.db")
+	a, b := key(1), key(2)
+	s := open(t, path)
+	j := join(a, "Аня")
+	j.AppVersion = "1.4.0"
+	create(t, s, a, j)
+	create(t, s, a, op.MemberSet{Name: "Анна"})
+	if _, err := s.Apply(op.New(b, pile, op.Head{}, 1, wallTime, op.Join{Name: "Боря", Platform: "android", Proof: op.JoinProof(secret, author(b))})); err != nil {
+		t.Fatal(err)
+	}
+	want := map[op.Author]state.Member{
+		author(a): {Name: "Анна", Platform: "ios", AppVersion: "1.4.0"},
+		author(b): {Name: "Боря", Platform: "android"},
+	}
+	if got := view(t, s).Members; !reflect.DeepEqual(got, want) {
+		t.Fatalf("members %+v, want %+v", got, want)
+	}
+	s.Close()
+	s = open(t, path)
+	defer s.Close()
+	if got := view(t, s).Members; !reflect.DeepEqual(got, want) {
+		t.Fatalf("members after reopen %+v, want %+v", got, want)
+	}
+}
+
+func TestDatabaseOfPreviousVersionOpens(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "pile.db")
+	a, b := key(1), key(2)
+	s := open(t, path)
+	create(t, s, a, join(a, "Аня"))
+	s.Close()
+	db, err := sql.Open("sqlite", path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := db.Exec(`CREATE TABLE old AS SELECT author, name, platform FROM members;
+		DROP TABLE members;
+		CREATE TABLE members (author BLOB PRIMARY KEY, name TEXT NOT NULL, platform TEXT NOT NULL) WITHOUT ROWID;
+		INSERT INTO members SELECT * FROM old;
+		DROP TABLE old;`); err != nil {
+		t.Fatal(err)
+	}
+	db.Close()
+
+	s = open(t, path)
+	defer s.Close()
+	j := join(b, "Боря")
+	j.AppVersion = "2.0.0"
+	if _, err := s.Apply(op.New(b, pile, op.Head{}, 1, wallTime, j)); err != nil {
+		t.Fatal(err)
+	}
+	want := map[op.Author]state.Member{
+		author(a): {Name: "Аня", Platform: "ios"},
+		author(b): {Name: "Боря", Platform: "ios", AppVersion: "2.0.0"},
+	}
+	if got := view(t, s).Members; !reflect.DeepEqual(got, want) {
+		t.Fatalf("members %+v, want %+v", got, want)
+	}
+}
+
+func TestLegacyOpsWithSchemaApply(t *testing.T) {
+	s := open(t, filepath.Join(t.TempDir(), "pile.db"))
+	defer s.Close()
+	for _, name := range []string{"join", "pile_create", "member_set", "asset_add", "asset_remove", "unknown_type"} {
+		text, err := os.ReadFile(filepath.Join("..", "crdt", "op", "testdata", "schema1", name+".hex"))
+		if err != nil {
+			t.Fatal(err)
+		}
+		raw, err := hex.DecodeString(strings.TrimSpace(string(text)))
+		if err != nil {
+			t.Fatal(err)
+		}
+		if _, err := s.Apply(raw); err != nil {
+			t.Fatalf("%s: %v", name, err)
+		}
+	}
+	v := view(t, s)
+	if len(v.Members) != 1 || len(v.VV) != 1 {
+		t.Fatalf("view %+v", v)
+	}
+	for a, m := range v.Members {
+		if m != (state.Member{Name: "Анна", Platform: "ios"}) || v.VV[a] != 6 {
+			t.Fatalf("member %+v, seq %d", m, v.VV[a])
+		}
+	}
+	if v.PileName != "Грузия 2026" || len(v.Assets) != 1 || v.Assets[string(bytes.Repeat([]byte{0xa2}, 32))].Meta.OriginalName != "VID_0002.MP4" {
+		t.Fatalf("view %+v", v)
 	}
 }

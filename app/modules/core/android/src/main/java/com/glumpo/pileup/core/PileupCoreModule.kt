@@ -20,6 +20,7 @@ class PileupCoreModule : Module() {
       Mobile.start(
         File(dir, "core").path,
         "android",
+        context.packageManager.getPackageInfo(context.packageName, 0).versionName ?: "",
         SeedKeystore(File(dir, "device.seed")),
         MediaStoreProvider(context.contentResolver),
         Renditions(context),

@@ -60,7 +60,7 @@ var (
 	token    string
 )
 
-func Start(dir, platform string, keystore Keystore, media MediaProvider, renditions RenditionMaker, network NetworkInfo, discovery DiscoveryProvider) error {
+func Start(dir, platform, appVersion string, keystore Keystore, media MediaProvider, renditions RenditionMaker, network NetworkInfo, discovery DiscoveryProvider) error {
 	mu.Lock()
 	defer mu.Unlock()
 	if server != nil {
@@ -70,6 +70,7 @@ func Start(dir, platform string, keystore Keystore, media MediaProvider, renditi
 		Dir:        dir,
 		Keystore:   keystore,
 		Platform:   platform,
+		AppVersion: appVersion,
 		Addrs:      addrs(network),
 		Media:      media,
 		Renditions: renditions,

@@ -700,11 +700,17 @@ components:
             required:
               - name
               - platform
+              - app_version
             properties:
               name:
                 type: string
               platform:
                 type: string
+              app_version:
+                type: string
+                description: >-
+                  Version of the app that created the member's Join, as of
+                  joining; empty when the Join carries no version.
     TimelineItem:
       type: object
       required:
