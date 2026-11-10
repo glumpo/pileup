@@ -292,7 +292,7 @@ func (l *loader) fetch(k string, owner op.Author) {
 	case err == nil:
 		l.cache.Loaded(k)
 	case owner == l.self || errors.Is(err, node.ErrUnknownAsset) || errors.Is(err, node.ErrRefused):
-		l.cache.Broken(k)
+		l.cache.Broken(k, time.Now())
 	default:
 		l.cache.Failed(k, time.Now())
 	}

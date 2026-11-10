@@ -20,7 +20,7 @@ type model struct {
 	cached   map[string]int64
 	loading  map[string]string
 	pinned   map[string]bool
-	broken   map[string]bool
+	broken   map[string]time.Time
 	offline  map[string]bool
 	failed   map[string]bool
 	lastFail map[string]time.Time
@@ -89,6 +89,11 @@ func (m *model) inFlight(src string) int {
 
 func (m *model) unavailable(src string) bool { return m.offline[src] || m.failed[src] }
 
+func (m *model) isBroken(x string) bool {
+	at, ok := m.broken[x]
+	return ok && m.now.Before(at.Add(prefetch.Recheck))
+}
+
 func (m *model) pickLoading(t *rapid.T) (string, bool) {
 	if len(m.loading) == 0 {
 		return "", false
@@ -97,7 +102,7 @@ func (m *model) pickLoading(t *rapid.T) (string, bool) {
 }
 
 func (m *model) step(t *rapid.T) {
-	switch rapid.IntRange(0, 9).Draw(t, "action") {
+	switch rapid.IntRange(0, 10).Draw(t, "action") {
 	case 0, 1:
 		if len(m.items) > 0 {
 			m.cursor = rapid.SampledFrom(m.items).Draw(t, "cursor").ID
@@ -146,6 +151,8 @@ func (m *model) step(t *rapid.T) {
 		m.offline[src] = !online
 	case 7:
 		m.now = m.now.Add(time.Duration(rapid.Int64Range(0, 40_000).Draw(t, "ms")) * time.Millisecond)
+	case 10:
+		m.now = m.now.Add(prefetch.Recheck)
 	case 8:
 		var kept []prefetch.Item
 		for _, it := range drawItems(t) {
@@ -157,8 +164,8 @@ func (m *model) step(t *rapid.T) {
 		m.c.SetItems(kept)
 	case 9:
 		if x, ok := m.pickLoading(t); ok {
-			m.c.Broken(x)
-			m.broken[x] = true
+			m.c.Broken(x, m.now)
+			m.broken[x] = m.now
 			m.failed[m.loading[x]] = false
 			delete(m.loading, x)
 		}
@@ -200,7 +207,7 @@ func (m *model) plan(t *rapid.T) {
 		if _, ok := m.cached[x]; ok {
 			t.Fatalf("loads cached %s", x)
 		}
-		if m.broken[x] {
+		if m.isBroken(x) {
 			t.Fatalf("loads broken %s", x)
 		}
 		if _, ok := m.loading[x]; ok {
@@ -226,7 +233,7 @@ func (m *model) plan(t *rapid.T) {
 		for _, it := range wanted {
 			_, cached := m.cached[it.ID]
 			_, loading := m.loading[it.ID]
-			if it.Source == src && !cached && !loading && !m.broken[it.ID] {
+			if it.Source == src && !cached && !loading && !m.isBroken(it.ID) {
 				missing = append(missing, it.ID)
 			}
 		}
@@ -252,7 +259,7 @@ func (m *model) plan(t *rapid.T) {
 	}
 	var waiting []string
 	for _, it := range m.items {
-		if _, ok := m.cached[it.ID]; inWindow[it.ID] && !ok && !m.broken[it.ID] && m.unavailable(it.Source) {
+		if _, ok := m.cached[it.ID]; inWindow[it.ID] && !ok && !m.isBroken(it.ID) && m.unavailable(it.Source) {
 			waiting = append(waiting, it.ID)
 		}
 	}
@@ -269,7 +276,7 @@ func (m *model) plan(t *rapid.T) {
 		p.Total++
 		if _, ok := m.cached[it.ID]; ok {
 			p.Done++
-		} else if m.broken[it.ID] {
+		} else if m.isBroken(it.ID) {
 			p.Failed++
 		}
 		progress[it.Source] = p
@@ -289,7 +296,7 @@ func TestInvariantsOverRandomEvents(t *testing.T) {
 			cached:   map[string]int64{},
 			loading:  map[string]string{},
 			pinned:   map[string]bool{},
-			broken:   map[string]bool{},
+			broken:   map[string]time.Time{},
 			offline:  map[string]bool{},
 			failed:   map[string]bool{},
 			lastFail: map[string]time.Time{},

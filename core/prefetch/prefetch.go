@@ -12,6 +12,7 @@ const (
 	PerSource  = 5
 	MinBackoff = time.Second
 	MaxBackoff = 30 * time.Second
+	Recheck    = 5 * time.Minute
 )
 
 type Item struct {
@@ -95,7 +96,7 @@ func (c *Cache) SetCached(sizes map[string]int64) { c.cached = sizes }
 
 func (c *Cache) Loaded(id string) { c.answered(id) }
 
-func (c *Cache) Broken(id string) {
+func (c *Cache) Broken(id string, now time.Time) {
 	c.answered(id)
 	c.broken[id] = true
 }

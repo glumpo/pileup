@@ -366,11 +366,11 @@ func TestBrokenItemDoesNotBlockItsSource(t *testing.T) {
 	c.SetCursor(id(0))
 	load := c.Plan(t0)
 	equal(t, "load", load, ids(0, 5))
-	c.Broken(id(0))
+	c.Broken(id(0), t0)
 	load = c.Plan(t0)
 	equal(t, "load after broken", load, []string{id(5)})
 	c.Failed(id(1), t0)
-	c.Broken(id(2))
+	c.Broken(id(2), t0)
 	equal(t, "waiting", c.Waiting(), nil)
 	load = c.Plan(t0)
 	equal(t, "load after the source answered", load, []string{id(1), id(6)})
@@ -389,6 +389,33 @@ func TestBrokenItemDoesNotBlockItsSource(t *testing.T) {
 	}
 }
 
+func TestBrokenItemIsPlannedAgainAfterRecheck(t *testing.T) {
+	c := newCache(chronology(10, oneSource))
+	pinAll(c, ids(0, 10))
+	equal(t, "load", c.Plan(t0), ids(0, 5))
+	c.Broken(id(0), t0)
+	c.loaded(ids(1, 5)...)
+	c.loaded(c.Plan(t0)...)
+	progress := func(want prefetch.Progress) {
+		t.Helper()
+		if p := c.Progress()["ann"]; p != want {
+			t.Fatalf("progress %+v, want %+v", p, want)
+		}
+	}
+	progress(prefetch.Progress{Total: 10, Done: 9, Failed: 1})
+	equal(t, "load before the recheck", c.Plan(t0.Add(prefetch.Recheck-time.Second)), nil)
+	at := t0.Add(prefetch.Recheck)
+	equal(t, "load after the recheck", c.Plan(at), []string{id(0)})
+	progress(prefetch.Progress{Total: 10, Done: 9})
+	c.Broken(id(0), at)
+	progress(prefetch.Progress{Total: 10, Done: 9, Failed: 1})
+	equal(t, "load before the next recheck", c.Plan(at.Add(prefetch.Recheck-time.Second)), nil)
+	at = at.Add(prefetch.Recheck)
+	equal(t, "load after the next recheck", c.Plan(at), []string{id(0)})
+	c.loaded(id(0))
+	progress(prefetch.Progress{Total: 10, Done: 10})
+}
+
 func TestProgressCountsPinnedItemsPerSource(t *testing.T) {
 	c := newCache(chronology(10, func(i int) string {
 		if i < 4 {
@@ -402,7 +429,7 @@ func TestProgressCountsPinnedItemsPerSource(t *testing.T) {
 	c.Plan(t0)
 	c.loaded(id(0))
 	c.loaded(id(1))
-	c.Broken(id(2))
+	c.Broken(id(2), t0)
 	c.loaded(id(4))
 	c.Failed(id(5), t0)
 	got := c.Progress()
