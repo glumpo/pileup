@@ -18,6 +18,12 @@ func SetNetworkCheck(d time.Duration) (restore func()) {
 	return func() { networkCheck = old }
 }
 
+func SetAnnounceTimeout(d time.Duration) (restore func()) {
+	old := announceTimeout
+	announceTimeout = d
+	return func() { announceTimeout = old }
+}
+
 func (n *Node) Dialing(pileID []byte) []string {
 	p, err := n.find(pileID)
 	if err != nil {

@@ -26,10 +26,11 @@ const (
 )
 
 type Hint struct {
-	Member   op.Author
-	Name     string
-	Platform string
-	Reason   string
+	Member    op.Author
+	Name      string
+	Platform  string
+	Reason    string
+	LastError string
 }
 
 type Progress struct {

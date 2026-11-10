@@ -41,6 +41,8 @@ const (
 	dialTimeout = 5 * time.Second
 )
 
+var announceTimeout = timeout
+
 var (
 	ErrUnknownPile = errors.New("node: unknown pile")
 	ErrJoined      = errors.New("node: already a member of this pile")
@@ -548,7 +550,7 @@ var pause = func(ctx context.Context, d time.Duration) error {
 func (n *Node) announce(ctx context.Context, p *pile, addr string) (op.Author, []listedAddr, error) {
 	var mu sync.Mutex
 	var who op.Author
-	c := http.Client{Timeout: timeout, Transport: &http.Transport{
+	c := http.Client{Timeout: announceTimeout, Transport: &http.Transport{
 		DisableKeepAlives: true,
 		DialContext: func(ctx context.Context, _, a string) (net.Conn, error) {
 			c, err := peer.Dial(ctx, a, n.key, p.ID, p.Secret)

@@ -33,7 +33,7 @@ func TestHintNamesMemberWhoseFilesWait(t *testing.T) {
 
 	rx := newReceiver(t)
 	must(t)(b.show.Start(p.ID, b.tv(rx), nil))
-	want := []show.Hint{{Member: c.Author(), Name: "участник 1", Platform: "ios", Reason: show.Unreachable}}
+	want := []show.Hint{{Member: c.Author(), Name: "участник 1", Platform: "ios", Reason: show.Unreachable, LastError: node.Refused}}
 	eventually(t, "hint names c", func() bool { return reflect.DeepEqual(must(t)(b.show.State()).Hints, want) })
 	ui := httptest.NewServer(httpapi.WithNode("ui", b.Node, b.show))
 	t.Cleanup(ui.Close)
@@ -42,7 +42,7 @@ func TestHintNamesMemberWhoseFilesWait(t *testing.T) {
 	if err := json.Unmarshal(body, &st); err != nil {
 		t.Fatal(err)
 	}
-	wantJSON := []map[string]string{{"author": fmt.Sprintf("%x", c.Author()), "name": "участник 1", "platform": "ios", "reason": "unreachable"}}
+	wantJSON := []map[string]string{{"author": fmt.Sprintf("%x", c.Author()), "name": "участник 1", "platform": "ios", "reason": "unreachable", "last_error": "refused"}}
 	if !reflect.DeepEqual(st.Hints, wantJSON) {
 		t.Fatalf("hints in the UI API: %s", body)
 	}
@@ -284,7 +284,7 @@ func TestVideoOfUnavailableSourceShowsPosterAndShowGoesOn(t *testing.T) {
 	if resp, _ := get(t, video.url); resp.StatusCode != http.StatusBadGateway {
 		t.Fatalf("video of a closed source: status %d", resp.StatusCode)
 	}
-	hint := []show.Hint{{Member: a.Author(), Name: "Аня", Platform: "ios", Reason: show.Unreachable}}
+	hint := []show.Hint{{Member: a.Author(), Name: "Аня", Platform: "ios", Reason: show.Unreachable, LastError: node.Refused}}
 	unavailable := func() bool {
 		st := must(t)(b.show.State())
 		return st.VideoUnavailable && !st.Playing && current(st) == "V" && reflect.DeepEqual(st.Hints, hint)

@@ -45,7 +45,8 @@ test('joining by pasted invite text opens the pile', async () => {
   expect(requests).toContainEqual(
     expect.objectContaining({ method: 'POST', path: '/piles/join', body: { invite: INVITE, member: 'Боря' } }),
   );
-  expect(await screen.findByText('Участники: Аня, Боря')).toBeOnTheScreen();
+  expect(await screen.findByText('Аня — на связи')).toBeOnTheScreen();
+  expect(screen.getByText('Боря — на связи')).toBeOnTheScreen();
   expect(screen.getByText('Грузия')).toBeOnTheScreen();
 });
 

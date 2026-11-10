@@ -34,8 +34,8 @@ export const georgia: Pile = {
   id: 'aa01',
   name: 'Грузия',
   members: [
-    { name: 'Аня', platform: 'ios' },
-    { name: 'Боря', platform: 'android' },
+    { key: '01', name: 'Аня', platform: 'ios', online: true, last_seen: Date.UTC(2026, 6, 1, 6, 0) },
+    { key: '02', name: 'Боря', platform: 'android', online: true, last_seen: Date.UTC(2026, 6, 1, 6, 0) },
   ],
 };
 

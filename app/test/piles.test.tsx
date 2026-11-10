@@ -4,7 +4,11 @@ import App from '../App';
 import { Pile } from '../src/api';
 import { AUTH, fakeCore, INVITE } from './fakeCore';
 
-const created: Pile = { id: 'aa01', name: 'Грузия', members: [{ name: 'Аня', platform: 'ios' }] };
+const created: Pile = {
+  id: 'aa01',
+  name: 'Грузия',
+  members: [{ key: '01', name: 'Аня', platform: 'ios', online: true, last_seen: Date.UTC(2026, 6, 1, 6, 0) }],
+};
 
 const inviteShown = () =>
   [
@@ -30,7 +34,7 @@ test('a created pile opens with its invite hidden until it is asked for', async 
   await user.type(screen.getByLabelText('Ваше имя'), 'Аня');
   await user.press(screen.getByRole('button', { name: 'Создать' }));
 
-  expect(await screen.findByText('Участники: Аня')).toBeOnTheScreen();
+  expect(await screen.findByText('Аня — на связи')).toBeOnTheScreen();
   expect(screen.getByText('Грузия')).toBeOnTheScreen();
   expect(inviteShown()).toBe(false);
   expect(requests.map((r) => r.path)).not.toContain('/piles/aa01/invite');

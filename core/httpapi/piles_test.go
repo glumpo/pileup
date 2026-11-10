@@ -2,6 +2,7 @@ package httpapi_test
 
 import (
 	"bytes"
+	"encoding/hex"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
@@ -202,5 +203,75 @@ func TestInviteForUnknownPile(t *testing.T) {
 		if out.Error != "unknown_pile" {
 			t.Fatalf("%s: error = %q", id, out.Error)
 		}
+	}
+}
+
+type presence struct {
+	Key       string `json:"key"`
+	Name      string `json:"name"`
+	Online    bool   `json:"online"`
+	LastSeen  *int64 `json:"last_seen"`
+	LastError string `json:"last_error"`
+}
+
+func (c client) presence(id string) map[string]presence {
+	c.t.Helper()
+	var ps []struct {
+		ID      string     `json:"id"`
+		Members []presence `json:"members"`
+	}
+	c.do("GET", "/piles", nil, http.StatusOK, &ps)
+	out := map[string]presence{}
+	for _, p := range ps {
+		for _, m := range p.Members {
+			if p.ID == id {
+				out[m.Name] = m
+			}
+		}
+	}
+	return out
+}
+
+func TestPileListsWhetherMembersAreConnected(t *testing.T) {
+	a, p, _ := sourceWithPhoto(t)
+	inv, err := a.Invite(p.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	b := start(t, "android")
+	b.do("POST", "/piles/join", map[string]string{"invite": inv, "member": "Боря"}, http.StatusCreated, nil)
+	id := hex.EncodeToString(p.ID)
+	author := a.Author()
+	key := hex.EncodeToString(author[:])
+
+	deadline := time.Now().Add(10 * time.Second)
+	for {
+		m := b.presence(id)
+		if anya := m["Аня"]; anya.Online && anya.Key == key && anya.LastSeen != nil && anya.LastError == "" && m["Боря"].Online {
+			break
+		}
+		if time.Now().After(deadline) {
+			t.Fatalf("members %+v, want Аня with key %s and both online", m, key)
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+
+	before := time.Now().UnixMilli()
+	if err := a.Close(); err != nil {
+		t.Fatal(err)
+	}
+	deadline = time.Now().Add(10 * time.Second)
+	for {
+		anya := b.presence(id)["Аня"]
+		if !anya.Online && anya.LastError == "refused" {
+			if anya.LastSeen == nil || *anya.LastSeen < before || *anya.LastSeen > time.Now().UnixMilli() {
+				t.Fatalf("Аня last seen at %v, want the end of the connection after %d", anya.LastSeen, before)
+			}
+			break
+		}
+		if time.Now().After(deadline) {
+			t.Fatalf("Аня after her Pileup closed: %+v", anya)
+		}
+		time.Sleep(10 * time.Millisecond)
 	}
 }

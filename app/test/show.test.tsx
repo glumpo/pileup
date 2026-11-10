@@ -264,6 +264,46 @@ test('members the show waits for are named with their phone and why', async () =
   expect(screen.queryByTestId('waiting')).toBeNull();
 });
 
+test('members the show waits for are advised by why they do not answer', async () => {
+  const { show } = core();
+  await startShow();
+
+  show.waiting = [items[2], items[1]];
+  show.hints = [
+    { ...anyaAway, last_error: 'refused' },
+    { author: '02', name: 'Боря', platform: 'android', reason: 'unreachable', last_error: 'no_route' },
+    { author: '03', name: 'Вера', platform: 'ios', reason: 'unreachable', last_error: 'other_device' },
+    { author: '04', name: 'Гоша', platform: 'android', reason: 'unreachable', last_error: 'no_address' },
+    { author: '05', name: 'Даша', platform: 'ios', reason: 'unreachable', last_error: 'timeout' },
+  ];
+  const banner = await screen.findByTestId('waiting', {}, { timeout: 3000 });
+  for (const text of [
+    'Нет ответа от iPhone: Аня. Pileup закрыт — попросите открыть Pileup.',
+    'Нет ответа от телефон: Боря. Телефон не в этой сети — попросите подключиться к той же сети Wi-Fi.',
+    'Нет ответа от iPhone: Вера. По известному адресу отвечает другое устройство — попросите открыть Pileup в той же сети Wi-Fi.',
+    'Нет ответа от телефон: Гоша. Адрес неизвестен — попросите открыть Pileup в той же сети Wi-Fi.',
+    `Нет ответа от iPhone: Даша. ${advice}`,
+  ]) {
+    expect(within(banner).getByText(text)).toBeOnTheScreen();
+  }
+});
+
+test('a file the screen could not open while its owner does not answer is explained by the owner', async () => {
+  const { show } = core();
+  await startShow();
+
+  show.renderer_error = { code: 'load_failed', message: 'LOAD_FAILED from receiver' };
+  show.waiting = [items[0]];
+  show.hints = [{ ...anyaAway, last_error: 'refused' }];
+  const banner = await screen.findByTestId('waiting', {}, { timeout: 3000 });
+  expect(within(banner).getByText('Нет ответа от iPhone: Аня. Pileup закрыт — попросите открыть Pileup.')).toBeOnTheScreen();
+  expect(screen.queryByText(/Экран не смог открыть этот файл/)).toBeNull();
+
+  show.waiting = [items[1]];
+  show.hints = [{ author: '02', name: 'Боря', platform: 'android', reason: 'unreachable', last_error: 'refused' }];
+  expect(await screen.findByText(/Экран не смог открыть этот файл/, {}, { timeout: 3000 })).toBeOnTheScreen();
+});
+
 test('all files of a member who does not answer are loaded from the remote after the estimate is confirmed', async () => {
   const { requests, show } = core();
   const user = await startShow();

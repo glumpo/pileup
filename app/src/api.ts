@@ -1,4 +1,11 @@
-export type Member = { name: string; platform: string };
+export type Member = {
+  key: string;
+  name: string;
+  platform: string;
+  online: boolean;
+  last_seen: number | null;
+  last_error?: string;
+};
 
 export type Pile = { id: string; name: string; members: Member[] };
 
@@ -49,7 +56,7 @@ export type Screen = {
 
 export type ShowItem = { id: string; revision: string; author: string; kind: string; taken_at: number };
 
-export type Hint = { author: string; name: string; platform: string; reason: string };
+export type Hint = { author: string; name: string; platform: string; reason: string; last_error?: string };
 
 export type ShowState = {
   pile: string;
