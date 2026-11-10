@@ -2,10 +2,14 @@ package node_test
 
 import (
 	"context"
+	"encoding/hex"
 	"errors"
+	"io"
+	"net/http"
 	"net/netip"
 	"path/filepath"
 	"reflect"
+	"sync"
 	"testing"
 	"time"
 
@@ -14,6 +18,7 @@ import (
 	"github.com/glumpo/pileup/core/device"
 	"github.com/glumpo/pileup/core/invite"
 	"github.com/glumpo/pileup/core/node"
+	"github.com/glumpo/pileup/core/store"
 )
 
 func loopback() []netip.Addr { return []netip.Addr{netip.MustParseAddr("127.0.0.1")} }
@@ -276,5 +281,47 @@ func TestMemberIsOnlineWhileConnected(t *testing.T) {
 	eventually(t, "a sees b offline", online(a, b.Author(), false))
 	if len(a.Online([]byte("no such pile"))) != 0 {
 		t.Fatal("members online in an unknown pile")
+	}
+}
+
+func TestClosedNodeLeavesNoRequestsRunning(t *testing.T) {
+	for round := range 20 {
+		dir := t.TempDir()
+		n := open(t, dir, "android")
+		p := create(t, n, "Грузия", "Аня")
+		m := memberOf(t, n, p)
+		busy := make(chan struct{}, 8)
+		var wg sync.WaitGroup
+		for range cap(busy) {
+			wg.Go(func() {
+				for {
+					req, _ := http.NewRequest(http.MethodGet, "http://"+m.addr+"/vv", nil)
+					resp, err := m.http.Do(req)
+					if err != nil {
+						return
+					}
+					io.Copy(io.Discard, resp.Body)
+					resp.Body.Close()
+					select {
+					case busy <- struct{}{}:
+					default:
+					}
+				}
+			})
+		}
+		for range cap(busy) {
+			<-busy
+		}
+		if err := n.Close(); err != nil {
+			t.Fatal(err)
+		}
+		s, err := store.Open(filepath.Join(dir, "piles", hex.EncodeToString(p.ID)+".db"), p.ID, secretOf(t, n, p))
+		if err != nil {
+			t.Fatalf("round %d: store of a closed node: %v", round, err)
+		}
+		if err := s.Close(); err != nil {
+			t.Fatal(err)
+		}
+		wg.Wait()
 	}
 }

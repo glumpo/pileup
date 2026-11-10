@@ -153,9 +153,10 @@ func (n *Node) Budget() int64 {
 }
 
 func (n *Node) localID(p *pile, assetID []byte) (string, error) {
-	n.mu.Lock()
-	local, ok := p.local[hex.EncodeToString(assetID)]
-	n.mu.Unlock()
+	local, ok, err := p.store.LocalID(assetID)
+	if err != nil {
+		return "", err
+	}
 	if !ok {
 		return "", ErrUnknownAsset
 	}

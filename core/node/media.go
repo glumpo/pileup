@@ -16,8 +16,8 @@ import (
 	"github.com/fxamacker/cbor/v2"
 	"github.com/glumpo/pileup/core/crdt/op"
 	"github.com/glumpo/pileup/core/crdt/state"
-	"github.com/glumpo/pileup/core/device"
 	"github.com/glumpo/pileup/core/media"
+	"github.com/glumpo/pileup/core/store"
 )
 
 var (
@@ -60,7 +60,7 @@ type Selection struct {
 	Items    []Candidate
 }
 
-type choice struct {
+type legacySelection struct {
 	From   int64             `json:"from"`
 	To     int64             `json:"to"`
 	Manual map[string]bool   `json:"manual"`
@@ -110,7 +110,7 @@ func (n *Node) Decide(ctx context.Context, id, asset []byte, selected bool) erro
 	if !slices.ContainsFunc(cs, func(x Candidate) bool { return bytes.Equal(x.Meta.AssetID, asset) }) {
 		return ErrUnknownAsset
 	}
-	c.Manual[hex.EncodeToString(asset)] = selected
+	c.Manual[string(asset)] = selected
 	return n.commit(ctx, p, c, cs)
 }
 
@@ -145,32 +145,50 @@ func (n *Node) Assets(id []byte) (map[string]state.Asset, error) {
 	return v.Assets, nil
 }
 
-func (n *Node) choice(id []byte) (*pile, choice, error) {
+func (n *Node) choice(id []byte) (*pile, store.Selection, error) {
 	p, err := n.find(id)
 	if err != nil {
-		return nil, choice{}, err
+		return nil, store.Selection{}, err
 	}
-	c, err := n.load(p.ID)
+	c, err := p.store.Selection()
 	return p, c, err
 }
 
-func (n *Node) load(id []byte) (choice, error) {
-	c := choice{Manual: map[string]bool{}}
-	b, err := os.ReadFile(n.choicePath(id))
+func (n *Node) importSelection(id []byte, s *store.Store) error {
+	path := filepath.Join(n.cfg.Dir, "piles", hex.EncodeToString(id)+".selection.json")
+	b, err := os.ReadFile(path)
 	if errors.Is(err, fs.ErrNotExist) {
-		return c, nil
+		return nil
 	}
+	var old legacySelection
 	if err == nil {
-		err = json.Unmarshal(b, &c)
+		err = json.Unmarshal(b, &old)
 	}
-	return c, err
+	if err != nil {
+		return err
+	}
+	c := store.Selection{From: old.From, To: old.To, Manual: map[string]bool{}, Files: map[string]string{}}
+	for k, v := range old.Manual {
+		asset, err := hex.DecodeString(k)
+		if err != nil {
+			return err
+		}
+		c.Manual[string(asset)] = v
+	}
+	for k, v := range old.Local {
+		asset, err := hex.DecodeString(k)
+		if err != nil {
+			return err
+		}
+		c.Files[string(asset)] = v
+	}
+	if err := s.Select(n.key, now(), c); err != nil {
+		return err
+	}
+	return os.Remove(path)
 }
 
-func (n *Node) choicePath(id []byte) string {
-	return filepath.Join(n.cfg.Dir, "piles", hex.EncodeToString(id)+".selection.json")
-}
-
-func (n *Node) candidates(c choice) ([]Candidate, error) {
+func (n *Node) candidates(c store.Selection) ([]Candidate, error) {
 	if n.cfg.Media == nil {
 		return nil, ErrNoMedia
 	}
@@ -221,37 +239,27 @@ func (n *Node) candidates(c choice) ([]Candidate, error) {
 	return out, nil
 }
 
-func (c choice) wants(x Candidate) bool {
-	if v, ok := c.Manual[hex.EncodeToString(x.Meta.AssetID)]; ok {
+func wants(c store.Selection, x Candidate) bool {
+	if v, ok := c.Manual[string(x.Meta.AssetID)]; ok {
 		return v
 	}
 	return !x.Screenshot && !x.Hidden
 }
 
-func (n *Node) commit(ctx context.Context, p *pile, c choice, cs []Candidate) error {
-	c.Local = map[string]string{}
+func (n *Node) commit(ctx context.Context, p *pile, c store.Selection, cs []Candidate) error {
+	c.Files = map[string]string{}
 	for _, x := range cs {
-		if c.wants(x) {
-			c.Local[hex.EncodeToString(x.Meta.AssetID)] = x.LocalID
+		if wants(c, x) {
+			c.Files[string(x.Meta.AssetID)] = x.LocalID
 		}
 	}
-	b, err := json.Marshal(c)
-	if err != nil {
-		return err
-	}
-	if err := device.WriteFile(n.choicePath(p.ID), b); err != nil {
-		return err
-	}
-	n.mu.Lock()
-	p.local = c.Local
-	n.mu.Unlock()
 	have, err := n.published(p)
 	if err != nil {
 		return err
 	}
 	var add op.AssetAdd
 	for _, x := range cs {
-		if !c.wants(x) {
+		if !wants(c, x) {
 			continue
 		}
 		m, ok := have[string(x.Meta.AssetID)]
@@ -267,15 +275,14 @@ func (n *Node) commit(ctx context.Context, p *pile, c choice, cs []Candidate) er
 	for id := range have {
 		remove.AssetIDs = append(remove.AssetIDs, []byte(id))
 	}
+	var changes []op.Change
 	if len(remove.AssetIDs) > 0 {
-		if _, err := p.replica.Create(ctx, now(), remove); err != nil {
-			return err
-		}
+		changes = append(changes, remove)
 	}
 	if len(add.Assets) > 0 {
-		_, err = p.replica.Create(ctx, now(), add)
+		changes = append(changes, add)
 	}
-	return err
+	return p.replica.Select(ctx, now(), c, changes...)
 }
 
 func (n *Node) published(p *pile) (map[string]op.AssetMeta, error) {

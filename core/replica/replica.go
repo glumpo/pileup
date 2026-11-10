@@ -75,7 +75,7 @@ func (n *Node) Hold() func() {
 	return func() { once.Do(func() { n.track(-1) }) }
 }
 
-func (n *Node) Create(ctx context.Context, wallTime int64, c op.Change) (op.Op, error) {
+func (n *Node) ready(ctx context.Context) error {
 	for {
 		n.mu.Lock()
 		if n.pending == 0 {
@@ -84,19 +84,36 @@ func (n *Node) Create(ctx context.Context, wallTime int64, c op.Change) (op.Op, 
 		ready, ch := n.caughtUp, n.changed
 		n.mu.Unlock()
 		if ready {
-			break
+			return nil
 		}
 		select {
 		case <-ch:
 		case <-ctx.Done():
-			return op.Op{}, ctx.Err()
+			return ctx.Err()
 		}
+	}
+}
+
+func (n *Node) Create(ctx context.Context, wallTime int64, c op.Change) (op.Op, error) {
+	if err := n.ready(ctx); err != nil {
+		return op.Op{}, err
 	}
 	o, err := n.store.Create(n.key, wallTime, c)
 	if err == nil {
 		n.notify()
 	}
 	return o, err
+}
+
+func (n *Node) Select(ctx context.Context, wallTime int64, sel store.Selection, changes ...op.Change) error {
+	if err := n.ready(ctx); err != nil {
+		return err
+	}
+	err := n.store.Select(n.key, wallTime, sel, changes...)
+	if err == nil {
+		n.notify()
+	}
+	return err
 }
 
 func (n *Node) Handler() http.Handler {

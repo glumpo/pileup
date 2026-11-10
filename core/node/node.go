@@ -80,7 +80,6 @@ type pile struct {
 	replica *replica.Node
 	owners  *http.Client
 	stream  *http.Client
-	local   map[string]string
 	online  map[op.Author]int
 	loops   map[string]*loop
 }
@@ -270,12 +269,12 @@ func (n *Node) start(e entry, changes ...op.Change) (*pile, error) {
 	if err := n.importPins(e.ID); err != nil {
 		return nil, err
 	}
-	c, err := n.load(e.ID)
+	s, err := store.Open(filepath.Join(n.cfg.Dir, "piles", hex.EncodeToString(e.ID)+".db"), e.ID, e.Secret)
 	if err != nil {
 		return nil, err
 	}
-	s, err := store.Open(filepath.Join(n.cfg.Dir, "piles", hex.EncodeToString(e.ID)+".db"), e.ID, e.Secret)
-	if err != nil {
+	if err := n.importSelection(e.ID, s); err != nil {
+		s.Close()
 		return nil, err
 	}
 	for _, c := range changes {
@@ -291,7 +290,7 @@ func (n *Node) start(e entry, changes ...op.Change) (*pile, error) {
 	}
 	e.Port = uint16(ln.Addr().(*net.TCPAddr).Port)
 	n.diag.Add(diag.Connection, e.ID, "", fmt.Sprintf("listening on port %d", e.Port))
-	p := &pile{entry: e, store: s, replica: replica.New(s, n.key, e.ID, e.Secret), local: c.Local, online: map[op.Author]int{}, loops: map[string]*loop{}}
+	p := &pile{entry: e, store: s, replica: replica.New(s, n.key, e.ID, e.Secret), online: map[op.Author]int{}, loops: map[string]*loop{}}
 	p.owners = n.owners(p)
 	p.stream = &http.Client{Transport: p.owners.Transport}
 	for _, a := range p.Peers {
@@ -316,7 +315,13 @@ func (n *Node) serve(p *pile, ln net.Listener) {
 	mux.Handle("/", p.replica.Handler())
 	mux.HandleFunc("POST /announce", func(w http.ResponseWriter, r *http.Request) { n.announced(p, w, r) })
 	mux.HandleFunc("GET /blob/{asset}/{revision}/{tier}", func(w http.ResponseWriter, r *http.Request) { n.serveBlob(p, w, r) })
-	srv := &http.Server{Handler: mux, ReadHeaderTimeout: timeout, IdleTimeout: timeout, ConnState: n.handshakes(p)}
+	srv := &http.Server{
+		Handler:           n.tracked(mux),
+		ReadHeaderTimeout: timeout,
+		IdleTimeout:       timeout,
+		ConnState:         n.handshakes(p),
+		BaseContext:       func(net.Listener) context.Context { return n.ctx },
+	}
 	l := peer.NewListener(ln, n.key, func(id []byte) ([]byte, bool) {
 		return p.Secret, bytes.Equal(id, p.ID)
 	})
@@ -328,6 +333,20 @@ func (n *Node) serve(p *pile, ln net.Listener) {
 	context.AfterFunc(n.ctx, func() {
 		srv.Close()
 		ln.Close()
+	})
+}
+
+func (n *Node) tracked(h http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		n.mu.Lock()
+		if n.ctx.Err() != nil {
+			n.mu.Unlock()
+			panic(http.ErrAbortHandler)
+		}
+		n.wg.Add(1)
+		n.mu.Unlock()
+		defer n.wg.Done()
+		h.ServeHTTP(w, r)
 	})
 }
 
