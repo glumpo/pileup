@@ -22,6 +22,7 @@ const (
 	connectTimeout = 10 * time.Second
 	requestTimeout = 30 * time.Second
 	stopTimeout    = 2 * time.Second
+	reload         = time.Second
 )
 
 func (s *session) connect() error {
@@ -114,21 +115,31 @@ func (s *session) media(a state.Asset) (string, string) {
 func (s *session) drive() {
 	defer s.wg.Done()
 	loaded := ""
+	var retry <-chan time.Time
 	for {
 		s.mu.Lock()
-		cur := s.items[s.cursor]
-		url, contentType := s.media(cur)
+		var cur state.Asset
+		url, contentType := "", ""
+		if s.cursor >= 0 {
+			cur = s.items[s.cursor]
+			url, contentType = s.media(cur)
+		}
 		command := ""
 		if url == loaded {
 			command, s.command = s.command, ""
 		}
 		s.mu.Unlock()
 		switch {
+		case url != loaded && url == "":
+			loaded, retry = "", nil
+			s.request("command_failed", "stop", s.cast.Stop)
 		case url != loaded:
-			loaded = url
-			s.request("load_failed", fmt.Sprintf("load %x", cur.Meta.AssetID), func(ctx context.Context) (cast.Media, error) {
+			loaded, retry = url, nil
+			if !s.request("load_failed", fmt.Sprintf("load %x", cur.Meta.AssetID), func(ctx context.Context) (cast.Media, error) {
 				return s.cast.Load(ctx, url, contentType)
-			})
+			}) {
+				retry = time.After(reload)
+			}
 		case command == playing:
 			s.request("command_failed", "play", s.cast.Play)
 		case command == paused:
@@ -142,8 +153,12 @@ func (s *session) drive() {
 			s.cast.Close()
 			return
 		case <-s.wake:
+		case <-retry:
+			loaded, retry = "", nil
 		case <-s.cast.Changed():
-			s.status(s.cast.Media())
+			if !s.status(s.cast.Media()) {
+				retry = time.After(reload)
+			}
 		case <-s.cast.Done():
 			s.failed("disconnected", "connection", s.cast.Err())
 			return
@@ -151,27 +166,30 @@ func (s *session) drive() {
 	}
 }
 
-func (s *session) request(code, what string, f func(context.Context) (cast.Media, error)) {
+func (s *session) request(code, what string, f func(context.Context) (cast.Media, error)) bool {
 	ctx, cancel := context.WithTimeout(s.ctx, requestTimeout)
 	m, err := f(ctx)
 	cancel()
 	if err != nil {
 		s.failed(code, what, err)
-		return
+		return false
 	}
 	s.mu.Lock()
 	s.fault = nil
 	s.player = m.State
 	s.mu.Unlock()
+	return true
 }
 
-func (s *session) status(m cast.Media) {
+func (s *session) status(m cast.Media) bool {
 	s.mu.Lock()
 	s.player = m.State
 	s.mu.Unlock()
 	if m.State == "IDLE" && m.IdleReason == "ERROR" {
 		s.failed("playback_failed", "playback", errors.New("media receiver failed to play the file"))
+		return false
 	}
+	return true
 }
 
 func (s *session) failed(code, what string, err error) {

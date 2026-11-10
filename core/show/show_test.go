@@ -463,7 +463,9 @@ func TestCastErrorsAndDisconnectAreReported(t *testing.T) {
 	eventually(t, "error cleared by next load", fault(""))
 
 	must(t)(a.show.Goto(a.asset(p, "V").Meta.AssetID))
-	rx.waitLoad(t, 3)
+	if l := rx.waitLoad(t, 4); l.contentType != "video/mp4" {
+		t.Fatalf("video loaded as %s", l.contentType)
+	}
 	eventually(t, "video is playing", func() bool { return must(t)(a.show.State()).Playing })
 	rx.push("IDLE", "ERROR")
 	eventually(t, "playback error in state", fault("playback_failed"))
