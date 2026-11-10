@@ -10,6 +10,7 @@ import (
 	"maps"
 	"net"
 	"net/http"
+	"net/http/httptest"
 	"net/netip"
 	"path/filepath"
 	"strconv"
@@ -364,6 +365,103 @@ func TestBodyIsLimitedByReadIdleTimeoutNotByTotalTime(t *testing.T) {
 			c.check(t, got, err)
 		})
 	}
+}
+
+func TestRelayedOriginalIsLimitedByReadIdleTimeout(t *testing.T) {
+	const idle = 500 * time.Millisecond
+	t.Cleanup(node.SetFetchTimeouts(time.Second, idle))
+	chunk := bytes.Repeat([]byte{7}, 1000)
+	relay := func(t *testing.T, original http.HandlerFunc) string {
+		t.Helper()
+		s := newSaved(t)
+		o := newOwner(t, s.id, s.secret)
+		at := o.serve(t, map[string]http.HandlerFunc{
+			"GET /blob/{asset}/{revision}/{tier}": func(w http.ResponseWriter, r *http.Request) {
+				if r.PathValue("tier") != "3" {
+					w.Write(ownerBytes(r.PathValue("tier")))
+					return
+				}
+				original(w, r)
+			},
+		})
+		s.write(t, s.history(t, 1), at.addr())
+		n := s.open(t)
+		syncedWith(t, n, s.id, o)
+		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			n.ServeOriginal(w, r, s.id, o.photo.AssetID, o.photo.Revision)
+		}))
+		t.Cleanup(srv.Close)
+		return srv.URL
+	}
+	screen := &http.Client{Timeout: 10 * time.Second}
+
+	t.Run("steady", func(t *testing.T) {
+		url := relay(t, func(w http.ResponseWriter, r *http.Request) {
+			for range 40 {
+				w.Write(chunk)
+				w.(http.Flusher).Flush()
+				time.Sleep(idle / 10)
+			}
+		})
+		resp, err := screen.Get(url)
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer resp.Body.Close()
+		if got, err := io.ReadAll(resp.Body); err != nil || !bytes.Equal(got, bytes.Repeat(chunk, 40)) {
+			t.Fatalf("steady original for twice the header limit: %d bytes, %v", len(got), err)
+		}
+	})
+	t.Run("screen pauses", func(t *testing.T) {
+		movie := bytes.Repeat(chunk, 32<<10)
+		url := relay(t, func(w http.ResponseWriter, r *http.Request) {
+			w.Header().Set("Content-Length", strconv.Itoa(len(movie)))
+			w.Write(movie)
+		})
+		resp, err := screen.Get(url)
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer resp.Body.Close()
+		head := make([]byte, len(chunk))
+		if _, err := io.ReadFull(resp.Body, head); err != nil {
+			t.Fatal(err)
+		}
+		time.Sleep(3 * idle)
+		rest, err := io.ReadAll(resp.Body)
+		if got := append(head, rest...); err != nil || !bytes.Equal(got, movie) {
+			t.Fatalf("original after the screen paused reading: %d of %d bytes, %v", len(got), len(movie), err)
+		}
+	})
+	t.Run("stalled", func(t *testing.T) {
+		var asked atomic.Int32
+		url := relay(t, func(w http.ResponseWriter, r *http.Request) {
+			if asked.Add(1) == 1 {
+				w.Header().Set("Content-Length", strconv.Itoa(10*len(chunk)))
+				w.Write(chunk)
+				w.(http.Flusher).Flush()
+			}
+			<-r.Context().Done()
+		})
+		start := time.Now()
+		resp, err := screen.Get(url)
+		if err != nil {
+			t.Fatal(err)
+		}
+		_, err = io.ReadAll(resp.Body)
+		resp.Body.Close()
+		if took := time.Since(start); err == nil || took > 5*time.Second {
+			t.Fatalf("original stalled by the owner: read ended after %v with %v, want it cut off after the idle timeout", took, err)
+		}
+		resp, err = screen.Get(url)
+		if err != nil {
+			t.Fatalf("next request while the owner is silent: %v, want 502", err)
+		}
+		resp.Body.Close()
+		if resp.StatusCode != http.StatusBadGateway {
+			t.Fatalf("next request while the owner is silent: status %d, want 502", resp.StatusCode)
+		}
+	})
 }
 
 func TestInviterFilesAreFetchedFromInviterRightAfterJoin(t *testing.T) {
