@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, userEvent } from '@testing-library/react-native';
+import { fireEvent, render, screen, userEvent, waitFor } from '@testing-library/react-native';
 import { Linking, Platform } from 'react-native';
 
 import App from '../App';
@@ -108,4 +108,87 @@ test.each(settingsHint)('a media library denied on %s explains the way through t
   expect(settings).toHaveBeenCalled();
   native.requestMediaPermissions.mockResolvedValue(true);
   jest.restoreAllMocks();
+});
+
+const format = 'Введите дату в формате ГГГГ-ММ-ДД, например 2026-07-01.';
+
+test.each([['01.07.2026'], ['2026-02-31']])('a date like %s is explained instead of a silent button', async (day) => {
+  core({ from: 0, to: 0, assets: [] });
+  const user = await openSelection();
+
+  await user.type(await screen.findByLabelText('С (ГГГГ-ММ-ДД)'), day);
+  await user.type(screen.getByLabelText('По (ГГГГ-ММ-ДД)'), '2026-07-10');
+  expect(screen.getByText(format)).toBeOnTheScreen();
+  expect(screen.getByRole('button', { name: 'Выбрать период' }).props.accessibilityState.disabled).toBe(true);
+});
+
+test('an end before the start is explained', async () => {
+  core({ from: 0, to: 0, assets: [] });
+  const user = await openSelection();
+
+  await user.type(await screen.findByLabelText('С (ГГГГ-ММ-ДД)'), '2026-07-10');
+  await user.type(screen.getByLabelText('По (ГГГГ-ММ-ДД)'), '2026-07-01');
+  expect(screen.getByText('Дата «по» должна быть не раньше даты «с».')).toBeOnTheScreen();
+  expect(screen.queryByText(format)).toBeNull();
+});
+
+test('without a period my files say what to do', async () => {
+  core({ from: 0, to: 0, assets: [] });
+  await openSelection();
+
+  expect(await screen.findByText('Выберите период, чтобы увидеть свои фото и видео.')).toBeOnTheScreen();
+});
+
+test('an empty period says so', async () => {
+  core({ from: july(1), to: july(11), assets: [] });
+  await openSelection();
+
+  expect(await screen.findByText('В этом периоде нет фото и видео.')).toBeOnTheScreen();
+  expect(screen.queryByText(/Выберите период/)).toBeNull();
+});
+
+test('choosing a period shows that the media library is being searched', async () => {
+  let answer: (r: [number]) => void = () => {};
+  const selection = { from: 0, to: 0, assets: [] };
+  fakeCore({
+    'GET /piles': [200, [georgia]],
+    'GET /piles/aa01/invite': [200, { invite: INVITE }],
+    'GET /piles/aa01/selection': () => [200, selection],
+    'PUT /piles/aa01/selection': () => new Promise((r) => (answer = r)),
+  });
+  const user = await openSelection();
+
+  await user.type(await screen.findByLabelText('С (ГГГГ-ММ-ДД)'), '2026-07-01');
+  await user.type(screen.getByLabelText('По (ГГГГ-ММ-ДД)'), '2026-07-10');
+  await user.press(screen.getByRole('button', { name: 'Выбрать период' }));
+  expect(await screen.findByText('Ищем файлы в медиатеке…')).toBeOnTheScreen();
+  answer([204]);
+  await waitFor(() => expect(screen.queryByText('Ищем файлы в медиатеке…')).toBeNull());
+});
+
+test('a file switch moves at once and moves back when the core refuses', async () => {
+  let answer: (r: [number, unknown]) => void = () => {};
+  fakeCore({
+    'GET /piles': [200, [georgia]],
+    'GET /piles/aa01/invite': [200, { invite: INVITE }],
+    'GET /piles/aa01/selection': [
+      200,
+      {
+        from: july(1),
+        to: july(11),
+        assets: [
+          { id: 'a1', local_id: '1', kind: 'photo', taken_at: july(3, 12), original_name: 'IMG_0001.HEIC', screenshot: false, hidden: false, selected: true },
+        ],
+      },
+    ],
+    'PUT /piles/aa01/selection/a1': () => new Promise((r) => (answer = r)),
+  });
+  await openSelection();
+
+  const toggle = await screen.findByLabelText('В pile: IMG_0001.HEIC');
+  await fireEvent(toggle, 'valueChange', false);
+  expect(screen.getByLabelText('В pile: IMG_0001.HEIC').props.value).toBe(false);
+  answer([507, { error: 'disk_full' }]);
+  await waitFor(() => expect(screen.getByLabelText('В pile: IMG_0001.HEIC').props.value).toBe(true));
+  expect(screen.getByText('На телефоне закончилось место. Освободите место и повторите.')).toBeOnTheScreen();
 });
