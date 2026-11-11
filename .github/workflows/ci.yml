@@ -34,6 +34,8 @@ jobs:
           go-version-file: core/go.mod
           cache-dependency-path: core/go.sum
       - run: scripts/ci-step.sh env sh -c 'sw_vers; uname -m; sysctl -n hw.ncpu; xcodebuild -version; xcrun simctl list devices available; go version; df -h .'
+      - run: scripts/ci-step.sh ios-boot make ios-boot
+      - run: scripts/ci-step.sh xcodegen env HOMEBREW_NO_AUTO_UPDATE=1 brew install xcodegen
       - run: scripts/ci-step.sh mobile-ios make mobile-ios
       - run: scripts/ci-step.sh ios-test make ios-test
       - if: always()
@@ -59,6 +61,7 @@ jobs:
           node-version: 26
           cache: npm
           cache-dependency-path: app/package-lock.json
+      - run: scripts/ci-step.sh ios-boot make ios-boot
       - run: scripts/ci-step.sh mobile-ios make mobile-ios
       - run: scripts/ci-step.sh ios-prebuild make ios-prebuild
       - run: scripts/ci-step.sh ios-build make ios-build
