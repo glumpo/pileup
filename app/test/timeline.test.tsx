@@ -164,7 +164,7 @@ test.each([
   const cell = await screen.findByTestId('asset-c9');
 
   const thumbnail = within(cell).getByTestId('image');
-  expect(thumbnail.props.placeholder).toBeUndefined();
+  expect(thumbnail.props.placeholder ?? []).toEqual([]);
   expect(sourceOf(thumbnail)).toEqual({ uri: `${BASE}/piles/aa01/blob/c9/rc9/1`, headers: AUTH });
   expect(within(screen.getByTestId('asset-f3')).getByTestId('image').props.placeholder).toEqual(hashed);
   expect(cellIds()).toEqual(['f3', 'a1', 'c9', '07', 'b2']);

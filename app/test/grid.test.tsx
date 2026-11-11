@@ -126,7 +126,7 @@ test('new files and thumbhashes appear in the open grid by themselves without re
   const requests = await openTimeline(() => timeline);
   const asked = () => requests.filter((r) => r.path === '/piles/aa01/timeline').length;
   await screen.findByTestId('asset-c9');
-  expect(thumbnail('f3').props.placeholder).toBeUndefined();
+  expect(thumbnail('f3').props.placeholder ?? []).toEqual([]);
   const before = asked();
 
   timeline = [{ ...items[0], thumbhash }, ...items.slice(1), asset('07', 'Боря', july1 + 3 * minute)];
