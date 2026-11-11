@@ -1,0 +1,566 @@
+cd app/modules/core/ios && xcodebuild test -scheme PileupNative -destination id=73903A6E-DECF-4552-ADBB-B4B1F348F51F -derivedDataPath .build/xcode
+Command line invocation:
+    /Applications/Xcode_26.6.app/Contents/Developer/usr/bin/xcodebuild test -scheme PileupNative -destination id=73903A6E-DECF-4552-ADBB-B4B1F348F51F -derivedDataPath .build/xcode
+
+Resolve Package Graph
+2026-11-11 01:33:56.273 xcodebuild[4909:21449] [MT] IDERunDestination: Supported platforms for the buildables in the current scheme is empty.
+
+
+Resolved source packages:
+  PileupNative: /Users/runner/work/pileup/pileup/app/modules/core/ios
+
+--- xcodebuild: WARNING: Using the first of multiple matching destinations:
+{ platform:iOS Simulator, arch:arm64, id:73903A6E-DECF-4552-ADBB-B4B1F348F51F, OS:26.2, name:iPhone 16e }
+{ platform:iOS Simulator, arch:x86_64, id:73903A6E-DECF-4552-ADBB-B4B1F348F51F, OS:26.2, name:iPhone 16e }
+ComputePackagePrebuildTargetDependencyGraph
+
+Prepare packages
+
+CreateBuildRequest
+
+SendProjectDescription
+
+CreateBuildOperation
+
+ComputeTargetDependencyGraph
+note: Building targets in dependency order
+note: Target dependency graph (3 targets)
+    Target 'PileupNative' in project 'PileupNative'
+        ➜ Explicit dependency on target 'PileupNative' in project 'PileupNative'
+    Target 'PileupNativeTests' in project 'PileupNative'
+        ➜ Explicit dependency on target 'PileupNative' in project 'PileupNative'
+    Target 'PileupNative' in project 'PileupNative' (no dependencies)
+
+GatherProvisioningInputs
+
+CreateBuildDescription
+
+ExecuteExternalTool /Applications/Xcode_26.6.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/swiftc --version
+
+ExecuteExternalTool /Applications/Xcode_26.6.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/clang -v -E -dM -isysroot /Applications/Xcode_26.6.app/Contents/Developer/Platforms/iPhoneSimulator.platform/Developer/SDKs/iPhoneSimulator26.5.sdk -x c -c /dev/null
+
+ExecuteExternalTool /Applications/Xcode_26.6.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/ld -version_details
+
+Build description signature: fcef3a904cca8159405b6a877ce0350f
+Build description path: /Users/runner/work/pileup/pileup/app/modules/core/ios/.build/xcode/Build/Intermediates.noindex/XCBuildData/fcef3a904cca8159405b6a877ce0350f.xcbuilddata
+ClangStatCache /Applications/Xcode_26.6.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/clang-stat-cache /Applications/Xcode_26.6.app/Contents/Developer/Platforms/iPhoneSimulator.platform/Developer/SDKs/iPhoneSimulator26.5.sdk /Users/runner/work/pileup/pileup/app/modules/core/ios/.build/xcode/SDKStatCaches.noindex/iphonesimulator26.5-23F81a-688ef53f1462e2c8f657fdc38a81448ff45c64a1807a658693f2a61704f17a36.sdkstatcache
+    cd /Users/runner/work/pileup/pileup/app/modules/core/ios/.swiftpm/xcode
+    /Applications/Xcode_26.6.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/clang-stat-cache /Applications/Xcode_26.6.app/Contents/Developer/Platforms/iPhoneSimulator.platform/Developer/SDKs/iPhoneSimulator26.5.sdk -o /Users/runner/work/pileup/pileup/app/modules/core/ios/.build/xcode/SDKStatCaches.noindex/iphonesimulator26.5-23F81a-688ef53f1462e2c8f657fdc38a81448ff45c64a1807a658693f2a61704f17a36.sdkstatcache
+
+CreateBuildDirectory /Users/runner/work/pileup/pileup/app/modules/core/ios/.build/xcode/Build/Products
+    cd /Users/runner/work/pileup/pileup/app/modules/core/ios/.swiftpm/xcode
+    builtin-create-build-directory /Users/runner/work/pileup/pileup/app/modules/core/ios/.build/xcode/Build/Products
+
+CreateBuildDirectory /Users/runner/work/pileup/pileup/app/modules/core/ios/.build/xcode/Build/Intermediates.noindex
+    cd /Users/runner/work/pileup/pileup/app/modules/core/ios/.swiftpm/xcode
+    builtin-create-build-directory /Users/runner/work/pileup/pileup/app/modules/core/ios/.build/xcode/Build/Intermediates.noindex
+
+CreateBuildDirectory /Users/runner/work/pileup/pileup/app/modules/core/ios/.build/xcode/Build/Products/Debug-iphonesimulator
+    cd /Users/runner/work/pileup/pileup/app/modules/core/ios/.swiftpm/xcode
+    builtin-create-build-directory /Users/runner/work/pileup/pileup/app/modules/core/ios/.build/xcode/Build/Products/Debug-iphonesimulator
+
+CreateBuildDirectory /Users/runner/work/pileup/pileup/app/modules/core/ios/.build/xcode/Build/Intermediates.noindex/SwiftExplicitPrecompiledModules
+    cd /Users/runner/work/pileup/pileup/app/modules/core/ios/.swiftpm/xcode
+    builtin-create-build-directory /Users/runner/work/pileup/pileup/app/modules/core/ios/.build/xcode/Build/Intermediates.noindex/SwiftExplicitPrecompiledModules
+
+CreateBuildDirectory /Users/runner/work/pileup/pileup/app/modules/core/ios/.build/xcode/Build/Intermediates.noindex/ExplicitPrecompiledModules
+    cd /Users/runner/work/pileup/pileup/app/modules/core/ios/.swiftpm/xcode
+    builtin-create-build-directory /Users/runner/work/pileup/pileup/app/modules/core/ios/.build/xcode/Build/Intermediates.noindex/ExplicitPrecompiledModules
+
+ProcessXCFramework /Users/runner/work/pileup/pileup/app/modules/core/ios/Mobile.xcframework /Users/runner/work/pileup/pileup/app/modules/core/ios/.build/xcode/Build/Products/Debug-iphonesimulator/Mobile.framework ios simulator
+    cd /Users/runner/work/pileup/pileup/app/modules/core/ios/.swiftpm/xcode
+    builtin-process-xcframework --xcframework /Users/runner/work/pileup/pileup/app/modules/core/ios/Mobile.xcframework --platform ios --environment simulator --target-path /Users/runner/work/pileup/pileup/app/modules/core/ios/.build/xcode/Build/Products/Debug-iphonesimulator
+
+CreateBuildDirectory /Users/runner/work/pileup/pileup/app/modules/core/ios/.build/xcode/Build/Products/Debug-iphonesimulator/PackageFrameworks
+    cd /Users/runner/work/pileup/pileup/app/modules/core/ios/.swiftpm/xcode
+    builtin-create-build-directory /Users/runner/work/pileup/pileup/app/modules/core/ios/.build/xcode/Build/Products/Debug-iphonesimulator/PackageFrameworks
+
+CreateBuildDirectory /Users/runner/work/pileup/pileup/app/modules/core/ios/.build/xcode/Build/Intermediates.noindex/EagerLinkingTBDs/Debug-iphonesimulator
+    cd /Users/runner/work/pileup/pileup/app/modules/core/ios/.swiftpm/xcode
+    builtin-create-build-directory /Users/runner/work/pileup/pileup/app/modules/core/ios/.build/xcode/Build/Intermediates.noindex/EagerLinkingTBDs/Debug-iphonesimulator
+
+WriteAuxiliaryFile /Users/runner/work/pileup/pileup/app/modules/core/ios/.build/xcode/Build/Intermediates.noindex/PileupNative.build/Debug-iphonesimulator/PileupNativeTests.build/PileupNativeTests.DependencyStaticMetadataFileList (in target 'PileupNativeTests' from project 'PileupNative')
+    cd /Users/runner/work/pileup/pileup/app/modules/core/ios
+    write-file /Users/runner/work/pileup/pileup/app/modules/core/ios/.build/xcode/Build/Intermediates.noindex/PileupNative.build/Debug-iphonesimulator/PileupNativeTests.build/PileupNativeTests.DependencyStaticMetadataFileList
+
+WriteAuxiliaryFile /Users/runner/work/pileup/pileup/app/modules/core/ios/.build/xcode/Build/Intermediates.noindex/PileupNative.build/Debug-iphonesimulator/PileupNativeTests.build/empty-PileupNativeTests.plist (in target 'PileupNativeTests' from project 'PileupNative')
+    cd /Users/runner/work/pileup/pileup/app/modules/core/ios
+    write-file /Users/runner/work/pileup/pileup/app/modules/core/ios/.build/xcode/Build/Intermediates.noindex/PileupNative.build/Debug-iphonesimulator/PileupNativeTests.build/empty-PileupNativeTests.plist
+
+WriteAuxiliaryFile /Users/runner/work/pileup/pileup/app/modules/core/ios/.build/xcode/Build/Intermediates.noindex/PileupNative.build/Debug-iphonesimulator/PileupNativeTests.build/PileupNativeTests.DependencyMetadataFileList (in target 'PileupNativeTests' from project 'PileupNative')
+    cd /Users/runner/work/pileup/pileup/app/modules/core/ios
+    write-file /Users/runner/work/pileup/pileup/app/modules/core/ios/.build/xcode/Build/Intermediates.noindex/PileupNative.build/Debug-iphonesimulator/PileupNativeTests.build/PileupNativeTests.DependencyMetadataFileList
+
+WriteAuxiliaryFile /Users/runner/work/pileup/pileup/app/modules/core/ios/.build/xcode/Build/Intermediates.noindex/PileupNative.build/Debug-iphonesimulator/PileupNativeTests.build/Objects-normal/arm64/PileupNativeTests_const_extract_protocols.json (in target 'PileupNativeTests' from project 'PileupNative')
+    cd /Users/runner/work/pileup/pileup/app/modules/core/ios
+    write-file /Users/runner/work/pileup/pileup/app/modules/core/ios/.build/xcode/Build/Intermediates.noindex/PileupNative.build/Debug-iphonesimulator/PileupNativeTests.build/Objects-normal/arm64/PileupNativeTests_const_extract_protocols.json
+
+WriteAuxiliaryFile /Users/runner/work/pileup/pileup/app/modules/core/ios/.build/xcode/Build/Intermediates.noindex/PileupNative.build/Debug-iphonesimulator/PileupNativeTests.build/Objects-normal/arm64/PileupNativeTests.SwiftFileList (in target 'PileupNativeTests' from project 'PileupNative')
+    cd /Users/runner/work/pileup/pileup/app/modules/core/ios
+    write-file /Users/runner/work/pileup/pileup/app/modules/core/ios/.build/xcode/Build/Intermediates.noindex/PileupNative.build/Debug-iphonesimulator/PileupNativeTests.build/Objects-normal/arm64/PileupNativeTests.SwiftFileList
+
+WriteAuxiliaryFile /Users/runner/work/pileup/pileup/app/modules/core/ios/.build/xcode/Build/Intermediates.noindex/PileupNative.build/Debug-iphonesimulator/PileupNativeTests.build/Objects-normal/arm64/PileupNativeTests.SwiftConstValuesFileList (in target 'PileupNativeTests' from project 'PileupNative')
+    cd /Users/runner/work/pileup/pileup/app/modules/core/ios
+    write-file /Users/runner/work/pileup/pileup/app/modules/core/ios/.build/xcode/Build/Intermediates.noindex/PileupNative.build/Debug-iphonesimulator/PileupNativeTests.build/Objects-normal/arm64/PileupNativeTests.SwiftConstValuesFileList
+
+WriteAuxiliaryFile /Users/runner/work/pileup/pileup/app/modules/core/ios/.build/xcode/Build/Intermediates.noindex/PileupNative.build/Debug-iphonesimulator/PileupNativeTests.build/Objects-normal/arm64/PileupNativeTests.LinkFileList (in target 'PileupNativeTests' from project 'PileupNative')
+    cd /Users/runner/work/pileup/pileup/app/modules/core/ios
+    write-file /Users/runner/work/pileup/pileup/app/modules/core/ios/.build/xcode/Build/Intermediates.noindex/PileupNative.build/Debug-iphonesimulator/PileupNativeTests.build/Objects-normal/arm64/PileupNativeTests.LinkFileList
+
+WriteAuxiliaryFile /Users/runner/work/pileup/pileup/app/modules/core/ios/.build/xcode/Build/Intermediates.noindex/PileupNative.build/Debug-iphonesimulator/PileupNativeTests.build/Objects-normal/arm64/PileupNativeTests-OutputFileMap.json (in target 'PileupNativeTests' from project 'PileupNative')
+    cd /Users/runner/work/pileup/pileup/app/modules/core/ios
+    write-file /Users/runner/work/pileup/pileup/app/modules/core/ios/.build/xcode/Build/Intermediates.noindex/PileupNative.build/Debug-iphonesimulator/PileupNativeTests.build/Objects-normal/arm64/PileupNativeTests-OutputFileMap.json
+
+WriteAuxiliaryFile /Users/runner/work/pileup/pileup/app/modules/core/ios/.build/xcode/Build/Intermediates.noindex/PileupNative.build/Debug-iphonesimulator/PileupNative.build/PileupNative.modulemap (in target 'PileupNative' from project 'PileupNative')
+    cd /Users/runner/work/pileup/pileup/app/modules/core/ios
+    write-file /Users/runner/work/pileup/pileup/app/modules/core/ios/.build/xcode/Build/Intermediates.noindex/PileupNative.build/Debug-iphonesimulator/PileupNative.build/PileupNative.modulemap
+
+WriteAuxiliaryFile /Users/runner/work/pileup/pileup/app/modules/core/ios/.build/xcode/Build/Intermediates.noindex/PileupNative.build/Debug-iphonesimulator/PileupNative.build/PileupNative.DependencyStaticMetadataFileList (in target 'PileupNative' from project 'PileupNative')
+    cd /Users/runner/work/pileup/pileup/app/modules/core/ios
+    write-file /Users/runner/work/pileup/pileup/app/modules/core/ios/.build/xcode/Build/Intermediates.noindex/PileupNative.build/Debug-iphonesimulator/PileupNative.build/PileupNative.DependencyStaticMetadataFileList
+
+WriteAuxiliaryFile /Users/runner/work/pileup/pileup/app/modules/core/ios/.build/xcode/Build/Intermediates.noindex/PileupNative.build/Debug-iphonesimulator/PileupNative.build/PileupNative.DependencyMetadataFileList (in target 'PileupNative' from project 'PileupNative')
+    cd /Users/runner/work/pileup/pileup/app/modules/core/ios
+    write-file /Users/runner/work/pileup/pileup/app/modules/core/ios/.build/xcode/Build/Intermediates.noindex/PileupNative.build/Debug-iphonesimulator/PileupNative.build/PileupNative.DependencyMetadataFileList
+
+WriteAuxiliaryFile /Users/runner/work/pileup/pileup/app/modules/core/ios/.build/xcode/Build/Intermediates.noindex/PileupNative.build/Debug-iphonesimulator/PileupNative.build/Objects-normal/arm64/PileupNative_const_extract_protocols.json (in target 'PileupNative' from project 'PileupNative')
+    cd /Users/runner/work/pileup/pileup/app/modules/core/ios
+    write-file /Users/runner/work/pileup/pileup/app/modules/core/ios/.build/xcode/Build/Intermediates.noindex/PileupNative.build/Debug-iphonesimulator/PileupNative.build/Objects-normal/arm64/PileupNative_const_extract_protocols.json
+
+WriteAuxiliaryFile /Users/runner/work/pileup/pileup/app/modules/core/ios/.build/xcode/Build/Intermediates.noindex/PileupNative.build/Debug-iphonesimulator/PileupNative.build/Objects-normal/arm64/PileupNative.SwiftFileList (in target 'PileupNative' from project 'PileupNative')
+    cd /Users/runner/work/pileup/pileup/app/modules/core/ios
+    write-file /Users/runner/work/pileup/pileup/app/modules/core/ios/.build/xcode/Build/Intermediates.noindex/PileupNative.build/Debug-iphonesimulator/PileupNative.build/Objects-normal/arm64/PileupNative.SwiftFileList
+
+WriteAuxiliaryFile /Users/runner/work/pileup/pileup/app/modules/core/ios/.build/xcode/Build/Intermediates.noindex/PileupNative.build/Debug-iphonesimulator/PileupNative.build/Objects-normal/arm64/PileupNative.SwiftConstValuesFileList (in target 'PileupNative' from project 'PileupNative')
+    cd /Users/runner/work/pileup/pileup/app/modules/core/ios
+    write-file /Users/runner/work/pileup/pileup/app/modules/core/ios/.build/xcode/Build/Intermediates.noindex/PileupNative.build/Debug-iphonesimulator/PileupNative.build/Objects-normal/arm64/PileupNative.SwiftConstValuesFileList
+
+WriteAuxiliaryFile /Users/runner/work/pileup/pileup/app/modules/core/ios/.build/xcode/Build/Intermediates.noindex/PileupNative.build/Debug-iphonesimulator/PileupNative.build/Objects-normal/arm64/PileupNative.LinkFileList (in target 'PileupNative' from project 'PileupNative')
+    cd /Users/runner/work/pileup/pileup/app/modules/core/ios
+    write-file /Users/runner/work/pileup/pileup/app/modules/core/ios/.build/xcode/Build/Intermediates.noindex/PileupNative.build/Debug-iphonesimulator/PileupNative.build/Objects-normal/arm64/PileupNative.LinkFileList
+
+WriteAuxiliaryFile /Users/runner/work/pileup/pileup/app/modules/core/ios/.build/xcode/Build/Intermediates.noindex/PileupNative.build/Debug-iphonesimulator/PileupNative.build/Objects-normal/arm64/PileupNative-OutputFileMap.json (in target 'PileupNative' from project 'PileupNative')
+    cd /Users/runner/work/pileup/pileup/app/modules/core/ios
+    write-file /Users/runner/work/pileup/pileup/app/modules/core/ios/.build/xcode/Build/Intermediates.noindex/PileupNative.build/Debug-iphonesimulator/PileupNative.build/Objects-normal/arm64/PileupNative-OutputFileMap.json
+
+Copy /Users/runner/work/pileup/pileup/app/modules/core/ios/.build/xcode/Build/Intermediates.noindex/GeneratedModuleMaps-iphonesimulator/PileupNative.modulemap /Users/runner/work/pileup/pileup/app/modules/core/ios/.build/xcode/Build/Intermediates.noindex/PileupNative.build/Debug-iphonesimulator/PileupNative.build/PileupNative.modulemap (in target 'PileupNative' from project 'PileupNative')
+    cd /Users/runner/work/pileup/pileup/app/modules/core/ios
+    builtin-copy -exclude .DS_Store -exclude CVS -exclude .svn -exclude .git -exclude .hg -resolve-src-symlinks /Users/runner/work/pileup/pileup/app/modules/core/ios/.build/xcode/Build/Intermediates.noindex/PileupNative.build/Debug-iphonesimulator/PileupNative.build/PileupNative.modulemap /Users/runner/work/pileup/pileup/app/modules/core/ios/.build/xcode/Build/Intermediates.noindex/GeneratedModuleMaps-iphonesimulator
+
+MkDir /Users/runner/work/pileup/pileup/app/modules/core/ios/.build/xcode/Build/Products/Debug-iphonesimulator/PileupNativeTests.xctest (in target 'PileupNativeTests' from project 'PileupNative')
+    cd /Users/runner/work/pileup/pileup/app/modules/core/ios
+    /bin/mkdir -p /Users/runner/work/pileup/pileup/app/modules/core/ios/.build/xcode/Build/Products/Debug-iphonesimulator/PileupNativeTests.xctest
+
+SwiftDriver PileupNative normal arm64 com.apple.xcode.tools.swift.compiler (in target 'PileupNative' from project 'PileupNative')
+    cd /Users/runner/work/pileup/pileup/app/modules/core/ios/.swiftpm/xcode
+    builtin-SwiftDriver -- /Applications/Xcode_26.6.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/swiftc -module-name PileupNative -Onone @/Users/runner/work/pileup/pileup/app/modules/core/ios/.build/xcode/Build/Intermediates.noindex/PileupNative.build/Debug-iphonesimulator/PileupNative.build/Objects-normal/arm64/PileupNative.SwiftFileList -DSWIFT_PACKAGE -DDEBUG -DSWIFT_MODULE_RESOURCE_BUNDLE_UNAVAILABLE -DXcode -plugin-path /Applications/Xcode_26.6.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/lib/swift/host/plugins/testing -enable-experimental-feature DebugDescriptionMacro -sdk /Applications/Xcode_26.6.app/Contents/Developer/Platforms/iPhoneSimulator.platform/Developer/SDKs/iPhoneSimulator26.5.sdk -target arm64-apple-ios16.4-simulator -g -module-cache-path /Users/runner/work/pileup/pileup/app/modules/core/ios/.build/xcode/ModuleCache.noindex -Xfrontend -serialize-debugging-options -profile-coverage-mapping -profile-generate -enable-testing -index-store-path /Users/runner/work/pileup/pileup/app/modules/core/ios/.build/xcode/Index.noindex/DataStore -Xcc -D_LIBCPP_HARDENING_MODE\=_LIBCPP_HARDENING_MODE_DEBUG -swift-version 5 -I /Users/runner/work/pileup/pileup/app/modules/core/ios/.build/xcode/Build/Products/Debug-iphonesimulator -Isystem /Applications/Xcode_26.6.app/Contents/Developer/Platforms/iPhoneSimulator.platform/Developer/usr/lib -F /Users/runner/work/pileup/pileup/app/modules/core/ios/.build/xcode/Build/Products/Debug-iphonesimulator -F /Applications/Xcode_26.6.app/Contents/Developer/Platforms/iPhoneSimulator.platform/Developer/Library/Frameworks -F /Applications/Xcode_26.6.app/Contents/Developer/Platforms/iPhoneSimulator.platform/Developer/SDKs/iPhoneSimulator26.5.sdk/Developer/Library/Frameworks -c -j3 -enable-batch-mode -incremental -Xcc -ivfsstatcache -Xcc /Users/runner/work/pileup/pileup/app/modules/core/ios/.build/xcode/SDKStatCaches.noindex/iphonesimulator26.5-23F81a-688ef53f1462e2c8f657fdc38a81448ff45c64a1807a658693f2a61704f17a36.sdkstatcache -output-file-map /Users/runner/work/pileup/pileup/app/modules/core/ios/.build/xcode/Build/Intermediates.noindex/PileupNative.build/Debug-iphonesimulator/PileupNative.build/Objects-normal/arm64/PileupNative-OutputFileMap.json -use-frontend-parseable-output -save-temps -no-color-diagnostics -explicit-module-build -module-cache-path /Users/runner/work/pileup/pileup/app/modules/core/ios/.build/xcode/Build/Intermediates.noindex/SwiftExplicitPrecompiledModules -clang-scanner-module-cache-path /Users/runner/work/pileup/pileup/app/modules/core/ios/.build/xcode/ModuleCache.noindex -sdk-module-cache-path /Users/runner/work/pileup/pileup/app/modules/core/ios/.build/xcode/ModuleCache.noindex -serialize-diagnostics -emit-dependencies -emit-module -emit-module-path /Users/runner/work/pileup/pileup/app/modules/core/ios/.build/xcode/Build/Intermediates.noindex/PileupNative.build/Debug-iphonesimulator/PileupNative.build/Objects-normal/arm64/PileupNative.swiftmodule -validate-clang-modules-once -clang-build-session-file /Users/runner/work/pileup/pileup/app/modules/core/ios/.build/xcode/ModuleCache.noindex/Session.modulevalidation -package-name ios -Xcc -I/Users/runner/work/pileup/pileup/app/modules/core/ios/.build/xcode/Build/Intermediates.noindex/PileupNative.build/Debug-iphonesimulator/PileupNative.build/swift-overrides.hmap -emit-const-values -Xfrontend -const-gather-protocols-file -Xfrontend /Users/runner/work/pileup/pileup/app/modules/core/ios/.build/xcode/Build/Intermediates.noindex/PileupNative.build/Debug-iphonesimulator/PileupNative.build/Objects-normal/arm64/PileupNative_const_extract_protocols.json -Xcc -I/Users/runner/work/pileup/pileup/app/modules/core/ios/.build/xcode/Build/Products/Debug-iphonesimulator/include -Xcc -I/Users/runner/work/pileup/pileup/app/modules/core/ios/.build/xcode/Build/Intermediates.noindex/PileupNative.build/Debug-iphonesimulator/PileupNative.build/DerivedSources-normal/arm64 -Xcc -I/Users/runner/work/pileup/pileup/app/modules/core/ios/.build/xcode/Build/Intermediates.noindex/PileupNative.build/Debug-iphonesimulator/PileupNative.build/DerivedSources/arm64 -Xcc -I/Users/runner/work/pileup/pileup/app/modules/core/ios/.build/xcode/Build/Intermediates.noindex/PileupNative.build/Debug-iphonesimulator/PileupNative.build/DerivedSources -Xcc -DSWIFT_PACKAGE -Xcc -DDEBUG\=1 -emit-objc-header -emit-objc-header-path /Users/runner/work/pileup/pileup/app/modules/core/ios/.build/xcode/Build/Intermediates.noindex/PileupNative.build/Debug-iphonesimulator/PileupNative.build/Objects-normal/arm64/PileupNative-Swift.h -working-directory /Users/runner/work/pileup/pileup/app/modules/core/ios/.swiftpm/xcode -experimental-emit-module-separately -disable-cmo
+
+SwiftExplicitDependencyGeneratePcm arm64 /Users/runner/work/pileup/pileup/app/modules/core/ios/.build/xcode/ModuleCache.noindex/_Builtin_float-8V8SDETISOPX284JVFYQ38JI0.pcm
+
+SwiftExplicitDependencyGeneratePcm arm64 /Users/runner/work/pileup/pileup/app/modules/core/ios/.build/xcode/ModuleCache.noindex/ptrauth-D8MMT2V9DTW9GSSCSNEEA4WSM.pcm
+
+SwiftExplicitDependencyGeneratePcm arm64 /Users/runner/work/pileup/pileup/app/modules/core/ios/.build/xcode/ModuleCache.noindex/_Builtin_stddef-CWSA5D6ICC6MS2CW8TJLCHBHX.pcm
+
+SwiftExplicitDependencyGeneratePcm arm64 /Users/runner/work/pileup/pileup/app/modules/core/ios/.build/xcode/ModuleCache.noindex/SwiftShims-7MDDR8FZAS4V90HEKNR23YO4H.pcm
+
+SwiftExplicitDependencyGeneratePcm arm64 /Users/runner/work/pileup/pileup/app/modules/core/ios/.build/xcode/ModuleCache.noindex/ptrcheck-5F73CG0IOXTXIEK2Y32XN4PMN.pcm
+
+SwiftExplicitDependencyGeneratePcm arm64 /Users/runner/work/pileup/pileup/app/modules/core/ios/.build/xcode/ModuleCache.noindex/_Builtin_stdarg-87VRNA2GBGSHY1K9JY77GZ2FK.pcm
+
+SwiftExplicitDependencyGeneratePcm arm64 /Users/runner/work/pileup/pileup/app/modules/core/ios/.build/xcode/ModuleCache.noindex/_Builtin_stdbool-CL6H3QDW6KXWLPQNEKOPY8EB.pcm
+
+SwiftExplicitDependencyGeneratePcm arm64 /Users/runner/work/pileup/pileup/app/modules/core/ios/.build/xcode/ModuleCache.noindex/_AvailabilityInternal-AEVIO3KDLO3ZBUA6DWDIYWOS3.pcm
+
+SwiftExplicitDependencyGeneratePcm arm64 /Users/runner/work/pileup/pileup/app/modules/core/ios/.build/xcode/ModuleCache.noindex/_SwiftConcurrencyShims-12VETZI4N54JD4LJAX9163E6L.pcm
+
+SwiftExplicitDependencyGeneratePcm arm64 /Users/runner/work/pileup/pileup/app/modules/core/ios/.build/xcode/ModuleCache.noindex/_DarwinFoundation1-7J237EBIWLH01OQP8QQNWLUWF.pcm
+
+SwiftExplicitDependencyGeneratePcm arm64 /Users/runner/work/pileup/pileup/app/modules/core/ios/.build/xcode/ModuleCache.noindex/_DarwinFoundation2-EAPW270163VU2U7QLMMVY6K87.pcm
+
+SwiftExplicitDependencyGeneratePcm arm64 /Users/runner/work/pileup/pileup/app/modules/core/ios/.build/xcode/ModuleCache.noindex/_Builtin_limits-BHJ47MHP57L89WNEMLZIB5T7A.pcm
+
+SwiftExplicitDependencyGeneratePcm arm64 /Users/runner/work/pileup/pileup/app/modules/core/ios/.build/xcode/ModuleCache.noindex/sys_types-C0LHA28UBNBNZPRC04HOYBHNS.pcm
+
+SwiftExplicitDependencyGeneratePcm arm64 /Users/runner/work/pileup/pileup/app/modules/core/ios/.build/xcode/ModuleCache.noindex/_Builtin_stdint-ANUU0Y6WHXS8ZJ9AAQZPQI7XF.pcm
+
+SwiftExplicitDependencyGeneratePcm arm64 /Users/runner/work/pileup/pileup/app/modules/core/ios/.build/xcode/ModuleCache.noindex/_DarwinFoundation3-ET28RBS9NBG460X603ALKIP4E.pcm
+
+SwiftExplicitDependencyGeneratePcm arm64 /Users/runner/work/pileup/pileup/app/modules/core/ios/.build/xcode/ModuleCache.noindex/_Builtin_inttypes-CTPB97HAVQNF14XINFXX1XE07.pcm
+
+SwiftExplicitDependencyGeneratePcm arm64 /Users/runner/work/pileup/pileup/app/modules/core/ios/.build/xcode/ModuleCache.noindex/Darwin-EKA8Y9F84OP27LQ0E5XCOP3N6.pcm
+
+SwiftExplicitDependencyGeneratePcm arm64 /Users/runner/work/pileup/pileup/app/modules/core/ios/.build/xcode/ModuleCache.noindex/ObjectiveC-7UNQB15BTRIJ8HW9GBN2015OR.pcm
+
+SwiftExplicitDependencyGeneratePcm arm64 /Users/runner/work/pileup/pileup/app/modules/core/ios/.build/xcode/ModuleCache.noindex/os_object-EGJNU0RWM4O9J1YX2M9BRICTU.pcm
+
+SwiftExplicitDependencyGeneratePcm arm64 /Users/runner/work/pileup/pileup/app/modules/core/ios/.build/xcode/ModuleCache.noindex/os_workgroup-4YOYM73YIWC6OOGYGHH93L46K.pcm
+
+SwiftExplicitDependencyGeneratePcm arm64 /Users/runner/work/pileup/pileup/app/modules/core/ios/.build/xcode/ModuleCache.noindex/Dispatch-8HXIE8EKOZCUSKG7Q9E8K9KEL.pcm
+
+SwiftExplicitDependencyGeneratePcm arm64 /Users/runner/work/pileup/pileup/app/modules/core/ios/.build/xcode/ModuleCache.noindex/XPC-DFABOT92MRG8CVN2BJOHNBEN6.pcm
+
+SwiftExplicitDependencyGeneratePcm arm64 /Users/runner/work/pileup/pileup/app/modules/core/ios/.build/xcode/ModuleCache.noindex/CoreFoundation-91GSXZBK6OX0JNB2ZNUDYYVD1.pcm
+
+SwiftExplicitDependencyGeneratePcm arm64 /Users/runner/work/pileup/pileup/app/modules/core/ios/.build/xcode/ModuleCache.noindex/Security-6VBFNTLBX5GKXXHSGXCR8RHF3.pcm
+
+SwiftExplicitDependencyGeneratePcm arm64 /Users/runner/work/pileup/pileup/app/modules/core/ios/.build/xcode/ModuleCache.noindex/CFNetwork-3L1ZCDDAO9J55ZR6D9E9S9I3J.pcm
+
+SwiftExplicitDependencyGeneratePcm arm64 /Users/runner/work/pileup/pileup/app/modules/core/ios/.build/xcode/ModuleCache.noindex/Foundation-5XRJ5GYKRMV06PO253NOY3QVR.pcm
+
+SwiftExplicitDependencyGeneratePcm arm64 /Users/runner/work/pileup/pileup/app/modules/core/ios/.build/xcode/Build/Intermediates.noindex/SwiftExplicitPrecompiledModules/Mobile-1LZ2V000CSN2PJ7HT9REAWLFJ.pcm
+
+SwiftEmitModule normal arm64 Emitting\ module\ for\ PileupNative (in target 'PileupNative' from project 'PileupNative')
+
+EmitSwiftModule normal arm64 (in target 'PileupNative' from project 'PileupNative')
+    cd /Users/runner/work/pileup/pileup/app/modules/core/ios/.swiftpm/xcode
+    
+
+SwiftCompile normal arm64 Compiling\ KeychainKeystore.swift,\ MediaLibrary.swift /Users/runner/work/pileup/pileup/app/modules/core/ios/Native/KeychainKeystore.swift /Users/runner/work/pileup/pileup/app/modules/core/ios/Native/MediaLibrary.swift (in target 'PileupNative' from project 'PileupNative')
+SwiftCompile normal arm64 /Users/runner/work/pileup/pileup/app/modules/core/ios/Native/KeychainKeystore.swift (in target 'PileupNative' from project 'PileupNative')
+    cd /Users/runner/work/pileup/pileup/app/modules/core/ios/.swiftpm/xcode
+    
+
+SwiftCompile normal arm64 /Users/runner/work/pileup/pileup/app/modules/core/ios/Native/MediaLibrary.swift (in target 'PileupNative' from project 'PileupNative')
+    cd /Users/runner/work/pileup/pileup/app/modules/core/ios/.swiftpm/xcode
+    
+
+SwiftCompile normal arm64 Compiling\ Core.swift,\ Discovery.swift /Users/runner/work/pileup/pileup/app/modules/core/ios/Native/Core.swift /Users/runner/work/pileup/pileup/app/modules/core/ios/Native/Discovery.swift (in target 'PileupNative' from project 'PileupNative')
+
+SwiftCompile normal arm64 /Users/runner/work/pileup/pileup/app/modules/core/ios/Native/Core.swift (in target 'PileupNative' from project 'PileupNative')
+    cd /Users/runner/work/pileup/pileup/app/modules/core/ios/.swiftpm/xcode
+    
+
+SwiftCompile normal arm64 /Users/runner/work/pileup/pileup/app/modules/core/ios/Native/Discovery.swift (in target 'PileupNative' from project 'PileupNative')
+    cd /Users/runner/work/pileup/pileup/app/modules/core/ios/.swiftpm/xcode
+    
+
+SwiftCompile normal arm64 Compiling\ NetworkAddresses.swift,\ Renditions.swift /Users/runner/work/pileup/pileup/app/modules/core/ios/Native/NetworkAddresses.swift /Users/runner/work/pileup/pileup/app/modules/core/ios/Native/Renditions.swift (in target 'PileupNative' from project 'PileupNative')
+SwiftCompile normal arm64 /Users/runner/work/pileup/pileup/app/modules/core/ios/Native/NetworkAddresses.swift (in target 'PileupNative' from project 'PileupNative')
+    cd /Users/runner/work/pileup/pileup/app/modules/core/ios/.swiftpm/xcode
+    
+
+SwiftCompile normal arm64 /Users/runner/work/pileup/pileup/app/modules/core/ios/Native/Renditions.swift (in target 'PileupNative' from project 'PileupNative')
+    cd /Users/runner/work/pileup/pileup/app/modules/core/ios/.swiftpm/xcode
+    
+
+SwiftDriverJobDiscovery normal arm64 Emitting module for PileupNative (in target 'PileupNative' from project 'PileupNative')
+
+SwiftDriver\ Compilation\ Requirements PileupNative normal arm64 com.apple.xcode.tools.swift.compiler (in target 'PileupNative' from project 'PileupNative')
+    cd /Users/runner/work/pileup/pileup/app/modules/core/ios/.swiftpm/xcode
+    builtin-Swift-Compilation-Requirements -- /Applications/Xcode_26.6.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/swiftc -module-name PileupNative -Onone @/Users/runner/work/pileup/pileup/app/modules/core/ios/.build/xcode/Build/Intermediates.noindex/PileupNative.build/Debug-iphonesimulator/PileupNative.build/Objects-normal/arm64/PileupNative.SwiftFileList -DSWIFT_PACKAGE -DDEBUG -DSWIFT_MODULE_RESOURCE_BUNDLE_UNAVAILABLE -DXcode -plugin-path /Applications/Xcode_26.6.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/lib/swift/host/plugins/testing -enable-experimental-feature DebugDescriptionMacro -sdk /Applications/Xcode_26.6.app/Contents/Developer/Platforms/iPhoneSimulator.platform/Developer/SDKs/iPhoneSimulator26.5.sdk -target arm64-apple-ios16.4-simulator -g -module-cache-path /Users/runner/work/pileup/pileup/app/modules/core/ios/.build/xcode/ModuleCache.noindex -Xfrontend -serialize-debugging-options -profile-coverage-mapping -profile-generate -enable-testing -index-store-path /Users/runner/work/pileup/pileup/app/modules/core/ios/.build/xcode/Index.noindex/DataStore -Xcc -D_LIBCPP_HARDENING_MODE\=_LIBCPP_HARDENING_MODE_DEBUG -swift-version 5 -I /Users/runner/work/pileup/pileup/app/modules/core/ios/.build/xcode/Build/Products/Debug-iphonesimulator -Isystem /Applications/Xcode_26.6.app/Contents/Developer/Platforms/iPhoneSimulator.platform/Developer/usr/lib -F /Users/runner/work/pileup/pileup/app/modules/core/ios/.build/xcode/Build/Products/Debug-iphonesimulator -F /Applications/Xcode_26.6.app/Contents/Developer/Platforms/iPhoneSimulator.platform/Developer/Library/Frameworks -F /Applications/Xcode_26.6.app/Contents/Developer/Platforms/iPhoneSimulator.platform/Developer/SDKs/iPhoneSimulator26.5.sdk/Developer/Library/Frameworks -c -j3 -enable-batch-mode -incremental -Xcc -ivfsstatcache -Xcc /Users/runner/work/pileup/pileup/app/modules/core/ios/.build/xcode/SDKStatCaches.noindex/iphonesimulator26.5-23F81a-688ef53f1462e2c8f657fdc38a81448ff45c64a1807a658693f2a61704f17a36.sdkstatcache -output-file-map /Users/runner/work/pileup/pileup/app/modules/core/ios/.build/xcode/Build/Intermediates.noindex/PileupNative.build/Debug-iphonesimulator/PileupNative.build/Objects-normal/arm64/PileupNative-OutputFileMap.json -use-frontend-parseable-output -save-temps -no-color-diagnostics -explicit-module-build -module-cache-path /Users/runner/work/pileup/pileup/app/modules/core/ios/.build/xcode/Build/Intermediates.noindex/SwiftExplicitPrecompiledModules -clang-scanner-module-cache-path /Users/runner/work/pileup/pileup/app/modules/core/ios/.build/xcode/ModuleCache.noindex -sdk-module-cache-path /Users/runner/work/pileup/pileup/app/modules/core/ios/.build/xcode/ModuleCache.noindex -serialize-diagnostics -emit-dependencies -emit-module -emit-module-path /Users/runner/work/pileup/pileup/app/modules/core/ios/.build/xcode/Build/Intermediates.noindex/PileupNative.build/Debug-iphonesimulator/PileupNative.build/Objects-normal/arm64/PileupNative.swiftmodule -validate-clang-modules-once -clang-build-session-file /Users/runner/work/pileup/pileup/app/modules/core/ios/.build/xcode/ModuleCache.noindex/Session.modulevalidation -package-name ios -Xcc -I/Users/runner/work/pileup/pileup/app/modules/core/ios/.build/xcode/Build/Intermediates.noindex/PileupNative.build/Debug-iphonesimulator/PileupNative.build/swift-overrides.hmap -emit-const-values -Xfrontend -const-gather-protocols-file -Xfrontend /Users/runner/work/pileup/pileup/app/modules/core/ios/.build/xcode/Build/Intermediates.noindex/PileupNative.build/Debug-iphonesimulator/PileupNative.build/Objects-normal/arm64/PileupNative_const_extract_protocols.json -Xcc -I/Users/runner/work/pileup/pileup/app/modules/core/ios/.build/xcode/Build/Products/Debug-iphonesimulator/include -Xcc -I/Users/runner/work/pileup/pileup/app/modules/core/ios/.build/xcode/Build/Intermediates.noindex/PileupNative.build/Debug-iphonesimulator/PileupNative.build/DerivedSources-normal/arm64 -Xcc -I/Users/runner/work/pileup/pileup/app/modules/core/ios/.build/xcode/Build/Intermediates.noindex/PileupNative.build/Debug-iphonesimulator/PileupNative.build/DerivedSources/arm64 -Xcc -I/Users/runner/work/pileup/pileup/app/modules/core/ios/.build/xcode/Build/Intermediates.noindex/PileupNative.build/Debug-iphonesimulator/PileupNative.build/DerivedSources -Xcc -DSWIFT_PACKAGE -Xcc -DDEBUG\=1 -emit-objc-header -emit-objc-header-path /Users/runner/work/pileup/pileup/app/modules/core/ios/.build/xcode/Build/Intermediates.noindex/PileupNative.build/Debug-iphonesimulator/PileupNative.build/Objects-normal/arm64/PileupNative-Swift.h -working-directory /Users/runner/work/pileup/pileup/app/modules/core/ios/.swiftpm/xcode -experimental-emit-module-separately -disable-cmo
+
+SwiftDriverJobDiscovery normal arm64 Compiling Core.swift, Discovery.swift (in target 'PileupNative' from project 'PileupNative')
+
+SwiftDriverJobDiscovery normal arm64 Compiling KeychainKeystore.swift, MediaLibrary.swift (in target 'PileupNative' from project 'PileupNative')
+
+SwiftMergeGeneratedHeaders /Users/runner/work/pileup/pileup/app/modules/core/ios/.build/xcode/Build/Intermediates.noindex/GeneratedModuleMaps-iphonesimulator/PileupNative-Swift.h /Users/runner/work/pileup/pileup/app/modules/core/ios/.build/xcode/Build/Intermediates.noindex/PileupNative.build/Debug-iphonesimulator/PileupNative.build/Objects-normal/arm64/PileupNative-Swift.h (in target 'PileupNative' from project 'PileupNative')
+    cd /Users/runner/work/pileup/pileup/app/modules/core/ios
+    builtin-swiftHeaderTool -arch arm64 /Users/runner/work/pileup/pileup/app/modules/core/ios/.build/xcode/Build/Intermediates.noindex/PileupNative.build/Debug-iphonesimulator/PileupNative.build/Objects-normal/arm64/PileupNative-Swift.h -o /Users/runner/work/pileup/pileup/app/modules/core/ios/.build/xcode/Build/Intermediates.noindex/GeneratedModuleMaps-iphonesimulator/PileupNative-Swift.h
+
+Copy /Users/runner/work/pileup/pileup/app/modules/core/ios/.build/xcode/Build/Products/Debug-iphonesimulator/PileupNative.swiftmodule/arm64-apple-ios-simulator.swiftmodule /Users/runner/work/pileup/pileup/app/modules/core/ios/.build/xcode/Build/Intermediates.noindex/PileupNative.build/Debug-iphonesimulator/PileupNative.build/Objects-normal/arm64/PileupNative.swiftmodule (in target 'PileupNative' from project 'PileupNative')
+    cd /Users/runner/work/pileup/pileup/app/modules/core/ios
+    builtin-copy -exclude .DS_Store -exclude CVS -exclude .svn -exclude .git -exclude .hg -resolve-src-symlinks -rename /Users/runner/work/pileup/pileup/app/modules/core/ios/.build/xcode/Build/Intermediates.noindex/PileupNative.build/Debug-iphonesimulator/PileupNative.build/Objects-normal/arm64/PileupNative.swiftmodule /Users/runner/work/pileup/pileup/app/modules/core/ios/.build/xcode/Build/Products/Debug-iphonesimulator/PileupNative.swiftmodule/arm64-apple-ios-simulator.swiftmodule
+
+Copy /Users/runner/work/pileup/pileup/app/modules/core/ios/.build/xcode/Build/Products/Debug-iphonesimulator/PileupNative.swiftmodule/arm64-apple-ios-simulator.swiftdoc /Users/runner/work/pileup/pileup/app/modules/core/ios/.build/xcode/Build/Intermediates.noindex/PileupNative.build/Debug-iphonesimulator/PileupNative.build/Objects-normal/arm64/PileupNative.swiftdoc (in target 'PileupNative' from project 'PileupNative')
+    cd /Users/runner/work/pileup/pileup/app/modules/core/ios
+    builtin-copy -exclude .DS_Store -exclude CVS -exclude .svn -exclude .git -exclude .hg -resolve-src-symlinks -rename /Users/runner/work/pileup/pileup/app/modules/core/ios/.build/xcode/Build/Intermediates.noindex/PileupNative.build/Debug-iphonesimulator/PileupNative.build/Objects-normal/arm64/PileupNative.swiftdoc /Users/runner/work/pileup/pileup/app/modules/core/ios/.build/xcode/Build/Products/Debug-iphonesimulator/PileupNative.swiftmodule/arm64-apple-ios-simulator.swiftdoc
+
+Copy /Users/runner/work/pileup/pileup/app/modules/core/ios/.build/xcode/Build/Products/Debug-iphonesimulator/PileupNative.swiftmodule/arm64-apple-ios-simulator.abi.json /Users/runner/work/pileup/pileup/app/modules/core/ios/.build/xcode/Build/Intermediates.noindex/PileupNative.build/Debug-iphonesimulator/PileupNative.build/Objects-normal/arm64/PileupNative.abi.json (in target 'PileupNative' from project 'PileupNative')
+    cd /Users/runner/work/pileup/pileup/app/modules/core/ios
+    builtin-copy -exclude .DS_Store -exclude CVS -exclude .svn -exclude .git -exclude .hg -resolve-src-symlinks -rename /Users/runner/work/pileup/pileup/app/modules/core/ios/.build/xcode/Build/Intermediates.noindex/PileupNative.build/Debug-iphonesimulator/PileupNative.build/Objects-normal/arm64/PileupNative.abi.json /Users/runner/work/pileup/pileup/app/modules/core/ios/.build/xcode/Build/Products/Debug-iphonesimulator/PileupNative.swiftmodule/arm64-apple-ios-simulator.abi.json
+
+Copy /Users/runner/work/pileup/pileup/app/modules/core/ios/.build/xcode/Build/Products/Debug-iphonesimulator/PileupNative.swiftmodule/Project/arm64-apple-ios-simulator.swiftsourceinfo /Users/runner/work/pileup/pileup/app/modules/core/ios/.build/xcode/Build/Intermediates.noindex/PileupNative.build/Debug-iphonesimulator/PileupNative.build/Objects-normal/arm64/PileupNative.swiftsourceinfo (in target 'PileupNative' from project 'PileupNative')
+    cd /Users/runner/work/pileup/pileup/app/modules/core/ios
+    builtin-copy -exclude .DS_Store -exclude CVS -exclude .svn -exclude .git -exclude .hg -resolve-src-symlinks -rename /Users/runner/work/pileup/pileup/app/modules/core/ios/.build/xcode/Build/Intermediates.noindex/PileupNative.build/Debug-iphonesimulator/PileupNative.build/Objects-normal/arm64/PileupNative.swiftsourceinfo /Users/runner/work/pileup/pileup/app/modules/core/ios/.build/xcode/Build/Products/Debug-iphonesimulator/PileupNative.swiftmodule/Project/arm64-apple-ios-simulator.swiftsourceinfo
+
+SwiftDriver PileupNativeTests normal arm64 com.apple.xcode.tools.swift.compiler (in target 'PileupNativeTests' from project 'PileupNative')
+    cd /Users/runner/work/pileup/pileup/app/modules/core/ios/.swiftpm/xcode
+    builtin-SwiftDriver -- /Applications/Xcode_26.6.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/swiftc -module-name PileupNativeTests -Onone @/Users/runner/work/pileup/pileup/app/modules/core/ios/.build/xcode/Build/Intermediates.noindex/PileupNative.build/Debug-iphonesimulator/PileupNativeTests.build/Objects-normal/arm64/PileupNativeTests.SwiftFileList -DSWIFT_PACKAGE -DDEBUG -DXcode -plugin-path /Applications/Xcode_26.6.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/lib/swift/host/plugins/testing -enable-experimental-feature DebugDescriptionMacro -sdk /Applications/Xcode_26.6.app/Contents/Developer/Platforms/iPhoneSimulator.platform/Developer/SDKs/iPhoneSimulator26.5.sdk -target arm64-apple-ios16.4-simulator -g -module-cache-path /Users/runner/work/pileup/pileup/app/modules/core/ios/.build/xcode/ModuleCache.noindex -Xfrontend -serialize-debugging-options -profile-coverage-mapping -profile-generate -enable-testing -index-store-path /Users/runner/work/pileup/pileup/app/modules/core/ios/.build/xcode/Index.noindex/DataStore -Xcc -D_LIBCPP_HARDENING_MODE\=_LIBCPP_HARDENING_MODE_DEBUG -swift-version 5 -I /Users/runner/work/pileup/pileup/app/modules/core/ios/.build/xcode/Build/Products/Debug-iphonesimulator -Isystem /Applications/Xcode_26.6.app/Contents/Developer/Platforms/iPhoneSimulator.platform/Developer/usr/lib -F /Users/runner/work/pileup/pileup/app/modules/core/ios/.build/xcode/Build/Products/Debug-iphonesimulator/PackageFrameworks -F /Users/runner/work/pileup/pileup/app/modules/core/ios/.build/xcode/Build/Products/Debug-iphonesimulator -F /Applications/Xcode_26.6.app/Contents/Developer/Platforms/iPhoneSimulator.platform/Developer/Library/Frameworks -F /Applications/Xcode_26.6.app/Contents/Developer/Platforms/iPhoneSimulator.platform/Developer/SDKs/iPhoneSimulator26.5.sdk/Developer/Library/Frameworks -c -j3 -enable-batch-mode -incremental -Xcc -ivfsstatcache -Xcc /Users/runner/work/pileup/pileup/app/modules/core/ios/.build/xcode/SDKStatCaches.noindex/iphonesimulator26.5-23F81a-688ef53f1462e2c8f657fdc38a81448ff45c64a1807a658693f2a61704f17a36.sdkstatcache -output-file-map /Users/runner/work/pileup/pileup/app/modules/core/ios/.build/xcode/Build/Intermediates.noindex/PileupNative.build/Debug-iphonesimulator/PileupNativeTests.build/Objects-normal/arm64/PileupNativeTests-OutputFileMap.json -use-frontend-parseable-output -save-temps -no-color-diagnostics -explicit-module-build -module-cache-path /Users/runner/work/pileup/pileup/app/modules/core/ios/.build/xcode/Build/Intermediates.noindex/SwiftExplicitPrecompiledModules -clang-scanner-module-cache-path /Users/runner/work/pileup/pileup/app/modules/core/ios/.build/xcode/ModuleCache.noindex -sdk-module-cache-path /Users/runner/work/pileup/pileup/app/modules/core/ios/.build/xcode/ModuleCache.noindex -serialize-diagnostics -emit-dependencies -emit-module -emit-module-path /Users/runner/work/pileup/pileup/app/modules/core/ios/.build/xcode/Build/Intermediates.noindex/PileupNative.build/Debug-iphonesimulator/PileupNativeTests.build/Objects-normal/arm64/PileupNativeTests.swiftmodule -validate-clang-modules-once -clang-build-session-file /Users/runner/work/pileup/pileup/app/modules/core/ios/.build/xcode/ModuleCache.noindex/Session.modulevalidation -package-name ios -emit-const-values -Xfrontend -const-gather-protocols-file -Xfrontend /Users/runner/work/pileup/pileup/app/modules/core/ios/.build/xcode/Build/Intermediates.noindex/PileupNative.build/Debug-iphonesimulator/PileupNativeTests.build/Objects-normal/arm64/PileupNativeTests_const_extract_protocols.json -Xcc -I/Users/runner/work/pileup/pileup/app/modules/core/ios/.build/xcode/Build/Products/Debug-iphonesimulator/include -Xcc -I/Users/runner/work/pileup/pileup/app/modules/core/ios/.build/xcode/Build/Intermediates.noindex/PileupNative.build/Debug-iphonesimulator/PileupNativeTests.build/DerivedSources-normal/arm64 -Xcc -I/Users/runner/work/pileup/pileup/app/modules/core/ios/.build/xcode/Build/Intermediates.noindex/PileupNative.build/Debug-iphonesimulator/PileupNativeTests.build/DerivedSources/arm64 -Xcc -I/Users/runner/work/pileup/pileup/app/modules/core/ios/.build/xcode/Build/Intermediates.noindex/PileupNative.build/Debug-iphonesimulator/PileupNativeTests.build/DerivedSources -Xcc -DSWIFT_PACKAGE -Xcc -DDEBUG\=1 -working-directory /Users/runner/work/pileup/pileup/app/modules/core/ios/.swiftpm/xcode -experimental-emit-module-separately -disable-cmo
+
+SwiftDriverJobDiscovery normal arm64 Compiling NetworkAddresses.swift, Renditions.swift (in target 'PileupNative' from project 'PileupNative')
+
+SwiftDriver\ Compilation PileupNative normal arm64 com.apple.xcode.tools.swift.compiler (in target 'PileupNative' from project 'PileupNative')
+    cd /Users/runner/work/pileup/pileup/app/modules/core/ios/.swiftpm/xcode
+    builtin-Swift-Compilation -- /Applications/Xcode_26.6.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/swiftc -module-name PileupNative -Onone @/Users/runner/work/pileup/pileup/app/modules/core/ios/.build/xcode/Build/Intermediates.noindex/PileupNative.build/Debug-iphonesimulator/PileupNative.build/Objects-normal/arm64/PileupNative.SwiftFileList -DSWIFT_PACKAGE -DDEBUG -DSWIFT_MODULE_RESOURCE_BUNDLE_UNAVAILABLE -DXcode -plugin-path /Applications/Xcode_26.6.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/lib/swift/host/plugins/testing -enable-experimental-feature DebugDescriptionMacro -sdk /Applications/Xcode_26.6.app/Contents/Developer/Platforms/iPhoneSimulator.platform/Developer/SDKs/iPhoneSimulator26.5.sdk -target arm64-apple-ios16.4-simulator -g -module-cache-path /Users/runner/work/pileup/pileup/app/modules/core/ios/.build/xcode/ModuleCache.noindex -Xfrontend -serialize-debugging-options -profile-coverage-mapping -profile-generate -enable-testing -index-store-path /Users/runner/work/pileup/pileup/app/modules/core/ios/.build/xcode/Index.noindex/DataStore -Xcc -D_LIBCPP_HARDENING_MODE\=_LIBCPP_HARDENING_MODE_DEBUG -swift-version 5 -I /Users/runner/work/pileup/pileup/app/modules/core/ios/.build/xcode/Build/Products/Debug-iphonesimulator -Isystem /Applications/Xcode_26.6.app/Contents/Developer/Platforms/iPhoneSimulator.platform/Developer/usr/lib -F /Users/runner/work/pileup/pileup/app/modules/core/ios/.build/xcode/Build/Products/Debug-iphonesimulator -F /Applications/Xcode_26.6.app/Contents/Developer/Platforms/iPhoneSimulator.platform/Developer/Library/Frameworks -F /Applications/Xcode_26.6.app/Contents/Developer/Platforms/iPhoneSimulator.platform/Developer/SDKs/iPhoneSimulator26.5.sdk/Developer/Library/Frameworks -c -j3 -enable-batch-mode -incremental -Xcc -ivfsstatcache -Xcc /Users/runner/work/pileup/pileup/app/modules/core/ios/.build/xcode/SDKStatCaches.noindex/iphonesimulator26.5-23F81a-688ef53f1462e2c8f657fdc38a81448ff45c64a1807a658693f2a61704f17a36.sdkstatcache -output-file-map /Users/runner/work/pileup/pileup/app/modules/core/ios/.build/xcode/Build/Intermediates.noindex/PileupNative.build/Debug-iphonesimulator/PileupNative.build/Objects-normal/arm64/PileupNative-OutputFileMap.json -use-frontend-parseable-output -save-temps -no-color-diagnostics -explicit-module-build -module-cache-path /Users/runner/work/pileup/pileup/app/modules/core/ios/.build/xcode/Build/Intermediates.noindex/SwiftExplicitPrecompiledModules -clang-scanner-module-cache-path /Users/runner/work/pileup/pileup/app/modules/core/ios/.build/xcode/ModuleCache.noindex -sdk-module-cache-path /Users/runner/work/pileup/pileup/app/modules/core/ios/.build/xcode/ModuleCache.noindex -serialize-diagnostics -emit-dependencies -emit-module -emit-module-path /Users/runner/work/pileup/pileup/app/modules/core/ios/.build/xcode/Build/Intermediates.noindex/PileupNative.build/Debug-iphonesimulator/PileupNative.build/Objects-normal/arm64/PileupNative.swiftmodule -validate-clang-modules-once -clang-build-session-file /Users/runner/work/pileup/pileup/app/modules/core/ios/.build/xcode/ModuleCache.noindex/Session.modulevalidation -package-name ios -Xcc -I/Users/runner/work/pileup/pileup/app/modules/core/ios/.build/xcode/Build/Intermediates.noindex/PileupNative.build/Debug-iphonesimulator/PileupNative.build/swift-overrides.hmap -emit-const-values -Xfrontend -const-gather-protocols-file -Xfrontend /Users/runner/work/pileup/pileup/app/modules/core/ios/.build/xcode/Build/Intermediates.noindex/PileupNative.build/Debug-iphonesimulator/PileupNative.build/Objects-normal/arm64/PileupNative_const_extract_protocols.json -Xcc -I/Users/runner/work/pileup/pileup/app/modules/core/ios/.build/xcode/Build/Products/Debug-iphonesimulator/include -Xcc -I/Users/runner/work/pileup/pileup/app/modules/core/ios/.build/xcode/Build/Intermediates.noindex/PileupNative.build/Debug-iphonesimulator/PileupNative.build/DerivedSources-normal/arm64 -Xcc -I/Users/runner/work/pileup/pileup/app/modules/core/ios/.build/xcode/Build/Intermediates.noindex/PileupNative.build/Debug-iphonesimulator/PileupNative.build/DerivedSources/arm64 -Xcc -I/Users/runner/work/pileup/pileup/app/modules/core/ios/.build/xcode/Build/Intermediates.noindex/PileupNative.build/Debug-iphonesimulator/PileupNative.build/DerivedSources -Xcc -DSWIFT_PACKAGE -Xcc -DDEBUG\=1 -emit-objc-header -emit-objc-header-path /Users/runner/work/pileup/pileup/app/modules/core/ios/.build/xcode/Build/Intermediates.noindex/PileupNative.build/Debug-iphonesimulator/PileupNative.build/Objects-normal/arm64/PileupNative-Swift.h -working-directory /Users/runner/work/pileup/pileup/app/modules/core/ios/.swiftpm/xcode -experimental-emit-module-separately -disable-cmo
+
+Ld /Users/runner/work/pileup/pileup/app/modules/core/ios/.build/xcode/Build/Products/Debug-iphonesimulator/PileupNative.o normal (in target 'PileupNative' from project 'PileupNative')
+    cd /Users/runner/work/pileup/pileup/app/modules/core/ios
+    /Applications/Xcode_26.6.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/clang -Xlinker -reproducible -target arm64-apple-ios16.4-simulator -r -isysroot /Applications/Xcode_26.6.app/Contents/Developer/Platforms/iPhoneSimulator.platform/Developer/SDKs/iPhoneSimulator26.5.sdk -O0 -F/Users/runner/work/pileup/pileup/app/modules/core/ios/.build/xcode/Build/Intermediates.noindex/EagerLinkingTBDs/Debug-iphonesimulator -F/Users/runner/work/pileup/pileup/app/modules/core/ios/.build/xcode/Build/Products/Debug-iphonesimulator -iframework /Applications/Xcode_26.6.app/Contents/Developer/Platforms/iPhoneSimulator.platform/Developer/Library/Frameworks -iframework /Applications/Xcode_26.6.app/Contents/Developer/Platforms/iPhoneSimulator.platform/Developer/SDKs/iPhoneSimulator26.5.sdk/Developer/Library/Frameworks -filelist /Users/runner/work/pileup/pileup/app/modules/core/ios/.build/xcode/Build/Intermediates.noindex/PileupNative.build/Debug-iphonesimulator/PileupNative.build/Objects-normal/arm64/PileupNative.LinkFileList -nostdlib -Xlinker -object_path_lto -Xlinker /Users/runner/work/pileup/pileup/app/modules/core/ios/.build/xcode/Build/Intermediates.noindex/PileupNative.build/Debug-iphonesimulator/PileupNative.build/Objects-normal/arm64/PileupNative_lto.o -Xlinker -no_deduplicate -Xlinker -objc_abi_version -Xlinker 2 -Xlinker -debug_variant -Xlinker -dependency_info -Xlinker /Users/runner/work/pileup/pileup/app/modules/core/ios/.build/xcode/Build/Intermediates.noindex/PileupNative.build/Debug-iphonesimulator/PileupNative.build/Objects-normal/arm64/PileupNative_dependency_info.dat -fobjc-link-runtime -L/Applications/Xcode_26.6.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/lib/swift/iphonesimulator -L/usr/lib/swift -Xlinker -add_ast_path -Xlinker /Users/runner/work/pileup/pileup/app/modules/core/ios/.build/xcode/Build/Intermediates.noindex/PileupNative.build/Debug-iphonesimulator/PileupNative.build/Objects-normal/arm64/PileupNative.swiftmodule @/Users/runner/work/pileup/pileup/app/modules/core/ios/.build/xcode/Build/Intermediates.noindex/PileupNative.build/Debug-iphonesimulator/PileupNative.build/Objects-normal/arm64/PileupNative-linker-args.resp -o /Users/runner/work/pileup/pileup/app/modules/core/ios/.build/xcode/Build/Products/Debug-iphonesimulator/PileupNative.o
+
+ExtractAppIntentsMetadata (in target 'PileupNative' from project 'PileupNative')
+    cd /Users/runner/work/pileup/pileup/app/modules/core/ios
+    /Applications/Xcode_26.6.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/appintentsmetadataprocessor --toolchain-dir /var/run/com.apple.security.cryptexd/mnt/com.apple.MobileAsset.MetalToolchain-v17.6.109.0.zNf4HT/Metal.xctoolchain --module-name PileupNative --sdk-root /Applications/Xcode_26.6.app/Contents/Developer/Platforms/iPhoneSimulator.platform/Developer/SDKs/iPhoneSimulator26.5.sdk --xcode-version 17F113 --platform-family iOS --deployment-target 16.4 --bundle-identifier ios.PileupNative --output /Users/runner/work/pileup/pileup/app/modules/core/ios/.build/xcode/Build/Products/Debug-iphonesimulator/PileupNative.appintents --target-triple arm64-apple-ios16.4-simulator --binary-file /Users/runner/work/pileup/pileup/app/modules/core/ios/.build/xcode/Build/Products/Debug-iphonesimulator/PileupNative.o --dependency-file /Users/runner/work/pileup/pileup/app/modules/core/ios/.build/xcode/Build/Intermediates.noindex/PileupNative.build/Debug-iphonesimulator/PileupNative.build/Objects-normal/arm64/PileupNative_dependency_info.dat --stringsdata-file /Users/runner/work/pileup/pileup/app/modules/core/ios/.build/xcode/Build/Intermediates.noindex/PileupNative.build/Debug-iphonesimulator/PileupNative.build/Objects-normal/arm64/ExtractedAppShortcutsMetadata.stringsdata --source-file-list /Users/runner/work/pileup/pileup/app/modules/core/ios/.build/xcode/Build/Intermediates.noindex/PileupNative.build/Debug-iphonesimulator/PileupNative.build/Objects-normal/arm64/PileupNative.SwiftFileList --metadata-file-list /Users/runner/work/pileup/pileup/app/modules/core/ios/.build/xcode/Build/Intermediates.noindex/PileupNative.build/Debug-iphonesimulator/PileupNative.build/PileupNative.DependencyMetadataFileList --static-metadata-file-list /Users/runner/work/pileup/pileup/app/modules/core/ios/.build/xcode/Build/Intermediates.noindex/PileupNative.build/Debug-iphonesimulator/PileupNative.build/PileupNative.DependencyStaticMetadataFileList --swift-const-vals-list /Users/runner/work/pileup/pileup/app/modules/core/ios/.build/xcode/Build/Intermediates.noindex/PileupNative.build/Debug-iphonesimulator/PileupNative.build/Objects-normal/arm64/PileupNative.SwiftConstValuesFileList --force --compile-time-extraction --deployment-aware-processing --validate-assistant-intents --no-app-shortcuts-localization
+2026-11-11 01:34:07.802 appintentsmetadataprocessor[5178:22375] Starting appintentsmetadataprocessor export
+2026-11-11 01:34:07.875 appintentsmetadataprocessor[5178:22375] Extracted no relevant App Intents symbols, skipping writing output
+
+RegisterExecutionPolicyException /Users/runner/work/pileup/pileup/app/modules/core/ios/.build/xcode/Build/Products/Debug-iphonesimulator/PileupNative.o (in target 'PileupNative' from project 'PileupNative')
+    cd /Users/runner/work/pileup/pileup/app/modules/core/ios
+    builtin-RegisterExecutionPolicyException /Users/runner/work/pileup/pileup/app/modules/core/ios/.build/xcode/Build/Products/Debug-iphonesimulator/PileupNative.o
+
+ProcessInfoPlistFile /Users/runner/work/pileup/pileup/app/modules/core/ios/.build/xcode/Build/Products/Debug-iphonesimulator/PileupNativeTests.xctest/Info.plist /Users/runner/work/pileup/pileup/app/modules/core/ios/.build/xcode/Build/Intermediates.noindex/PileupNative.build/Debug-iphonesimulator/PileupNativeTests.build/empty-PileupNativeTests.plist (in target 'PileupNativeTests' from project 'PileupNative')
+    cd /Users/runner/work/pileup/pileup/app/modules/core/ios
+    builtin-infoPlistUtility /Users/runner/work/pileup/pileup/app/modules/core/ios/.build/xcode/Build/Intermediates.noindex/PileupNative.build/Debug-iphonesimulator/PileupNativeTests.build/empty-PileupNativeTests.plist -producttype com.apple.product-type.bundle.unit-test -expandbuildsettings -format binary -platform iphonesimulator -o /Users/runner/work/pileup/pileup/app/modules/core/ios/.build/xcode/Build/Products/Debug-iphonesimulator/PileupNativeTests.xctest/Info.plist
+
+SwiftExplicitDependencyGeneratePcm arm64 /Users/runner/work/pileup/pileup/app/modules/core/ios/.build/xcode/ModuleCache.noindex/DataDetection-EINYL70TLH53F1V5LQ3X78NSO.pcm
+
+SwiftExplicitDependencyGeneratePcm arm64 /Users/runner/work/pileup/pileup/app/modules/core/ios/.build/xcode/ModuleCache.noindex/Symbols-9ZXNJIW5T5USEXHO02AEH6ZIG.pcm
+
+SwiftExplicitDependencyGeneratePcm arm64 /Users/runner/work/pileup/pileup/app/modules/core/ios/.build/xcode/ModuleCache.noindex/_Builtin_stdatomic-9NYGL4VV1BBONPD5PVNZK3CS2.pcm
+
+SwiftExplicitDependencyGeneratePcm arm64 /Users/runner/work/pileup/pileup/app/modules/core/ios/.build/xcode/ModuleCache.noindex/CoreGraphics-978NOK2UH90ACJXWL8SLCY7EU.pcm
+
+SwiftExplicitDependencyGeneratePcm arm64 /Users/runner/work/pileup/pileup/app/modules/core/ios/.build/xcode/ModuleCache.noindex/UniformTypeIdentifiers-4NWM1WY6RO3MGH2OZQ9NYQIR0.pcm
+
+SwiftExplicitDependencyGeneratePcm arm64 /Users/runner/work/pileup/pileup/app/modules/core/ios/.build/xcode/ModuleCache.noindex/CoreTransferable-84EU19TE1SS1MWAB7YLG6WPRS.pcm
+
+SwiftExplicitDependencyGeneratePcm arm64 /Users/runner/work/pileup/pileup/app/modules/core/ios/.build/xcode/ModuleCache.noindex/DeveloperToolsSupport-8U639QRPQNI9Z0LRZIDP7L1SP.pcm
+
+SwiftExplicitDependencyGeneratePcm arm64 /Users/runner/work/pileup/pileup/app/modules/core/ios/.build/xcode/ModuleCache.noindex/_Builtin_tgmath-6AIXQ9KLZ42ZS9FU7PD30VOGT.pcm
+
+SwiftExplicitDependencyGeneratePcm arm64 /Users/runner/work/pileup/pileup/app/modules/core/ios/.build/xcode/ModuleCache.noindex/UIUtilities-DRBMRELOPYYOLUBZS6JW5BEUE.pcm
+
+SwiftExplicitDependencyGeneratePcm arm64 /Users/runner/work/pileup/pileup/app/modules/core/ios/.build/xcode/ModuleCache.noindex/_Builtin_intrinsics-2H0C2R5BAP22UMTKK3MQPTIIW.pcm
+
+SwiftExplicitDependencyGeneratePcm arm64 /Users/runner/work/pileup/pileup/app/modules/core/ios/.build/xcode/ModuleCache.noindex/Accessibility-CZS8XQCJPJI7QPZ1VX6T709IR.pcm
+
+SwiftExplicitDependencyGeneratePcm arm64 /Users/runner/work/pileup/pileup/app/modules/core/ios/.build/xcode/ModuleCache.noindex/CoreText-499PULPY4TS7QKZTRMESIBOFZ.pcm
+
+SwiftExplicitDependencyGeneratePcm arm64 /Users/runner/work/pileup/pileup/app/modules/core/ios/.build/xcode/ModuleCache.noindex/ImageIO-B5ZNWZSRV305X7ASNH3Y5SSWG.pcm
+
+SwiftExplicitDependencyGeneratePcm arm64 /Users/runner/work/pileup/pileup/app/modules/core/ios/.build/xcode/ModuleCache.noindex/FileProvider-AE2NFFDT3K8UTVR4FRX99BA03.pcm
+
+SwiftExplicitDependencyGeneratePcm arm64 /Users/runner/work/pileup/pileup/app/modules/core/ios/.build/xcode/ModuleCache.noindex/MachO-9DM534PKDGRF37LBJ9FF2NHFS.pcm
+
+SwiftExplicitDependencyGeneratePcm arm64 /Users/runner/work/pileup/pileup/app/modules/core/ios/.build/xcode/ModuleCache.noindex/OpenGLES-EVVIQ9AS24406HWRIA0VC4980.pcm
+
+SwiftExplicitDependencyGeneratePcm arm64 /Users/runner/work/pileup/pileup/app/modules/core/ios/.build/xcode/ModuleCache.noindex/IOSurface-6FZMPV4COJ1ASLX8KBNF4GN9K.pcm
+
+SwiftExplicitDependencyGeneratePcm arm64 /Users/runner/work/pileup/pileup/app/modules/core/ios/.build/xcode/ModuleCache.noindex/os-9JX9Q7VXTJHL6AXIT9LXJP50X.pcm
+
+SwiftExplicitDependencyGeneratePcm arm64 /Users/runner/work/pileup/pileup/app/modules/core/ios/.build/xcode/ModuleCache.noindex/simd-A6QJWVNH23XICW2JZPCE6IJ84.pcm
+
+SwiftExplicitDependencyGeneratePcm arm64 /Users/runner/work/pileup/pileup/app/modules/core/ios/.build/xcode/ModuleCache.noindex/UserNotifications-DZSW64M8M37ONJ9FV70TGJ3JH.pcm
+
+SwiftExplicitDependencyGeneratePcm arm64 /Users/runner/work/pileup/pileup/app/modules/core/ios/.build/xcode/ModuleCache.noindex/Metal-AYIUELIR5OYXFRRT7W3F88VOO.pcm
+
+SwiftExplicitDependencyGeneratePcm arm64 /Users/runner/work/pileup/pileup/app/modules/core/ios/.build/xcode/ModuleCache.noindex/OSLog-6MPDX7GOY4L2RWT9G6DPLY14C.pcm
+
+SwiftExplicitDependencyGeneratePcm arm64 /Users/runner/work/pileup/pileup/app/modules/core/ios/.build/xcode/ModuleCache.noindex/CoreVideo-D34ELATKA4NU6TCS104MG0DRG.pcm
+
+SwiftExplicitDependencyGeneratePcm arm64 /Users/runner/work/pileup/pileup/app/modules/core/ios/.build/xcode/ModuleCache.noindex/QuartzCore-3DTO36JLKOP5EQGO6MPS0XO9P.pcm
+
+SwiftExplicitDependencyGeneratePcm arm64 /Users/runner/work/pileup/pileup/app/modules/core/ios/.build/xcode/ModuleCache.noindex/CoreImage-F38A3O9YSBMCL2YOMBBKGB80J.pcm
+
+SwiftExplicitDependencyGeneratePcm arm64 /Users/runner/work/pileup/pileup/app/modules/core/ios/.build/xcode/ModuleCache.noindex/Spatial-B90FXER3148GB4FEPB3OW9IZW.pcm
+
+SwiftExplicitDependencyGeneratePcm arm64 /Users/runner/work/pileup/pileup/app/modules/core/ios/.build/xcode/ModuleCache.noindex/SwiftUICore-5PJ3ZBP3I0SEHVKERFXI86VO.pcm
+
+SwiftExplicitDependencyGeneratePcm arm64 /Users/runner/work/pileup/pileup/app/modules/core/ios/.build/xcode/ModuleCache.noindex/UIKit-64ZTV233SQF991SVXP0R3XM99.pcm
+
+SwiftExplicitDependencyGeneratePcm arm64 /Users/runner/work/pileup/pileup/app/modules/core/ios/.build/xcode/Build/Intermediates.noindex/SwiftExplicitPrecompiledModules/XCUIAutomation-VJTN2034W5GQF4CI74UM0FYD.pcm
+
+SwiftExplicitDependencyCompileModuleFromInterface arm64 /Users/runner/work/pileup/pileup/app/modules/core/ios/.build/xcode/Build/Intermediates.noindex/SwiftExplicitPrecompiledModules/XCUIAutomation-1OHPKKPB4H4IU.swiftmodule
+
+SwiftExplicitDependencyGeneratePcm arm64 /Users/runner/work/pileup/pileup/app/modules/core/ios/.build/xcode/Build/Intermediates.noindex/SwiftExplicitPrecompiledModules/XCTest-6GZ02YGFLWRXXB4SUF67W7NBA.pcm
+
+SwiftExplicitDependencyCompileModuleFromInterface arm64 /Users/runner/work/pileup/pileup/app/modules/core/ios/.build/xcode/Build/Intermediates.noindex/SwiftExplicitPrecompiledModules/XCTest-1RXZCHMT9PFJS.swiftmodule
+
+SwiftEmitModule normal arm64 Emitting\ module\ for\ PileupNativeTests (in target 'PileupNativeTests' from project 'PileupNative')
+
+EmitSwiftModule normal arm64 (in target 'PileupNativeTests' from project 'PileupNative')
+    cd /Users/runner/work/pileup/pileup/app/modules/core/ios/.swiftpm/xcode
+    
+
+SwiftCompile normal arm64 Compiling\ NetworkAddressesTests.swift /Users/runner/work/pileup/pileup/app/modules/core/ios/Tests/NetworkAddressesTests.swift (in target 'PileupNativeTests' from project 'PileupNative')
+SwiftCompile normal arm64 /Users/runner/work/pileup/pileup/app/modules/core/ios/Tests/NetworkAddressesTests.swift (in target 'PileupNativeTests' from project 'PileupNative')
+    cd /Users/runner/work/pileup/pileup/app/modules/core/ios/.swiftpm/xcode
+    
+
+SwiftCompile normal arm64 Compiling\ CoreTests.swift,\ DataDirectoryTests.swift /Users/runner/work/pileup/pileup/app/modules/core/ios/Tests/CoreTests.swift /Users/runner/work/pileup/pileup/app/modules/core/ios/Tests/DataDirectoryTests.swift (in target 'PileupNativeTests' from project 'PileupNative')
+
+SwiftCompile normal arm64 /Users/runner/work/pileup/pileup/app/modules/core/ios/Tests/CoreTests.swift (in target 'PileupNativeTests' from project 'PileupNative')
+    cd /Users/runner/work/pileup/pileup/app/modules/core/ios/.swiftpm/xcode
+    
+
+SwiftCompile normal arm64 /Users/runner/work/pileup/pileup/app/modules/core/ios/Tests/DataDirectoryTests.swift (in target 'PileupNativeTests' from project 'PileupNative')
+    cd /Users/runner/work/pileup/pileup/app/modules/core/ios/.swiftpm/xcode
+    
+
+SwiftCompile normal arm64 Compiling\ KeychainKeystoreTests.swift /Users/runner/work/pileup/pileup/app/modules/core/ios/Tests/KeychainKeystoreTests.swift (in target 'PileupNativeTests' from project 'PileupNative')
+SwiftCompile normal arm64 /Users/runner/work/pileup/pileup/app/modules/core/ios/Tests/KeychainKeystoreTests.swift (in target 'PileupNativeTests' from project 'PileupNative')
+    cd /Users/runner/work/pileup/pileup/app/modules/core/ios/.swiftpm/xcode
+    
+
+SwiftDriverJobDiscovery normal arm64 Emitting module for PileupNativeTests (in target 'PileupNativeTests' from project 'PileupNative')
+
+SwiftDriver\ Compilation\ Requirements PileupNativeTests normal arm64 com.apple.xcode.tools.swift.compiler (in target 'PileupNativeTests' from project 'PileupNative')
+    cd /Users/runner/work/pileup/pileup/app/modules/core/ios/.swiftpm/xcode
+    builtin-Swift-Compilation-Requirements -- /Applications/Xcode_26.6.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/swiftc -module-name PileupNativeTests -Onone @/Users/runner/work/pileup/pileup/app/modules/core/ios/.build/xcode/Build/Intermediates.noindex/PileupNative.build/Debug-iphonesimulator/PileupNativeTests.build/Objects-normal/arm64/PileupNativeTests.SwiftFileList -DSWIFT_PACKAGE -DDEBUG -DXcode -plugin-path /Applications/Xcode_26.6.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/lib/swift/host/plugins/testing -enable-experimental-feature DebugDescriptionMacro -sdk /Applications/Xcode_26.6.app/Contents/Developer/Platforms/iPhoneSimulator.platform/Developer/SDKs/iPhoneSimulator26.5.sdk -target arm64-apple-ios16.4-simulator -g -module-cache-path /Users/runner/work/pileup/pileup/app/modules/core/ios/.build/xcode/ModuleCache.noindex -Xfrontend -serialize-debugging-options -profile-coverage-mapping -profile-generate -enable-testing -index-store-path /Users/runner/work/pileup/pileup/app/modules/core/ios/.build/xcode/Index.noindex/DataStore -Xcc -D_LIBCPP_HARDENING_MODE\=_LIBCPP_HARDENING_MODE_DEBUG -swift-version 5 -I /Users/runner/work/pileup/pileup/app/modules/core/ios/.build/xcode/Build/Products/Debug-iphonesimulator -Isystem /Applications/Xcode_26.6.app/Contents/Developer/Platforms/iPhoneSimulator.platform/Developer/usr/lib -F /Users/runner/work/pileup/pileup/app/modules/core/ios/.build/xcode/Build/Products/Debug-iphonesimulator/PackageFrameworks -F /Users/runner/work/pileup/pileup/app/modules/core/ios/.build/xcode/Build/Products/Debug-iphonesimulator -F /Applications/Xcode_26.6.app/Contents/Developer/Platforms/iPhoneSimulator.platform/Developer/Library/Frameworks -F /Applications/Xcode_26.6.app/Contents/Developer/Platforms/iPhoneSimulator.platform/Developer/SDKs/iPhoneSimulator26.5.sdk/Developer/Library/Frameworks -c -j3 -enable-batch-mode -incremental -Xcc -ivfsstatcache -Xcc /Users/runner/work/pileup/pileup/app/modules/core/ios/.build/xcode/SDKStatCaches.noindex/iphonesimulator26.5-23F81a-688ef53f1462e2c8f657fdc38a81448ff45c64a1807a658693f2a61704f17a36.sdkstatcache -output-file-map /Users/runner/work/pileup/pileup/app/modules/core/ios/.build/xcode/Build/Intermediates.noindex/PileupNative.build/Debug-iphonesimulator/PileupNativeTests.build/Objects-normal/arm64/PileupNativeTests-OutputFileMap.json -use-frontend-parseable-output -save-temps -no-color-diagnostics -explicit-module-build -module-cache-path /Users/runner/work/pileup/pileup/app/modules/core/ios/.build/xcode/Build/Intermediates.noindex/SwiftExplicitPrecompiledModules -clang-scanner-module-cache-path /Users/runner/work/pileup/pileup/app/modules/core/ios/.build/xcode/ModuleCache.noindex -sdk-module-cache-path /Users/runner/work/pileup/pileup/app/modules/core/ios/.build/xcode/ModuleCache.noindex -serialize-diagnostics -emit-dependencies -emit-module -emit-module-path /Users/runner/work/pileup/pileup/app/modules/core/ios/.build/xcode/Build/Intermediates.noindex/PileupNative.build/Debug-iphonesimulator/PileupNativeTests.build/Objects-normal/arm64/PileupNativeTests.swiftmodule -validate-clang-modules-once -clang-build-session-file /Users/runner/work/pileup/pileup/app/modules/core/ios/.build/xcode/ModuleCache.noindex/Session.modulevalidation -package-name ios -emit-const-values -Xfrontend -const-gather-protocols-file -Xfrontend /Users/runner/work/pileup/pileup/app/modules/core/ios/.build/xcode/Build/Intermediates.noindex/PileupNative.build/Debug-iphonesimulator/PileupNativeTests.build/Objects-normal/arm64/PileupNativeTests_const_extract_protocols.json -Xcc -I/Users/runner/work/pileup/pileup/app/modules/core/ios/.build/xcode/Build/Products/Debug-iphonesimulator/include -Xcc -I/Users/runner/work/pileup/pileup/app/modules/core/ios/.build/xcode/Build/Intermediates.noindex/PileupNative.build/Debug-iphonesimulator/PileupNativeTests.build/DerivedSources-normal/arm64 -Xcc -I/Users/runner/work/pileup/pileup/app/modules/core/ios/.build/xcode/Build/Intermediates.noindex/PileupNative.build/Debug-iphonesimulator/PileupNativeTests.build/DerivedSources/arm64 -Xcc -I/Users/runner/work/pileup/pileup/app/modules/core/ios/.build/xcode/Build/Intermediates.noindex/PileupNative.build/Debug-iphonesimulator/PileupNativeTests.build/DerivedSources -Xcc -DSWIFT_PACKAGE -Xcc -DDEBUG\=1 -working-directory /Users/runner/work/pileup/pileup/app/modules/core/ios/.swiftpm/xcode -experimental-emit-module-separately -disable-cmo
+
+SwiftDriverJobDiscovery normal arm64 Compiling CoreTests.swift, DataDirectoryTests.swift (in target 'PileupNativeTests' from project 'PileupNative')
+
+SwiftDriverJobDiscovery normal arm64 Compiling NetworkAddressesTests.swift (in target 'PileupNativeTests' from project 'PileupNative')
+
+Copy /Users/runner/work/pileup/pileup/app/modules/core/ios/.build/xcode/Build/Products/Debug-iphonesimulator/PileupNativeTests.swiftmodule/arm64-apple-ios-simulator.swiftmodule /Users/runner/work/pileup/pileup/app/modules/core/ios/.build/xcode/Build/Intermediates.noindex/PileupNative.build/Debug-iphonesimulator/PileupNativeTests.build/Objects-normal/arm64/PileupNativeTests.swiftmodule (in target 'PileupNativeTests' from project 'PileupNative')
+    cd /Users/runner/work/pileup/pileup/app/modules/core/ios
+    builtin-copy -exclude .DS_Store -exclude CVS -exclude .svn -exclude .git -exclude .hg -resolve-src-symlinks -rename /Users/runner/work/pileup/pileup/app/modules/core/ios/.build/xcode/Build/Intermediates.noindex/PileupNative.build/Debug-iphonesimulator/PileupNativeTests.build/Objects-normal/arm64/PileupNativeTests.swiftmodule /Users/runner/work/pileup/pileup/app/modules/core/ios/.build/xcode/Build/Products/Debug-iphonesimulator/PileupNativeTests.swiftmodule/arm64-apple-ios-simulator.swiftmodule
+
+Copy /Users/runner/work/pileup/pileup/app/modules/core/ios/.build/xcode/Build/Products/Debug-iphonesimulator/PileupNativeTests.swiftmodule/arm64-apple-ios-simulator.swiftdoc /Users/runner/work/pileup/pileup/app/modules/core/ios/.build/xcode/Build/Intermediates.noindex/PileupNative.build/Debug-iphonesimulator/PileupNativeTests.build/Objects-normal/arm64/PileupNativeTests.swiftdoc (in target 'PileupNativeTests' from project 'PileupNative')
+    cd /Users/runner/work/pileup/pileup/app/modules/core/ios
+    builtin-copy -exclude .DS_Store -exclude CVS -exclude .svn -exclude .git -exclude .hg -resolve-src-symlinks -rename /Users/runner/work/pileup/pileup/app/modules/core/ios/.build/xcode/Build/Intermediates.noindex/PileupNative.build/Debug-iphonesimulator/PileupNativeTests.build/Objects-normal/arm64/PileupNativeTests.swiftdoc /Users/runner/work/pileup/pileup/app/modules/core/ios/.build/xcode/Build/Products/Debug-iphonesimulator/PileupNativeTests.swiftmodule/arm64-apple-ios-simulator.swiftdoc
+
+Copy /Users/runner/work/pileup/pileup/app/modules/core/ios/.build/xcode/Build/Products/Debug-iphonesimulator/PileupNativeTests.swiftmodule/arm64-apple-ios-simulator.abi.json /Users/runner/work/pileup/pileup/app/modules/core/ios/.build/xcode/Build/Intermediates.noindex/PileupNative.build/Debug-iphonesimulator/PileupNativeTests.build/Objects-normal/arm64/PileupNativeTests.abi.json (in target 'PileupNativeTests' from project 'PileupNative')
+    cd /Users/runner/work/pileup/pileup/app/modules/core/ios
+    builtin-copy -exclude .DS_Store -exclude CVS -exclude .svn -exclude .git -exclude .hg -resolve-src-symlinks -rename /Users/runner/work/pileup/pileup/app/modules/core/ios/.build/xcode/Build/Intermediates.noindex/PileupNative.build/Debug-iphonesimulator/PileupNativeTests.build/Objects-normal/arm64/PileupNativeTests.abi.json /Users/runner/work/pileup/pileup/app/modules/core/ios/.build/xcode/Build/Products/Debug-iphonesimulator/PileupNativeTests.swiftmodule/arm64-apple-ios-simulator.abi.json
+
+Copy /Users/runner/work/pileup/pileup/app/modules/core/ios/.build/xcode/Build/Products/Debug-iphonesimulator/PileupNativeTests.swiftmodule/Project/arm64-apple-ios-simulator.swiftsourceinfo /Users/runner/work/pileup/pileup/app/modules/core/ios/.build/xcode/Build/Intermediates.noindex/PileupNative.build/Debug-iphonesimulator/PileupNativeTests.build/Objects-normal/arm64/PileupNativeTests.swiftsourceinfo (in target 'PileupNativeTests' from project 'PileupNative')
+    cd /Users/runner/work/pileup/pileup/app/modules/core/ios
+    builtin-copy -exclude .DS_Store -exclude CVS -exclude .svn -exclude .git -exclude .hg -resolve-src-symlinks -rename /Users/runner/work/pileup/pileup/app/modules/core/ios/.build/xcode/Build/Intermediates.noindex/PileupNative.build/Debug-iphonesimulator/PileupNativeTests.build/Objects-normal/arm64/PileupNativeTests.swiftsourceinfo /Users/runner/work/pileup/pileup/app/modules/core/ios/.build/xcode/Build/Products/Debug-iphonesimulator/PileupNativeTests.swiftmodule/Project/arm64-apple-ios-simulator.swiftsourceinfo
+
+SwiftDriverJobDiscovery normal arm64 Compiling KeychainKeystoreTests.swift (in target 'PileupNativeTests' from project 'PileupNative')
+
+SwiftDriver\ Compilation PileupNativeTests normal arm64 com.apple.xcode.tools.swift.compiler (in target 'PileupNativeTests' from project 'PileupNative')
+    cd /Users/runner/work/pileup/pileup/app/modules/core/ios/.swiftpm/xcode
+    builtin-Swift-Compilation -- /Applications/Xcode_26.6.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/swiftc -module-name PileupNativeTests -Onone @/Users/runner/work/pileup/pileup/app/modules/core/ios/.build/xcode/Build/Intermediates.noindex/PileupNative.build/Debug-iphonesimulator/PileupNativeTests.build/Objects-normal/arm64/PileupNativeTests.SwiftFileList -DSWIFT_PACKAGE -DDEBUG -DXcode -plugin-path /Applications/Xcode_26.6.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/lib/swift/host/plugins/testing -enable-experimental-feature DebugDescriptionMacro -sdk /Applications/Xcode_26.6.app/Contents/Developer/Platforms/iPhoneSimulator.platform/Developer/SDKs/iPhoneSimulator26.5.sdk -target arm64-apple-ios16.4-simulator -g -module-cache-path /Users/runner/work/pileup/pileup/app/modules/core/ios/.build/xcode/ModuleCache.noindex -Xfrontend -serialize-debugging-options -profile-coverage-mapping -profile-generate -enable-testing -index-store-path /Users/runner/work/pileup/pileup/app/modules/core/ios/.build/xcode/Index.noindex/DataStore -Xcc -D_LIBCPP_HARDENING_MODE\=_LIBCPP_HARDENING_MODE_DEBUG -swift-version 5 -I /Users/runner/work/pileup/pileup/app/modules/core/ios/.build/xcode/Build/Products/Debug-iphonesimulator -Isystem /Applications/Xcode_26.6.app/Contents/Developer/Platforms/iPhoneSimulator.platform/Developer/usr/lib -F /Users/runner/work/pileup/pileup/app/modules/core/ios/.build/xcode/Build/Products/Debug-iphonesimulator/PackageFrameworks -F /Users/runner/work/pileup/pileup/app/modules/core/ios/.build/xcode/Build/Products/Debug-iphonesimulator -F /Applications/Xcode_26.6.app/Contents/Developer/Platforms/iPhoneSimulator.platform/Developer/Library/Frameworks -F /Applications/Xcode_26.6.app/Contents/Developer/Platforms/iPhoneSimulator.platform/Developer/SDKs/iPhoneSimulator26.5.sdk/Developer/Library/Frameworks -c -j3 -enable-batch-mode -incremental -Xcc -ivfsstatcache -Xcc /Users/runner/work/pileup/pileup/app/modules/core/ios/.build/xcode/SDKStatCaches.noindex/iphonesimulator26.5-23F81a-688ef53f1462e2c8f657fdc38a81448ff45c64a1807a658693f2a61704f17a36.sdkstatcache -output-file-map /Users/runner/work/pileup/pileup/app/modules/core/ios/.build/xcode/Build/Intermediates.noindex/PileupNative.build/Debug-iphonesimulator/PileupNativeTests.build/Objects-normal/arm64/PileupNativeTests-OutputFileMap.json -use-frontend-parseable-output -save-temps -no-color-diagnostics -explicit-module-build -module-cache-path /Users/runner/work/pileup/pileup/app/modules/core/ios/.build/xcode/Build/Intermediates.noindex/SwiftExplicitPrecompiledModules -clang-scanner-module-cache-path /Users/runner/work/pileup/pileup/app/modules/core/ios/.build/xcode/ModuleCache.noindex -sdk-module-cache-path /Users/runner/work/pileup/pileup/app/modules/core/ios/.build/xcode/ModuleCache.noindex -serialize-diagnostics -emit-dependencies -emit-module -emit-module-path /Users/runner/work/pileup/pileup/app/modules/core/ios/.build/xcode/Build/Intermediates.noindex/PileupNative.build/Debug-iphonesimulator/PileupNativeTests.build/Objects-normal/arm64/PileupNativeTests.swiftmodule -validate-clang-modules-once -clang-build-session-file /Users/runner/work/pileup/pileup/app/modules/core/ios/.build/xcode/ModuleCache.noindex/Session.modulevalidation -package-name ios -emit-const-values -Xfrontend -const-gather-protocols-file -Xfrontend /Users/runner/work/pileup/pileup/app/modules/core/ios/.build/xcode/Build/Intermediates.noindex/PileupNative.build/Debug-iphonesimulator/PileupNativeTests.build/Objects-normal/arm64/PileupNativeTests_const_extract_protocols.json -Xcc -I/Users/runner/work/pileup/pileup/app/modules/core/ios/.build/xcode/Build/Products/Debug-iphonesimulator/include -Xcc -I/Users/runner/work/pileup/pileup/app/modules/core/ios/.build/xcode/Build/Intermediates.noindex/PileupNative.build/Debug-iphonesimulator/PileupNativeTests.build/DerivedSources-normal/arm64 -Xcc -I/Users/runner/work/pileup/pileup/app/modules/core/ios/.build/xcode/Build/Intermediates.noindex/PileupNative.build/Debug-iphonesimulator/PileupNativeTests.build/DerivedSources/arm64 -Xcc -I/Users/runner/work/pileup/pileup/app/modules/core/ios/.build/xcode/Build/Intermediates.noindex/PileupNative.build/Debug-iphonesimulator/PileupNativeTests.build/DerivedSources -Xcc -DSWIFT_PACKAGE -Xcc -DDEBUG\=1 -working-directory /Users/runner/work/pileup/pileup/app/modules/core/ios/.swiftpm/xcode -experimental-emit-module-separately -disable-cmo
+
+Ld /Users/runner/work/pileup/pileup/app/modules/core/ios/.build/xcode/Build/Products/Debug-iphonesimulator/PileupNativeTests.xctest/PileupNativeTests normal (in target 'PileupNativeTests' from project 'PileupNative')
+    cd /Users/runner/work/pileup/pileup/app/modules/core/ios
+    /Applications/Xcode_26.6.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/clang -Xlinker -reproducible -target arm64-apple-ios16.4-simulator -bundle -isysroot /Applications/Xcode_26.6.app/Contents/Developer/Platforms/iPhoneSimulator.platform/Developer/SDKs/iPhoneSimulator26.5.sdk -O0 -L/Users/runner/work/pileup/pileup/app/modules/core/ios/.build/xcode/Build/Intermediates.noindex/EagerLinkingTBDs/Debug-iphonesimulator -L/Users/runner/work/pileup/pileup/app/modules/core/ios/.build/xcode/Build/Products/Debug-iphonesimulator -L/Applications/Xcode_26.6.app/Contents/Developer/Platforms/iPhoneSimulator.platform/Developer/usr/lib -F/Users/runner/work/pileup/pileup/app/modules/core/ios/.build/xcode/Build/Intermediates.noindex/EagerLinkingTBDs/Debug-iphonesimulator -F/Users/runner/work/pileup/pileup/app/modules/core/ios/.build/xcode/Build/Products/Debug-iphonesimulator/PackageFrameworks -F/Users/runner/work/pileup/pileup/app/modules/core/ios/.build/xcode/Build/Products/Debug-iphonesimulator -iframework /Applications/Xcode_26.6.app/Contents/Developer/Platforms/iPhoneSimulator.platform/Developer/Library/Frameworks -iframework /Applications/Xcode_26.6.app/Contents/Developer/Platforms/iPhoneSimulator.platform/Developer/SDKs/iPhoneSimulator26.5.sdk/Developer/Library/Frameworks -filelist /Users/runner/work/pileup/pileup/app/modules/core/ios/.build/xcode/Build/Intermediates.noindex/PileupNative.build/Debug-iphonesimulator/PileupNativeTests.build/Objects-normal/arm64/PileupNativeTests.LinkFileList -Xlinker -rpath -Xlinker /usr/lib/swift -Xlinker -rpath -Xlinker /Users/runner/work/pileup/pileup/app/modules/core/ios/.build/xcode/Build/Products/Debug-iphonesimulator/PackageFrameworks -Xlinker -rpath -Xlinker @loader_path/Frameworks -Xlinker -rpath -Xlinker @loader_path/../Frameworks -Xlinker -dead_strip -Xlinker -object_path_lto -Xlinker /Users/runner/work/pileup/pileup/app/modules/core/ios/.build/xcode/Build/Intermediates.noindex/PileupNative.build/Debug-iphonesimulator/PileupNativeTests.build/Objects-normal/arm64/PileupNativeTests_lto.o -rdynamic -Xlinker -no_deduplicate -Xlinker -objc_abi_version -Xlinker 2 -Xlinker -debug_variant -Xlinker -dependency_info -Xlinker /Users/runner/work/pileup/pileup/app/modules/core/ios/.build/xcode/Build/Intermediates.noindex/PileupNative.build/Debug-iphonesimulator/PileupNativeTests.build/Objects-normal/arm64/PileupNativeTests_dependency_info.dat -fobjc-link-runtime -fprofile-instr-generate -L/Applications/Xcode_26.6.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/lib/swift/iphonesimulator -L/usr/lib/swift -Xlinker -add_ast_path -Xlinker /Users/runner/work/pileup/pileup/app/modules/core/ios/.build/xcode/Build/Intermediates.noindex/PileupNative.build/Debug-iphonesimulator/PileupNativeTests.build/Objects-normal/arm64/PileupNativeTests.swiftmodule @/Users/runner/work/pileup/pileup/app/modules/core/ios/.build/xcode/Build/Intermediates.noindex/PileupNative.build/Debug-iphonesimulator/PileupNativeTests.build/Objects-normal/arm64/PileupNativeTests-linker-args.resp -Wl,-no_warn_duplicate_libraries -lresolv -Xlinker -needed_framework -Xlinker XCTest -framework XCTest -Xlinker -needed-lXCTestSwiftSupport -lXCTestSwiftSupport -framework Mobile -Xlinker -no_adhoc_codesign -o /Users/runner/work/pileup/pileup/app/modules/core/ios/.build/xcode/Build/Products/Debug-iphonesimulator/PileupNativeTests.xctest/PileupNativeTests -Xlinker -add_ast_path -Xlinker /Users/runner/work/pileup/pileup/app/modules/core/ios/.build/xcode/Build/Intermediates.noindex/PileupNative.build/Debug-iphonesimulator/PileupNative.build/Objects-normal/arm64/PileupNative.swiftmodule @/Users/runner/work/pileup/pileup/app/modules/core/ios/.build/xcode/Build/Intermediates.noindex/PileupNative.build/Debug-iphonesimulator/PileupNative.build/Objects-normal/arm64/PileupNative-linker-args.resp
+
+CopySwiftLibs /Users/runner/work/pileup/pileup/app/modules/core/ios/.build/xcode/Build/Products/Debug-iphonesimulator/PileupNativeTests.xctest (in target 'PileupNativeTests' from project 'PileupNative')
+    cd /Users/runner/work/pileup/pileup/app/modules/core/ios
+    builtin-swiftStdLibTool --copy --verbose --sign - --scan-executable /Users/runner/work/pileup/pileup/app/modules/core/ios/.build/xcode/Build/Products/Debug-iphonesimulator/PileupNativeTests.xctest/PileupNativeTests --scan-folder /Users/runner/work/pileup/pileup/app/modules/core/ios/.build/xcode/Build/Products/Debug-iphonesimulator/PileupNativeTests.xctest/Frameworks --scan-folder /Users/runner/work/pileup/pileup/app/modules/core/ios/.build/xcode/Build/Products/Debug-iphonesimulator/PileupNativeTests.xctest/PlugIns --scan-folder /Users/runner/work/pileup/pileup/app/modules/core/ios/.build/xcode/Build/Products/Debug-iphonesimulator/PileupNativeTests.xctest/SystemExtensions --scan-folder /Users/runner/work/pileup/pileup/app/modules/core/ios/.build/xcode/Build/Products/Debug-iphonesimulator/PileupNativeTests.xctest/Extensions --platform iphonesimulator --toolchain /var/run/com.apple.security.cryptexd/mnt/com.apple.MobileAsset.MetalToolchain-v17.6.109.0.zNf4HT/Metal.xctoolchain --toolchain /Applications/Xcode_26.6.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain --destination /Users/runner/work/pileup/pileup/app/modules/core/ios/.build/xcode/Build/Products/Debug-iphonesimulator/PileupNativeTests.xctest/Frameworks --strip-bitcode --scan-executable /Applications/Xcode_26.6.app/Contents/Developer/Platforms/iPhoneSimulator.platform/Developer/usr/lib/libXCTestSwiftSupport.dylib --strip-bitcode-tool /Applications/Xcode_26.6.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/bitcode_strip --emit-dependency-info /Users/runner/work/pileup/pileup/app/modules/core/ios/.build/xcode/Build/Intermediates.noindex/PileupNative.build/Debug-iphonesimulator/PileupNativeTests.build/SwiftStdLibToolInputDependencies.dep --filter-for-swift-os
+
+ExtractAppIntentsMetadata (in target 'PileupNativeTests' from project 'PileupNative')
+    cd /Users/runner/work/pileup/pileup/app/modules/core/ios
+    /Applications/Xcode_26.6.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/appintentsmetadataprocessor --toolchain-dir /var/run/com.apple.security.cryptexd/mnt/com.apple.MobileAsset.MetalToolchain-v17.6.109.0.zNf4HT/Metal.xctoolchain --module-name PileupNativeTests --sdk-root /Applications/Xcode_26.6.app/Contents/Developer/Platforms/iPhoneSimulator.platform/Developer/SDKs/iPhoneSimulator26.5.sdk --xcode-version 17F113 --platform-family iOS --deployment-target 16.4 --bundle-identifier ios.PileupNativeTests --output /Users/runner/work/pileup/pileup/app/modules/core/ios/.build/xcode/Build/Products/Debug-iphonesimulator/PileupNativeTests.xctest --target-triple arm64-apple-ios16.4-simulator --binary-file /Users/runner/work/pileup/pileup/app/modules/core/ios/.build/xcode/Build/Products/Debug-iphonesimulator/PileupNativeTests.xctest/PileupNativeTests --dependency-file /Users/runner/work/pileup/pileup/app/modules/core/ios/.build/xcode/Build/Intermediates.noindex/PileupNative.build/Debug-iphonesimulator/PileupNativeTests.build/Objects-normal/arm64/PileupNativeTests_dependency_info.dat --stringsdata-file /Users/runner/work/pileup/pileup/app/modules/core/ios/.build/xcode/Build/Intermediates.noindex/PileupNative.build/Debug-iphonesimulator/PileupNativeTests.build/Objects-normal/arm64/ExtractedAppShortcutsMetadata.stringsdata --source-file-list /Users/runner/work/pileup/pileup/app/modules/core/ios/.build/xcode/Build/Intermediates.noindex/PileupNative.build/Debug-iphonesimulator/PileupNativeTests.build/Objects-normal/arm64/PileupNativeTests.SwiftFileList --metadata-file-list /Users/runner/work/pileup/pileup/app/modules/core/ios/.build/xcode/Build/Intermediates.noindex/PileupNative.build/Debug-iphonesimulator/PileupNativeTests.build/PileupNativeTests.DependencyMetadataFileList --static-metadata-file-list /Users/runner/work/pileup/pileup/app/modules/core/ios/.build/xcode/Build/Intermediates.noindex/PileupNative.build/Debug-iphonesimulator/PileupNativeTests.build/PileupNativeTests.DependencyStaticMetadataFileList --swift-const-vals-list /Users/runner/work/pileup/pileup/app/modules/core/ios/.build/xcode/Build/Intermediates.noindex/PileupNative.build/Debug-iphonesimulator/PileupNativeTests.build/Objects-normal/arm64/PileupNativeTests.SwiftConstValuesFileList --compile-time-extraction --deployment-aware-processing --validate-assistant-intents --no-app-shortcuts-localization
+2026-11-11 01:34:12.351 appintentsmetadataprocessor[5316:22743] Starting appintentsmetadataprocessor export
+2026-11-11 01:34:12.354 appintentsmetadataprocessor[5316:22743] warning: Metadata extraction skipped. No AppIntents.framework dependency found.
+
+AppIntentsSSUTraining (in target 'PileupNativeTests' from project 'PileupNative')
+    cd /Users/runner/work/pileup/pileup/app/modules/core/ios
+    /Applications/Xcode_26.6.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/appintentsnltrainingprocessor --infoplist-path /Users/runner/work/pileup/pileup/app/modules/core/ios/.build/xcode/Build/Products/Debug-iphonesimulator/PileupNativeTests.xctest/Info.plist --temp-dir-path /Users/runner/work/pileup/pileup/app/modules/core/ios/.build/xcode/Build/Intermediates.noindex/PileupNative.build/Debug-iphonesimulator/PileupNativeTests.build/ssu --bundle-id ios.PileupNativeTests --product-path /Users/runner/work/pileup/pileup/app/modules/core/ios/.build/xcode/Build/Products/Debug-iphonesimulator/PileupNativeTests.xctest --extracted-metadata-path /Users/runner/work/pileup/pileup/app/modules/core/ios/.build/xcode/Build/Products/Debug-iphonesimulator/PileupNativeTests.xctest/Metadata.appintents --metadata-file-list /Users/runner/work/pileup/pileup/app/modules/core/ios/.build/xcode/Build/Intermediates.noindex/PileupNative.build/Debug-iphonesimulator/PileupNativeTests.build/PileupNativeTests.DependencyMetadataFileList --source-file /Users/runner/work/pileup/pileup/app/modules/core/ios/.build/xcode/Build/Products/Debug-iphonesimulator/PileupNativeTests.xctest/Info.plist --archive-ssu-assets
+2026-11-11 01:34:12.383 appintentsnltrainingprocessor[5317:22744] Parsing options for appintentsnltrainingprocessor
+2026-11-11 01:34:12.384 appintentsnltrainingprocessor[5317:22744] Starting AppIntents SSU YAML Generation
+2026-11-11 01:34:12.388 appintentsnltrainingprocessor[5317:22744] No AppShortcuts found - Skipping.
+
+CodeSign /Users/runner/work/pileup/pileup/app/modules/core/ios/.build/xcode/Build/Products/Debug-iphonesimulator/PileupNativeTests.xctest (in target 'PileupNativeTests' from project 'PileupNative')
+    cd /Users/runner/work/pileup/pileup/app/modules/core/ios
+    
+    Signing Identity:     "Sign to Run Locally"
+    
+    /usr/bin/codesign --force --sign - --timestamp\=none --generate-entitlement-der /Users/runner/work/pileup/pileup/app/modules/core/ios/.build/xcode/Build/Products/Debug-iphonesimulator/PileupNativeTests.xctest
+
+RegisterExecutionPolicyException /Users/runner/work/pileup/pileup/app/modules/core/ios/.build/xcode/Build/Products/Debug-iphonesimulator/PileupNativeTests.xctest (in target 'PileupNativeTests' from project 'PileupNative')
+    cd /Users/runner/work/pileup/pileup/app/modules/core/ios
+    builtin-RegisterExecutionPolicyException /Users/runner/work/pileup/pileup/app/modules/core/ios/.build/xcode/Build/Products/Debug-iphonesimulator/PileupNativeTests.xctest
+
+Touch /Users/runner/work/pileup/pileup/app/modules/core/ios/.build/xcode/Build/Products/Debug-iphonesimulator/PileupNativeTests.xctest (in target 'PileupNativeTests' from project 'PileupNative')
+    cd /Users/runner/work/pileup/pileup/app/modules/core/ios
+    /usr/bin/touch -c /Users/runner/work/pileup/pileup/app/modules/core/ios/.build/xcode/Build/Products/Debug-iphonesimulator/PileupNativeTests.xctest
+
+Test Suite 'All tests' started at 2026-11-11 01:35:04.878.
+Test Suite 'PileupNativeTests.xctest' started at 2026-11-11 01:35:04.880.
+Test Suite 'CoreTests' started at 2026-11-11 01:35:04.881.
+Test Case '-[PileupNativeTests.CoreTests testHealthAnswersOnlyWithToken]' started.
+<unknown>:0: error: -[PileupNativeTests.CoreTests testHealthAnswersOnlyWithToken] : failed: caught error: "Error Domain=NSOSStatusErrorDomain Code=-34018 "keychain error -34018" UserInfo={NSLocalizedDescription=keychain error -34018}"
+<unknown>:0: error: -[PileupNativeTests.CoreTests testHealthAnswersOnlyWithToken] : failed: caught error: "Error Domain=NSOSStatusErrorDomain Code=-34018 "keychain error -34018" UserInfo={NSLocalizedDescription=keychain error -34018}"
+Test Case '-[PileupNativeTests.CoreTests testHealthAnswersOnlyWithToken]' failed (0.078 seconds).
+Test Case '-[PileupNativeTests.CoreTests testInviteCarriesDeviceAddresses]' started.
+<unknown>:0: error: -[PileupNativeTests.CoreTests testInviteCarriesDeviceAddresses] : failed: caught error: "Error Domain=NSOSStatusErrorDomain Code=-34018 "keychain error -34018" UserInfo={NSLocalizedDescription=keychain error -34018}"
+<unknown>:0: error: -[PileupNativeTests.CoreTests testInviteCarriesDeviceAddresses] : failed: caught error: "Error Domain=NSOSStatusErrorDomain Code=-34018 "keychain error -34018" UserInfo={NSLocalizedDescription=keychain error -34018}"
+Test Case '-[PileupNativeTests.CoreTests testInviteCarriesDeviceAddresses]' failed (0.016 seconds).
+Test Case '-[PileupNativeTests.CoreTests testMemberIsAnIOSDeviceWithAppVersion]' started.
+<unknown>:0: error: -[PileupNativeTests.CoreTests testMemberIsAnIOSDeviceWithAppVersion] : failed: caught error: "Error Domain=NSOSStatusErrorDomain Code=-34018 "keychain error -34018" UserInfo={NSLocalizedDescription=keychain error -34018}"
+<unknown>:0: error: -[PileupNativeTests.CoreTests testMemberIsAnIOSDeviceWithAppVersion] : failed: caught error: "Error Domain=NSOSStatusErrorDomain Code=-34018 "keychain error -34018" UserInfo={NSLocalizedDescription=keychain error -34018}"
+Test Case '-[PileupNativeTests.CoreTests testMemberIsAnIOSDeviceWithAppVersion]' failed (0.428 seconds).
+Test Case '-[PileupNativeTests.CoreTests testStopClosesPortAndRestartKeepsDeviceAndPiles]' started.
+<unknown>:0: error: -[PileupNativeTests.CoreTests testStopClosesPortAndRestartKeepsDeviceAndPiles] : failed: caught error: "Error Domain=NSOSStatusErrorDomain Code=-34018 "keychain error -34018" UserInfo={NSLocalizedDescription=keychain error -34018}"
+<unknown>:0: error: -[PileupNativeTests.CoreTests testStopClosesPortAndRestartKeepsDeviceAndPiles] : failed: caught error: "Error Domain=NSOSStatusErrorDomain Code=-34018 "keychain error -34018" UserInfo={NSLocalizedDescription=keychain error -34018}"
+Test Case '-[PileupNativeTests.CoreTests testStopClosesPortAndRestartKeepsDeviceAndPiles]' failed (1.586 seconds).
+Test Suite 'CoreTests' failed at 2026-11-11 01:35:06.991.
+	 Executed 4 tests, with 8 failures (8 unexpected) in 2.108 (2.111) seconds
+Test Suite 'DataDirectoryTests' started at 2026-11-11 01:35:06.992.
+Test Case '-[PileupNativeTests.DataDirectoryTests testNewDirectoryIsCreatedAndExcludedFromBackup]' started.
+<unknown>:0: error: -[PileupNativeTests.DataDirectoryTests testNewDirectoryIsCreatedAndExcludedFromBackup] : failed: caught error: "Error Domain=NSOSStatusErrorDomain Code=-34018 "keychain error -34018" UserInfo={NSLocalizedDescription=keychain error -34018}"
+<unknown>:0: error: -[PileupNativeTests.DataDirectoryTests testNewDirectoryIsCreatedAndExcludedFromBackup] : failed: caught error: "Error Domain=NSOSStatusErrorDomain Code=-34018 "keychain error -34018" UserInfo={NSLocalizedDescription=keychain error -34018}"
+Test Case '-[PileupNativeTests.DataDirectoryTests testNewDirectoryIsCreatedAndExcludedFromBackup]' failed (0.453 seconds).
+Test Case '-[PileupNativeTests.DataDirectoryTests testSeedIsKeptWithExistingDataDirectory]' started.
+<unknown>:0: error: -[PileupNativeTests.DataDirectoryTests testSeedIsKeptWithExistingDataDirectory] : failed: caught error: "Error Domain=NSOSStatusErrorDomain Code=-34018 "keychain error -34018" UserInfo={NSLocalizedDescription=keychain error -34018}"
+<unknown>:0: error: -[PileupNativeTests.DataDirectoryTests testSeedIsKeptWithExistingDataDirectory] : failed: caught error: "Error Domain=NSOSStatusErrorDomain Code=-34018 "keychain error -34018" UserInfo={NSLocalizedDescription=keychain error -34018}"
+Test Case '-[PileupNativeTests.DataDirectoryTests testSeedIsKeptWithExistingDataDirectory]' failed (0.016 seconds).
+Test Case '-[PileupNativeTests.DataDirectoryTests testSeedWithoutDataDirectoryIsDiscarded]' started.
+<unknown>:0: error: -[PileupNativeTests.DataDirectoryTests testSeedWithoutDataDirectoryIsDiscarded] : failed: caught error: "Error Domain=NSOSStatusErrorDomain Code=-34018 "keychain error -34018" UserInfo={NSLocalizedDescription=keychain error -34018}"
+<unknown>:0: error: -[PileupNativeTests.DataDirectoryTests testSeedWithoutDataDirectoryIsDiscarded] : failed: caught error: "Error Domain=NSOSStatusErrorDomain Code=-34018 "keychain error -34018" UserInfo={NSLocalizedDescription=keychain error -34018}"
+Test Case '-[PileupNativeTests.DataDirectoryTests testSeedWithoutDataDirectoryIsDiscarded]' failed (0.025 seconds).
+Test Suite 'DataDirectoryTests' failed at 2026-11-11 01:35:07.590.
+	 Executed 3 tests, with 6 failures (6 unexpected) in 0.494 (0.597) seconds
+Test Suite 'KeychainKeystoreTests' started at 2026-11-11 01:35:07.590.
+Test Case '-[PileupNativeTests.KeychainKeystoreTests testNothingStoredLoadsEmpty]' started.
+/Users/runner/work/pileup/pileup/app/modules/core/ios/Tests/KeychainKeystoreTests.swift:13: error: -[PileupNativeTests.KeychainKeystoreTests testNothingStoredLoadsEmpty] : XCTAssertEqual failed: threw error "Error Domain=NSOSStatusErrorDomain Code=-34018 "keychain error -34018" UserInfo={NSLocalizedDescription=keychain error -34018}"
+<unknown>:0: error: -[PileupNativeTests.KeychainKeystoreTests testNothingStoredLoadsEmpty] : failed: caught error: "Error Domain=NSOSStatusErrorDomain Code=-34018 "keychain error -34018" UserInfo={NSLocalizedDescription=keychain error -34018}"
+Test Case '-[PileupNativeTests.KeychainKeystoreTests testNothingStoredLoadsEmpty]' failed (0.014 seconds).
+Test Case '-[PileupNativeTests.KeychainKeystoreTests testResetForgetsSeed]' started.
+<unknown>:0: error: -[PileupNativeTests.KeychainKeystoreTests testResetForgetsSeed] : failed: caught error: "Error Domain=NSOSStatusErrorDomain Code=-34018 "keychain error -34018" UserInfo={NSLocalizedDescription=keychain error -34018}"
+<unknown>:0: error: -[PileupNativeTests.KeychainKeystoreTests testResetForgetsSeed] : failed: caught error: "Error Domain=NSOSStatusErrorDomain Code=-34018 "keychain error -34018" UserInfo={NSLocalizedDescription=keychain error -34018}"
+Test Case '-[PileupNativeTests.KeychainKeystoreTests testResetForgetsSeed]' failed (0.038 seconds).
+Test Case '-[PileupNativeTests.KeychainKeystoreTests testSavedSeedIsLoadedByAnotherInstance]' started.
+<unknown>:0: error: -[PileupNativeTests.KeychainKeystoreTests testSavedSeedIsLoadedByAnotherInstance] : failed: caught error: "Error Domain=NSOSStatusErrorDomain Code=-34018 "keychain error -34018" UserInfo={NSLocalizedDescription=keychain error -34018}"
+<unknown>:0: error: -[PileupNativeTests.KeychainKeystoreTests testSavedSeedIsLoadedByAnotherInstance] : failed: caught error: "Error Domain=NSOSStatusErrorDomain Code=-34018 "keychain error -34018" UserInfo={NSLocalizedDescription=keychain error -34018}"
+Test Case '-[PileupNativeTests.KeychainKeystoreTests testSavedSeedIsLoadedByAnotherInstance]' failed (0.053 seconds).
+Test Case '-[PileupNativeTests.KeychainKeystoreTests testSaveReplacesStoredSeed]' started.
+<unknown>:0: error: -[PileupNativeTests.KeychainKeystoreTests testSaveReplacesStoredSeed] : failed: caught error: "Error Domain=NSOSStatusErrorDomain Code=-34018 "keychain error -34018" UserInfo={NSLocalizedDescription=keychain error -34018}"
+<unknown>:0: error: -[PileupNativeTests.KeychainKeystoreTests testSaveReplacesStoredSeed] : failed: caught error: "Error Domain=NSOSStatusErrorDomain Code=-34018 "keychain error -34018" UserInfo={NSLocalizedDescription=keychain error -34018}"
+Test Case '-[PileupNativeTests.KeychainKeystoreTests testSaveReplacesStoredSeed]' failed (0.017 seconds).
+Test Case '-[PileupNativeTests.KeychainKeystoreTests testSeedStaysOnThisDeviceAndIsNotSynced]' started.
+<unknown>:0: error: -[PileupNativeTests.KeychainKeystoreTests testSeedStaysOnThisDeviceAndIsNotSynced] : failed: caught error: "Error Domain=NSOSStatusErrorDomain Code=-34018 "keychain error -34018" UserInfo={NSLocalizedDescription=keychain error -34018}"
+<unknown>:0: error: -[PileupNativeTests.KeychainKeystoreTests testSeedStaysOnThisDeviceAndIsNotSynced] : failed: caught error: "Error Domain=NSOSStatusErrorDomain Code=-34018 "keychain error -34018" UserInfo={NSLocalizedDescription=keychain error -34018}"
+Test Case '-[PileupNativeTests.KeychainKeystoreTests testSeedStaysOnThisDeviceAndIsNotSynced]' failed (0.016 seconds).
+Test Case '-[PileupNativeTests.KeychainKeystoreTests testServicesAreIndependent]' started.
+<unknown>:0: error: -[PileupNativeTests.KeychainKeystoreTests testServicesAreIndependent] : failed: caught error: "Error Domain=NSOSStatusErrorDomain Code=-34018 "keychain error -34018" UserInfo={NSLocalizedDescription=keychain error -34018}"
+<unknown>:0: error: -[PileupNativeTests.KeychainKeystoreTests testServicesAreIndependent] : failed: caught error: "Error Domain=NSOSStatusErrorDomain Code=-34018 "keychain error -34018" UserInfo={NSLocalizedDescription=keychain error -34018}"
+Test Case '-[PileupNativeTests.KeychainKeystoreTests testServicesAreIndependent]' failed (0.022 seconds).
+Test Suite 'KeychainKeystoreTests' failed at 2026-11-11 01:35:07.906.
+	 Executed 6 tests, with 12 failures (12 unexpected) in 0.160 (0.316) seconds
+Test Suite 'NetworkAddressesTests' started at 2026-11-11 01:35:07.906.
+Test Case '-[PileupNativeTests.NetworkAddressesTests testCellularInterfacesAreExcluded]' started.
+Test Case '-[PileupNativeTests.NetworkAddressesTests testCellularInterfacesAreExcluded]' passed (0.037 seconds).
+Test Case '-[PileupNativeTests.NetworkAddressesTests testDeviceAddressesAreAJSONArrayOfStrings]' started.
+Test Case '-[PileupNativeTests.NetworkAddressesTests testDeviceAddressesAreAJSONArrayOfStrings]' passed (0.001 seconds).
+Test Case '-[PileupNativeTests.NetworkAddressesTests testLoopbackAndDownInterfacesAreExcluded]' started.
+Test Case '-[PileupNativeTests.NetworkAddressesTests testLoopbackAndDownInterfacesAreExcluded]' passed (0.001 seconds).
+Test Case '-[PileupNativeTests.NetworkAddressesTests testWifiAndHotspotAddressesOfBothFamiliesAreReported]' started.
+Test Case '-[PileupNativeTests.NetworkAddressesTests testWifiAndHotspotAddressesOfBothFamiliesAreReported]' passed (0.001 seconds).
+Test Suite 'NetworkAddressesTests' passed at 2026-11-11 01:35:07.949.
+	 Executed 4 tests, with 0 failures (0 unexpected) in 0.040 (0.042) seconds
+Test Suite 'PileupNativeTests.xctest' failed at 2026-11-11 01:35:08.009.
+	 Executed 17 tests, with 26 failures (26 unexpected) in 2.802 (3.129) seconds
+Test Suite 'All tests' failed at 2026-11-11 01:35:08.009.
+	 Executed 17 tests, with 26 failures (26 unexpected) in 2.802 (3.131) seconds
+2026-11-11 01:37:41.508 xcodebuild[4909:21449] [MT] IDETestOperationsObserverDebug: 209.001 elapsed -- Testing started completed.
+2026-11-11 01:37:41.508 xcodebuild[4909:21449] [MT] IDETestOperationsObserverDebug: 0.000 sec, +0.000 sec -- start
+2026-11-11 01:37:41.508 xcodebuild[4909:21449] [MT] IDETestOperationsObserverDebug: 209.003 sec, +209.003 sec -- end
+
+Test session results, code coverage, and logs:
+	/Users/runner/work/pileup/pileup/app/modules/core/ios/.build/xcode/Logs/Test/Test-PileupNative-2026.11.11_01-33-56-+0000.xcresult
+
+Failing tests:
+	CoreTests.testHealthAnswersOnlyWithToken()
+	CoreTests.testInviteCarriesDeviceAddresses()
+	CoreTests.testMemberIsAnIOSDeviceWithAppVersion()
+	CoreTests.testStopClosesPortAndRestartKeepsDeviceAndPiles()
+	DataDirectoryTests.testNewDirectoryIsCreatedAndExcludedFromBackup()
+	DataDirectoryTests.testSeedIsKeptWithExistingDataDirectory()
+	DataDirectoryTests.testSeedWithoutDataDirectoryIsDiscarded()
+	KeychainKeystoreTests.testNothingStoredLoadsEmpty()
+	KeychainKeystoreTests.testNothingStoredLoadsEmpty()
+	KeychainKeystoreTests.testResetForgetsSeed()
+	KeychainKeystoreTests.testSavedSeedIsLoadedByAnotherInstance()
+	KeychainKeystoreTests.testSaveReplacesStoredSeed()
+	KeychainKeystoreTests.testSeedStaysOnThisDeviceAndIsNotSynced()
+	KeychainKeystoreTests.testServicesAreIndependent()
+
+** TEST FAILED **
+
+Testing started
+make: *** [ios-test] Error 65
