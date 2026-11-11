@@ -222,6 +222,7 @@ func TestViewerCacheAccountingSurvivesRestart(t *testing.T) {
 	b = openPhone(t, dir, "android", lib, 2*size)
 	ui = httptest.NewServer(httpapi.WithNode("ui", b.Node, b.show))
 	t.Cleanup(ui.Close)
+	eventually(t, "b connects to a after restart", func() bool { return b.Online(p.ID)[a.Author()] })
 	b.view(ui.URL, p, b.asset(p, "P2"))
 	for i, want := range []bool{false, true, true} {
 		if l := fmt.Sprintf("P%d", i); b.cached(p, l) != want {
