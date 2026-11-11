@@ -40,6 +40,7 @@ const (
 var (
 	ErrUnavailable = errors.New("node: asset owner is unavailable")
 	ErrRefused     = errors.New("node: owner refused")
+	ErrNotLocal    = errors.New("node: original is not on the owner's device")
 	ErrRender      = errors.New("node: rendition failed")
 	errNoOwner     = errors.New("node: owner address is unknown")
 	errNotOwner    = errors.New("node: another device answers at the owner address")
@@ -462,7 +463,7 @@ func (n *Node) serveBlob(p *pile, w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func (n *Node) ServeOriginal(w http.ResponseWriter, r *http.Request, pileID, assetID, revision []byte) {
+func (n *Node) ServeOriginal(w http.ResponseWriter, r *http.Request, pileID, assetID, revision []byte) error {
 	p, err := n.find(pileID)
 	var a state.Asset
 	if err == nil {
@@ -470,22 +471,23 @@ func (n *Node) ServeOriginal(w http.ResponseWriter, r *http.Request, pileID, ass
 	}
 	if err != nil {
 		http.NotFound(w, r)
-		return
+		return nil
 	}
 	if a.Owner != n.Author() {
 		n.relayOriginal(p, a, w, r)
-		return
+		return nil
 	}
 	content, err := n.original(p, assetID)
 	n.report(diag.Media, p.ID, "", fmt.Sprintf("original %x", assetID), err)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusBadGateway)
-		return
+		return nil
 	}
 	w.Header().Set("ETag", `"`+hex.EncodeToString(revision)+`"`)
 	w.Header().Set("Content-Type", a.Meta.MIME)
 	w.Header().Set("Cache-Control", Immutable)
 	http.ServeContent(w, r, "", time.Time{}, content)
+	return nil
 }
 
 func (n *Node) relayOriginal(p *pile, a state.Asset, w http.ResponseWriter, r *http.Request) {
