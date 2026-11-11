@@ -1,11 +1,11 @@
 ---
 id: TASK-55
 title: 'Экраны приложения: понятные состояния загрузки, разрешения, вход и QR'
-status: In Progress
+status: Done
 assignee:
   - '@claude'
 created_date: '2026-11-11T01:54:00Z'
-updated_date: '2026-11-11T21:59:00Z'
+updated_date: '2026-11-11T22:05:00Z'
 labels:
   - app
   - ui
