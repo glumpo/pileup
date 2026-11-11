@@ -115,6 +115,7 @@ export class ApiError extends Error {
 export function connect(port: number, token: string, lost?: () => void) {
   const base = `http://127.0.0.1:${port}`;
   const auth = { Authorization: `Bearer ${token}` };
+  const timelines = new Map<string, { etag: string; items: TimelineItem[] }>();
 
   async function send(url: string, init: RequestInit) {
     try {
@@ -159,7 +160,21 @@ export function connect(port: number, token: string, lost?: () => void) {
       call<void>('PUT', `/piles/${pile}/selection`, { from, to }),
     setSelected: (pile: string, asset: string, selected: boolean) =>
       call<void>('PUT', `/piles/${pile}/selection/${asset}`, { selected }),
-    timeline: (pile: string) => call<TimelineItem[]>('GET', `/piles/${pile}/timeline`),
+    timeline: async (pile: string) => {
+      const known = timelines.get(pile);
+      const res = await send(`${base}/piles/${pile}/timeline`, {
+        headers: known ? { ...auth, 'If-None-Match': known.etag } : auth,
+      });
+      if (known && res.status === 304) return known.items;
+      if (!res.ok) {
+        const problem = await res.json().catch(() => ({}));
+        throw new ApiError(res.status, problem.error ?? 'internal', problem.reason);
+      }
+      const items: TimelineItem[] = await res.json();
+      const etag = res.headers.get('ETag');
+      if (etag) timelines.set(pile, { etag, items });
+      return items;
+    },
     diag: () => call<DiagEvent[]>('GET', '/diag'),
     reconnect: () => call<void>('POST', '/reconnect'),
     diagExport: () => text('/diag/export'),
