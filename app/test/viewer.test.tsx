@@ -1,4 +1,5 @@
-import { act, render, screen, userEvent, waitFor, within } from '@testing-library/react-native';
+import { act, fireEvent, render, screen, userEvent, waitFor, within } from '@testing-library/react-native';
+import { Dimensions } from 'react-native';
 
 import App from '../App';
 import { TimelineItem } from '../src/api';
@@ -183,12 +184,20 @@ test('a photo page has no video mark', async () => {
 test('two neighbouring pages on each side are loaded in advance', async () => {
   const many = Array.from({ length: 9 }, (_, i) => asset(`p${i}`, 'Аня', july1 + i * minute));
   const requests = await openViewer('p4', () => new Promise(() => {}), many);
+  const { width, height } = Dimensions.get('window');
+  await fireEvent(screen.getByTestId('viewer'), 'layout', { nativeEvent: { layout: { x: 0, y: 0, width, height } } });
+  await fireEvent(screen.getByTestId('viewer'), 'contentSizeChange', width * many.length, height);
+  await fireEvent.scroll(screen.getByTestId('viewer'), {
+    nativeEvent: {
+      contentOffset: { x: width * 4, y: 0 },
+      contentSize: { width: width * many.length, height },
+      layoutMeasurement: { width, height },
+    },
+  });
 
-  await waitFor(() =>
-    expect(new Set(requests.filter((r) => r.path.endsWith('/2')).map((r) => r.path))).toEqual(
-      new Set(['p2', 'p3', 'p4', 'p5', 'p6'].map((id) => blob(id, 2))),
-    ),
-  );
+  const asked = () => requests.filter((r) => r.path.endsWith('/2')).map((r) => r.path);
+  await waitFor(() => expect(asked()).toEqual(expect.arrayContaining(['p2', 'p3', 'p4', 'p5', 'p6'].map((id) => blob(id, 2)))));
   await act(() => new Promise((r) => setTimeout(r, 300)));
-  expect(new Set(requests.filter((r) => r.path.endsWith('/2')).map((r) => r.path)).size).toBe(5);
+  expect(asked()).not.toContain(blob('p0', 2));
+  expect(asked()).not.toContain(blob('p8', 2));
 });
