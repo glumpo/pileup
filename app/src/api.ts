@@ -56,7 +56,14 @@ export type Screen = {
   reason?: string;
 };
 
-export type ShowItem = { id: string; revision: string; author: string; kind: string; taken_at: number };
+export type ShowItem = {
+  id: string;
+  revision: string;
+  author: string;
+  kind: string;
+  taken_at: number;
+  codec?: string;
+};
 
 export type Hint = { author: string; name: string; platform: string; reason: string; last_error?: string };
 
@@ -68,6 +75,7 @@ export type ShowState = {
   current: ShowItem;
   playing: boolean;
   video_unavailable: boolean;
+  video_reason?: string;
   renderer_error?: { code: string; message: string };
   waiting: ShowItem[];
   hints: Hint[];

@@ -16,6 +16,7 @@ type showItem struct {
 	Author   string `json:"author"`
 	Kind     string `json:"kind"`
 	TakenAt  int64  `json:"taken_at"`
+	Codec    string `json:"codec,omitempty"`
 }
 
 type rendererError struct {
@@ -39,6 +40,7 @@ type showState struct {
 	Current          showItem       `json:"current"`
 	Playing          bool           `json:"playing"`
 	VideoUnavailable bool           `json:"video_unavailable"`
+	VideoReason      string         `json:"video_reason,omitempty"`
 	RendererError    *rendererError `json:"renderer_error,omitempty"`
 	Waiting          []showItem     `json:"waiting"`
 	Hints            []hint         `json:"hints"`
@@ -55,6 +57,7 @@ func toShowItem(a state.Asset) showItem {
 		Author:   hex.EncodeToString(a.Owner[:]),
 		Kind:     kindNames[a.Meta.Kind],
 		TakenAt:  a.Meta.TakenAt,
+		Codec:    a.Meta.Codec,
 	}
 }
 
@@ -68,6 +71,7 @@ func toShowState(st show.State) showState {
 		Current:          toShowItem(st.Current),
 		Playing:          st.Playing,
 		VideoUnavailable: st.VideoUnavailable,
+		VideoReason:      st.VideoReason,
 		Waiting:          []showItem{},
 		Hints:            []hint{},
 	}
