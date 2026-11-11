@@ -11,3 +11,6 @@ web-build/
 /app/ios/
 /app/modules/core/android/libs/
 /app/modules/core/android/build/
+/app/modules/core/ios/Mobile.xcframework/
+/app/modules/core/ios/.build/
+/app/modules/core/ios/.swiftpm/
