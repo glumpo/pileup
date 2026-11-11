@@ -128,3 +128,29 @@ func TestBlobFailuresAreLogged(t *testing.T) {
 		t.Fatal("b did not log the failed fetch")
 	}
 }
+
+func TestStartIsLoggedAndLogSurvivesReopen(t *testing.T) {
+	dir := t.TempDir()
+	cfg := node.Config{Dir: dir, Keystore: device.File(filepath.Join(dir, "device.key")), Platform: "android", AppVersion: "1.4.0", Addrs: loopback}
+	a, err := node.Open(cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	a.Diag().Add(diag.Sync, nil, "10.0.0.2:4000", "sync established")
+	a.Close()
+
+	cfg.AppVersion = "1.5.0"
+	b, err := node.Open(cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer b.Close()
+	var got []string
+	for _, e := range b.Diag().Events() {
+		got = append(got, string(e.Kind)+" "+e.Message)
+	}
+	if len(got) != 3 || !strings.Contains(got[0], "1.5.0") || !strings.Contains(got[0], "android") ||
+		got[1] != "sync sync established" || !strings.Contains(got[2], "1.4.0") || !strings.Contains(got[2], "android") {
+		t.Fatalf("events after restart %q, want the new start, the old event and the old start", got)
+	}
+}

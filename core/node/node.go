@@ -93,6 +93,7 @@ type pile struct {
 	addrs   map[op.Author]string
 	peers   map[string]op.Author
 	faults  map[string]string
+	away    map[op.Author]*absence
 	loops   map[string]*loop
 	ln      net.Listener
 	cached  timeline
@@ -148,7 +149,8 @@ func Open(cfg Config) (*Node, error) {
 		return nil, err
 	}
 	ctx, cancel := context.WithCancel(context.Background())
-	n := &Node{cfg: cfg, key: key, ctx: ctx, cancel: cancel, blobs: blobs, found: map[string]map[string]service{}, diag: diag.New(diagSize)}
+	n := &Node{cfg: cfg, key: key, ctx: ctx, cancel: cancel, blobs: blobs, found: map[string]map[string]service{}, diag: diag.Open(cfg.Dir, diagSize)}
+	n.diag.Add(diag.App, nil, "", fmt.Sprintf("Pileup %s %s started", cfg.AppVersion, cfg.Platform))
 	for _, a := range []string{aside, cacheAside} {
 		if a != "" {
 			n.diag.Add(diag.Sync, nil, "", a)
@@ -232,7 +234,7 @@ func (n *Node) Close() error {
 	n.cancel()
 	n.mu.Unlock()
 	n.wg.Wait()
-	errs := []error{n.blobs.Close()}
+	errs := []error{n.blobs.Close(), n.diag.Close()}
 	for _, p := range n.piles {
 		errs = append(errs, p.store.Close())
 	}
@@ -389,7 +391,7 @@ func (n *Node) start(e entry, addrs map[op.Author]string, changes ...op.Change) 
 	e.Port = uint16(ln.Addr().(*net.TCPAddr).Port)
 	n.diag.Add(diag.Connection, e.ID, "", fmt.Sprintf("listening on port %d", e.Port))
 	e.Peers = nil
-	p := &pile{entry: e, store: s, replica: replica.New(s, n.key, e.ID, e.Secret), online: map[op.Author]int{}, seen: map[op.Author]time.Time{}, addrs: addrs, peers: peers, faults: map[string]string{}, loops: map[string]*loop{}}
+	p := &pile{entry: e, store: s, replica: replica.New(s, n.key, e.ID, e.Secret), online: map[op.Author]int{}, seen: map[op.Author]time.Time{}, addrs: addrs, peers: peers, faults: map[string]string{}, away: map[op.Author]*absence{}, loops: map[string]*loop{}}
 	p.owners = n.owners(p)
 	p.stream = &http.Client{Transport: p.owners.Transport}
 	for a := range p.peers {
@@ -417,7 +419,7 @@ func (n *Node) serve(p *pile, ln net.Listener) {
 	mux.HandleFunc("POST /announce", func(w http.ResponseWriter, r *http.Request) { n.announced(p, w, r) })
 	mux.HandleFunc("GET /blob/{asset}/{revision}/{tier}", func(w http.ResponseWriter, r *http.Request) { n.serveBlob(p, w, r) })
 	srv := &http.Server{
-		Handler:           n.tracked(mux),
+		Handler:           n.tracked(p, mux),
 		ReadHeaderTimeout: timeout,
 		IdleTimeout:       timeout,
 		ConnState:         n.handshakes(p),
@@ -472,13 +474,14 @@ func (n *Node) check(p *pile, ln net.Listener) {
 	}
 }
 
-func (n *Node) tracked(h http.Handler) http.Handler {
+func (n *Node) tracked(p *pile, h http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		n.mu.Lock()
 		if n.ctx.Err() != nil {
 			n.mu.Unlock()
 			panic(http.ErrAbortHandler)
 		}
+		delete(p.away, op.Author(r.Context().Value(connKey{}).(*peer.Conn).Peer()))
 		n.wg.Add(1)
 		n.mu.Unlock()
 		defer n.wg.Done()
@@ -524,6 +527,7 @@ func (n *Node) learn(p *pile, l *loop, who op.Author, addr string) {
 	was, known := p.peers[addr]
 	p.peers[addr] = who
 	delete(p.faults, addr)
+	delete(p.away, who)
 	l.live, l.failing = true, false
 	p.online[who]++
 	prev := p.addrs[who]
@@ -650,6 +654,7 @@ func (n *Node) attempt(ctx context.Context, p *pile, l *loop, addr string, relea
 	n.listed(p, addr, others)
 	synced, report := false, n.synced(p, addr)
 	err = p.replica.Pull(ctx, addr, func(ops int) {
+		n.back(p, who)
 		synced = true
 		release()
 		report(ops)

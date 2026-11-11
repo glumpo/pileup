@@ -126,3 +126,27 @@ test.each(failures)('a page says so when %s', async (_, display, text) => {
 
   expect(await screen.findByText(text)).toBeOnTheScreen();
 });
+
+const unavailable: [string, string][] = [
+  ['refused', 'Нет ответа от участника: Боря. Pileup закрыт — попросите открыть Pileup.'],
+  ['no_route', 'Нет ответа от участника: Боря. Телефон не в этой сети — попросите подключиться к той же сети Wi-Fi.'],
+  ['timeout', asleep],
+];
+
+test.each(unavailable)('a page of a member who does not answer gives the advice for %s', async (reason, text) => {
+  await openViewer('07', [502, { error: 'source_unavailable', reason }]);
+
+  expect(await screen.findByText(text)).toBeOnTheScreen();
+});
+
+test('a page shows that the file is loading until it is shown', async () => {
+  await openViewer('c9', () => new Promise(() => {}));
+  await waitFor(() => expect(viewer().getAllByTestId('loading')).toHaveLength(1));
+});
+
+test('a page shows no loading indicator once the file is shown or has failed', async () => {
+  await openViewer('07', [502, { error: 'source_unavailable', reason: 'refused' }]);
+
+  await screen.findByText('Нет ответа от участника: Боря. Pileup закрыт — попросите открыть Pileup.');
+  await waitFor(() => expect(viewer().queryAllByTestId('loading')).toEqual([]));
+});

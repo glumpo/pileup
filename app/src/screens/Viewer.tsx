@@ -1,18 +1,28 @@
 import { useCallback, useEffect, useState } from 'react';
-import { FlatList, Image, Pressable, StyleSheet, Text, useWindowDimensions, View, ViewStyle } from 'react-native';
+import {
+  ActivityIndicator,
+  FlatList,
+  Image,
+  Pressable,
+  StyleSheet,
+  Text,
+  useWindowDimensions,
+  View,
+  ViewStyle,
+} from 'react-native';
 
 import { Api, ApiError, Pile, TimelineItem } from '../api';
+import { adviceFor } from '../presence';
 import { Preview } from '../Preview';
 import { dayOf, duration, timeOf } from '../time';
 import { Boundary, describe } from '../ui';
 
 type Problem = { text: string; retry: boolean };
 
-const advice = 'Возможно, погас экран — попросите разблокировать телефон и открыть Pileup.';
-
 function problemOf(error: unknown, author: string): Problem {
   const code = error instanceof ApiError ? error.code : undefined;
-  if (code === 'source_unavailable') return { text: `Нет ответа от участника: ${author}. ${advice}`, retry: true };
+  if (code === 'source_unavailable')
+    return { text: `Нет ответа от участника: ${author}. ${adviceFor((error as ApiError).reason)}`, retry: true };
   if (code === 'source_failed')
     return {
       text: `Телефон участника не смог подготовить файл: ${author}. Возможно, файл удалён из галереи или в неподдерживаемом формате.`,
@@ -30,6 +40,7 @@ function problemOf(error: unknown, author: string): Problem {
 function Page({ api, pile, item, style }: { api: Api; pile: string; item: TimelineItem; style: ViewStyle }) {
   const [attempt, setAttempt] = useState(0);
   const [problem, setProblem] = useState<Problem>();
+  const [loaded, setLoaded] = useState(false);
 
   useEffect(() => {
     if (!problem?.retry) return;
@@ -57,9 +68,13 @@ function Page({ api, pile, item, style }: { api: Api; pile: string; item: Timeli
         source={api.blob(pile, item, 2)}
         style={StyleSheet.absoluteFill}
         resizeMode="contain"
-        onLoad={() => setProblem(undefined)}
+        onLoad={() => {
+          setLoaded(true);
+          setProblem(undefined);
+        }}
         onError={failed}
       />
+      {!loaded && !problem && <ActivityIndicator testID="loading" style={StyleSheet.absoluteFill} color="#fff" />}
       {problem && <Text style={styles.problem}>{problem.text}</Text>}
     </View>
   );

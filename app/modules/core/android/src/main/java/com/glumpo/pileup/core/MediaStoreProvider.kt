@@ -8,6 +8,7 @@ import android.os.Build
 import android.provider.BaseColumns
 import android.provider.MediaStore
 import android.provider.MediaStore.MediaColumns
+import mobile.Mobile
 
 fun collection(kind: Kind): Uri = when (kind) {
   Kind.PHOTO -> MediaStore.Images.Media.EXTERNAL_CONTENT_URI
@@ -35,6 +36,7 @@ class MediaStoreProvider(private val resolver: ContentResolver) : mobile.MediaPr
     if (kind == Kind.PHOTO || sdk >= 29) columns += ORIENTATION
     if (sdk >= 29) columns += MediaColumns.RELATIVE_PATH
     val cursor = resolver.query(collection(kind), columns.toTypedArray(), query.selection, query.args, null)
+    if (cursor == null) Mobile.report("media", "MediaStore query of ${kind.name.lowercase()} returned no cursor")
     return cursor?.use { c ->
       buildList {
         while (c.moveToNext()) {

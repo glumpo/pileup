@@ -1,3 +1,5 @@
+import { reportTo } from './report';
+
 export type Member = {
   key: string;
   name: string;
@@ -118,6 +120,8 @@ export function connect(port: number, token: string) {
     }
     return res.status === 204 ? (undefined as T) : res.json();
   }
+
+  reportTo((kind, message) => call<void>('POST', '/diag', { kind, message }));
 
   async function text(path: string): Promise<string> {
     const res = await fetch(base + path, { headers: auth });
