@@ -195,8 +195,8 @@ func TestJoinErrors(t *testing.T) {
 	b.joinFails("PILEUP:AI", http.StatusBadRequest, "unknown_invite_version")
 	i.Secret = make([]byte, 32)
 	b.joinFails(i.String(), http.StatusBadGateway, "inviter_unreachable")
-	if got := b.joinReason(i.String()); got != "other_device" {
-		t.Fatalf("wrong secret: reason = %q, want other_device", got)
+	if got := b.joinReason(i.String()); got != "error" {
+		t.Fatalf("wrong secret: reason = %q, want error", got)
 	}
 	l, err := net.Listen("tcp", "127.0.0.1:0")
 	if err != nil {

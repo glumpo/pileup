@@ -135,7 +135,7 @@ func fail(w http.ResponseWriter, r *http.Request, err error) {
 	case errors.Is(err, node.ErrJoined):
 		reply(w, http.StatusConflict, problem("already_joined"))
 	case errors.Is(err, node.ErrUnreachable):
-		reply(w, http.StatusBadGateway, problem("inviter_unreachable"))
+		reply(w, http.StatusBadGateway, map[string]string{"error": "inviter_unreachable", "reason": node.Class(err)})
 	case errors.Is(err, node.ErrOffline):
 		reply(w, http.StatusServiceUnavailable, problem("offline"))
 	case errors.Is(err, node.ErrUnknownAsset):
