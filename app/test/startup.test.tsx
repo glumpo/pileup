@@ -49,7 +49,7 @@ test('any other start failure is explained and its details can be shared', async
   fakeCore({ 'GET /piles': [200, []] });
   const error = rejected('open /data/user/0/core/piles.json: permission denied');
   core.start.mockRejectedValueOnce(error);
-  const share = jest.spyOn(Share, 'share').mockResolvedValue({ action: Share.sharedAction });
+  const share = jest.spyOn(Share, 'share').mockResolvedValue({ action: Share.sharedAction, activityType: undefined });
   const user = userEvent.setup();
   await render(<App />);
 
