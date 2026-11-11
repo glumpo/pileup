@@ -78,7 +78,9 @@ Cleartext на Android: `network_security_config` запрещает HTTP все
 
 ### 4.1 UI API (за UI-токеном)
 
-`GET /health`; `GET|POST /piles`; `GET /piles/{id}/invite` (**возвращает S**); `POST /piles/join`; `GET|PUT /piles/{id}/selection`, `PUT /piles/{id}/selection/{asset}`; `GET /piles/{id}/timeline`; `GET /piles/{id}/blob/{asset}/{rev}/{tier}` (только T1/T2); `GET|POST|DELETE /piles/{id}/pins`, `GET /piles/{id}/pins/estimate`; `GET /screens`; `GET /diag`, `/diag/export`; `POST /reconnect`; `POST|GET|DELETE /show`, `POST /show/{next,prev,play,pause,goto}`. Заголовков CORS нет. Браузер на телефоне не может прислать `Authorization` без preflight, а preflight получает 401 (`TestHealthRejectsMissingOrWrongToken`, `TestNodeAPIRequiresToken`).
+`GET /health`; `GET|POST /piles`; `GET /piles/{id}/invite` (**возвращает S**); `POST /piles/join`; `GET|PUT /piles/{id}/selection`, `PUT /piles/{id}/selection/{asset}`; `GET /piles/{id}/timeline`; `GET /piles/{id}/blob/{asset}/{rev}/{tier}` (только T1/T2); `GET|POST|DELETE /piles/{id}/pins`, `GET /piles/{id}/pins/estimate`; `GET /screens`; `GET /diag`, `/diag/export`, `POST /diag` (A60); `POST /reconnect`; `POST|GET|DELETE /show`, `POST /show/{next,prev,play,pause,goto}`. Заголовков CORS нет. Браузер на телефоне не может прислать `Authorization` без preflight, а preflight получает 401 (`TestHealthRejectsMissingOrWrongToken`, `TestNodeAPIRequiresToken`).
+
+Журнал диагностики и его экспорт секретов не содержат (A60): строки приглашения вырезаются из всех сообщений (`PILEUP:…`), UI-токен — из сообщений `POST /diag` и `mobile.Report`; секрет pile и токен ядро в журнал не пишет (`TestDiagHidesSecrets`, `TestInvitesAreNotLogged`, `TestReportHidesToken`). Файлы `diag.log`, `diag.log.1`, `crash.txt` лежат в каталоге данных ядра (`noBackupFilesDir/core` на Android).
 
 ### 4.2 Порт pile (после рукопожатия §5)
 

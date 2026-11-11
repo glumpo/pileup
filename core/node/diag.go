@@ -44,3 +44,7 @@ func (n *Node) handshakes(p *pile) func(net.Conn, http.ConnState) {
 		}
 	}
 }
+
+func (n *Node) Build() (appVersion, platform string) {
+	return n.cfg.AppVersion, n.cfg.Platform
+}

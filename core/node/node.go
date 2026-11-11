@@ -147,7 +147,8 @@ func Open(cfg Config) (*Node, error) {
 		return nil, err
 	}
 	ctx, cancel := context.WithCancel(context.Background())
-	n := &Node{cfg: cfg, key: key, ctx: ctx, cancel: cancel, blobs: blobs, found: map[string]map[string]service{}, diag: diag.New(diagSize)}
+	n := &Node{cfg: cfg, key: key, ctx: ctx, cancel: cancel, blobs: blobs, found: map[string]map[string]service{}, diag: diag.Open(cfg.Dir, diagSize)}
+	n.diag.Add(diag.App, nil, "", fmt.Sprintf("Pileup %s %s started", cfg.AppVersion, cfg.Platform))
 	for _, a := range []string{aside, cacheAside} {
 		if a != "" {
 			n.diag.Add(diag.Sync, nil, "", a)
@@ -231,7 +232,7 @@ func (n *Node) Close() error {
 	n.cancel()
 	n.mu.Unlock()
 	n.wg.Wait()
-	errs := []error{n.blobs.Close()}
+	errs := []error{n.blobs.Close(), n.diag.Close()}
 	for _, p := range n.piles {
 		errs = append(errs, p.store.Close())
 	}
