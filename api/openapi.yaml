@@ -234,7 +234,8 @@ paths:
       description: >-
         Order is (taken_at, author, asset_id), the same on every member's
         device. Days are not part of the model; the UI may draw day separators
-        by taken_at + local_offset.
+        by taken_at + local_offset. The response carries an ETag; a request
+        with If-None-Match equal to it gets 304 while the pile is unchanged.
       responses:
         "200":
           description: Assets of all members in timeline order.
@@ -244,6 +245,8 @@ paths:
                 type: array
                 items:
                   $ref: "#/components/schemas/TimelineItem"
+        "304":
+          description: Timeline is unchanged since the ETag in If-None-Match.
         "401":
           description: Missing or invalid token.
         "404":

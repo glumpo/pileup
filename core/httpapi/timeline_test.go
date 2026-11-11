@@ -1,6 +1,8 @@
 package httpapi_test
 
 import (
+	"encoding/json"
+	"io"
 	"net/http"
 	"reflect"
 	"slices"
@@ -152,5 +154,50 @@ func TestBothMembersSeeOneTimelineInTheSameOrder(t *testing.T) {
 	}
 	if k := byLocal["b3"].Kind; k != "live_photo" {
 		t.Fatalf("live photo kind %q", k)
+	}
+}
+
+func (c client) timelineIf(p pile, etag string) (int, string, []byte) {
+	c.t.Helper()
+	req, err := http.NewRequest("GET", c.url+"/piles/"+p.ID+"/timeline", nil)
+	if err != nil {
+		c.t.Fatal(err)
+	}
+	req.Header.Set("Authorization", "Bearer secret")
+	if etag != "" {
+		req.Header.Set("If-None-Match", etag)
+	}
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		c.t.Fatal(err)
+	}
+	defer resp.Body.Close()
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		c.t.Fatal(err)
+	}
+	return resp.StatusCode, resp.Header.Get("ETag"), body
+}
+
+func TestUnchangedTimelineIsNotSentAgain(t *testing.T) {
+	a := startWith(t, anya)
+	p := a.create("Грузия", "Аня")
+	a.do("PUT", "/piles/"+p.ID+"/selection", map[string]int64{"from": july1, "to": july10}, http.StatusNoContent, nil)
+	status, etag, body := a.timelineIf(p, "")
+	if status != http.StatusOK || etag == "" || len(body) == 0 {
+		t.Fatalf("first request: status %d, ETag %q, %d bytes", status, etag, len(body))
+	}
+	if status, again, body := a.timelineIf(p, etag); status != http.StatusNotModified || again != etag || len(body) != 0 {
+		t.Fatalf("repeated request: status %d, ETag %q (was %q), %d bytes", status, again, etag, len(body))
+	}
+
+	a.do("PUT", "/piles/"+p.ID+"/selection", map[string]int64{"from": ten + minute, "to": july10}, http.StatusNoContent, nil)
+	status, changed, body := a.timelineIf(p, etag)
+	var items []item
+	if err := json.Unmarshal(body, &items); err != nil {
+		t.Fatal(err)
+	}
+	if status != http.StatusOK || changed == etag || len(items) != 2 || !reflect.DeepEqual(items, a.timeline(p)) {
+		t.Fatalf("after a change: status %d, ETag %q (was %q), %d files", status, changed, etag, len(items))
 	}
 }

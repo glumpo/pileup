@@ -105,7 +105,7 @@
 | `func (*Node) SetPins(id []byte, assets []string) error` | заменить закрепления (hex) |
 | `func (*Node) Free() (int64, error)` | свободное место на разделе каталога данных (statfs) |
 | `func (*Node) ServeOriginal(w, r, pileID, assetID, revision []byte)` | стрим T3 с Range: свой — из `ReadOriginal`, чужой — прокси к владельцу с таймаутами заголовков и простоя (5.2). В кеш не попадает |
-| `func (*Node) Timeline(id []byte) (Pile, []state.Asset, error)` | хронология: `taken_at`, затем owner, asset_id; порядок окна |
+| `func (*Node) Timeline(id []byte) (Pile, []state.Asset, error)` | хронология: `taken_at`, затем owner, asset_id; порядок окна. Готовый результат кешируется на pile вместе с каналом `replica.Changed`, взятым до чтения; пока канал тот же, повтор не читает БД (A58). Срез и `Members` общие для всех вызывающих — только для чтения |
 | `func (*Node) Online(pileID []byte) map[op.Author]bool` | участники с живым исходящим соединением синхронизации (A24) |
 | `func (*Node) Presence(pileID []byte, who op.Author) Presence` | на связи ли участник, когда был на связи, класс последней ошибки подключения (`security.md` §5.4) |
 
@@ -274,7 +274,7 @@
 ### 6.1 Загрузчик pile (`core/show/loader.go`)
 
 - Один на pile внутри `show.Host`, живёт до `Host.Close`. Создаётся при первом `Start`, `Pin`, `Unpin`, `Pins` или `Estimate` для этого pile: читает закрепления из `Node.Pins` и запускает тик раз в секунду.
-- **Элементы** — хронология (`Node.Timeline`). `id = hex(asset)/hex(revision)`, источник = owner, `Skip` не выставляется. Они обновляются при каждом `Host.pile(...)` (Pin/Unpin/Pins/Estimate) и при каждом `refresh` активного показа (команды и изменения реплики). Тик хронологию не перечитывает.
+- **Элементы** — хронология (`Node.Timeline`). `id = hex(asset)/hex(revision)`, источник = owner, `Skip` не выставляется. Они обновляются при каждом `Host.pile(...)` (Pin/Unpin/Pins/Estimate) и при каждом `refresh` активного показа (команды и изменения реплики); без изменений pile хронология приходит из кеша узла, БД не читается (A58). Тик хронологию не перечитывает.
 - **Тик**: `SetOnline` по `Node.Online` для чужих источников (свой всегда доступен), `plan()`, запись в журнал о новых «застрявших» источниках.
 - **`plan()`**: `Node.Protect(окно)` → `SetCached(Node.Displays)` (что реально удерживает pile) → `Plan(now)`. На каждый id из плана запускается горутина `Node.Blob(l.ctx, T2)`. Контекст — общий для хоста, поэтому смена курсора загрузку не отменяет; отменяет только `Host.Close`.
 - **Итог загрузки**: успех → `Loaded`, отметка «нет места» снимается. `DiskFull` (своя ошибка записи) → `Broken(now)` и отметка «нет места» до `now + Recheck`: источник не винится. Свой файл (любая ошибка), `ErrUnknownAsset` или `ErrRefused` → `Broken(now)`. Иначе (`ErrUnavailable`) → `Failed(now)`. Затем снова `plan()`.
