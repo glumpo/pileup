@@ -3,6 +3,7 @@ package show
 import (
 	"context"
 	"encoding/hex"
+	"fmt"
 	"net/http"
 	"strings"
 	"sync"
@@ -47,6 +48,12 @@ type session struct {
 	command   string
 	fault     *RendererError
 	videoDown bool
+	why       string
+	revived   bool
+	misses    int
+	ended     bool
+	offset    float64
+	since     time.Time
 }
 
 func key(a state.Asset) string {
@@ -155,8 +162,10 @@ func (s *session) move(i int) {
 		}
 		cur := s.items[i]
 		s.videoDown = cur.Meta.Kind == op.KindVideo && !s.l.reachable(cur.Owner)
+		s.why, s.revived, s.misses, s.ended, s.offset, s.since = "", s.videoDown, 0, false, 0, time.Time{}
 		if s.videoDown {
-			s.posterOnly(cur)
+			s.why = Unreachable
+			s.posterOnly(cur, Unreachable)
 		}
 		s.signal()
 	}
@@ -171,11 +180,18 @@ func (s *session) control(command string) error {
 	if cur.Meta.Kind != op.KindVideo {
 		return ErrNotVideo
 	}
+	if s.ended {
+		if command == playing {
+			s.ended = false
+			s.signal()
+		}
+		return nil
+	}
 	if s.videoDown {
 		if command != playing || !s.l.reachable(cur.Owner) {
 			return nil
 		}
-		s.videoDown = false
+		s.videoDown, s.why, s.misses = false, "", 0
 		if s.cast != nil {
 			s.signal()
 			return nil
@@ -197,21 +213,28 @@ func (s *session) signal() {
 	}
 }
 
-func (s *session) unavailable(a state.Asset) {
+func (s *session) unavailable(a state.Asset, why string) {
 	s.mu.Lock()
 	down := s.cursor >= 0 && key(s.items[s.cursor]) == key(a) && !s.videoDown
 	if down {
-		s.videoDown = true
+		s.videoDown, s.why = true, why
 		s.signal()
 	}
 	s.mu.Unlock()
 	if down {
-		s.posterOnly(a)
+		s.posterOnly(a, why)
 	}
 }
 
-func (s *session) posterOnly(a state.Asset) {
-	s.n.Diag().Add(diag.Media, s.pile, source(a.Owner), "video source is unavailable, showing the poster")
+func (s *session) posterOnly(a state.Asset, why string) {
+	switch why {
+	case Unreachable:
+		s.n.Diag().Add(diag.Media, s.pile, source(a.Owner), "video source is unavailable, showing the poster")
+	case Unsupported:
+		s.n.Diag().Add(diag.Renderer, s.pile, s.screen.Name, fmt.Sprintf("screen cannot play video %x (%s, codec %q), showing the poster", a.Meta.AssetID, a.Meta.MIME, a.Meta.Codec))
+	default:
+		s.n.Diag().Add(diag.Media, s.pile, source(a.Owner), fmt.Sprintf("video original cannot be read (%s), showing the poster", why))
+	}
 }
 
 func (s *session) state() State {
@@ -223,9 +246,10 @@ func (s *session) state() State {
 		cur := s.items[s.cursor]
 		st.Index = s.cursor
 		st.Current = cur
-		st.Playing = cur.Meta.Kind == op.KindVideo && !s.videoDown && (s.player == playing || s.player == "BUFFERING")
+		st.Playing = cur.Meta.Kind == op.KindVideo && !s.videoDown && !s.ended && (s.player == playing || s.player == "BUFFERING")
 		st.VideoUnavailable = s.videoDown
-		if s.videoDown {
+		st.VideoReason = s.why
+		if s.why == Unreachable {
 			down = append(down, cur.Owner)
 		}
 	}

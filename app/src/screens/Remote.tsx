@@ -16,6 +16,20 @@ const rendererErrors: Record<string, string> = {
   reconnecting: 'Переподключаемся к экрану…',
 };
 
+const formats: Record<string, string> = { hvc1: 'HEVC', hev1: 'HEVC', avc1: 'H.264', avc3: 'H.264' };
+
+function videoText(reason: string | undefined, codec: string | undefined, author: string): string {
+  if (reason === 'unsupported') {
+    const format = codec ? ` в формате ${formats[codec] ?? codec}` : ' — вероятно, не поддерживает его формат';
+    return `Экран не воспроизводит это видео${format}. На экране постер. Посмотрите видео на телефоне, где оно снято, или переходите к следующему файлу.`;
+  }
+  if (reason === 'not_local')
+    return `Видео участника: ${author} — только в iCloud, на телефоне его нет. Откройте его в «Фото» на iPhone, чтобы скачать, и нажмите «Воспроизвести» или переходите к следующему файлу.`;
+  if (reason === 'unreadable')
+    return `Телефон участника не может прочитать это видео: ${author}. Возможно, оно удалено из галереи или у Pileup нет к нему доступа. Переходите к следующему файлу.`;
+  return 'Видео недоступно — на экране постер. Попросите разблокировать телефон и открыть Pileup или переходите к следующему файлу.';
+}
+
 function hintText({ name, platform, reason, last_error }: Hint): string {
   const phone = `${platform === 'ios' ? 'iPhone' : 'телефон'}: ${name}`;
   const advice = adviceFor(last_error);
@@ -110,8 +124,7 @@ export function Remote({
                 backgroundColor: 'rgba(0, 0, 0, 0.6)',
               }}
             >
-              Видео недоступно — на экране постер. Попросите разблокировать телефон и открыть Pileup или переходите к
-              следующему файлу.
+              {videoText(state.video_reason, current.codec, author ?? '')}
             </Text>
           )}
         </View>

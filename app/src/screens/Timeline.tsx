@@ -1,5 +1,5 @@
-import { memo, useCallback, useEffect, useMemo, useState } from 'react';
-import { FlatList, Pressable, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { AppState, FlatList, Pressable, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
 
 import { Api, Pile, TimelineItem } from '../api';
 import { Preview } from '../Preview';
@@ -8,6 +8,7 @@ import { Boundary, describe, ErrorText, Screen, styles } from '../ui';
 
 const COLUMNS = 4;
 const HEADER = 36;
+const REFRESH = 10_000;
 
 type Row = { day: string } | { first: number; items: TimelineItem[] };
 
@@ -28,6 +29,29 @@ function toRows(items: TimelineItem[]): Row[] {
     }
   });
   return rows;
+}
+
+function same(a: TimelineItem, b: TimelineItem): boolean {
+  const keys = Object.keys(a) as (keyof TimelineItem)[];
+  return keys.length === Object.keys(b).length && keys.every((k) => a[k] === b[k]);
+}
+
+function merge(prev: TimelineItem[] | undefined, next: TimelineItem[]): TimelineItem[] {
+  if (!prev) return next;
+  const known = new Map(prev.map((i) => [i.id, i]));
+  const out = next.map((i) => {
+    const old = known.get(i.id);
+    return old && same(old, i) ? old : i;
+  });
+  return out.length === prev.length && out.every((i, n) => i === prev[n]) ? prev : out;
+}
+
+function emptyText(pile: Pile): string {
+  if (!pile.name)
+    return 'Хронология ещё не получена: не было связи ни с одним участником. Файлы появятся, когда кто-то из них откроет Pileup в этой сети.';
+  const offline = pile.members.filter((m) => !m.online).map((m) => m.name);
+  if (offline.length === 0) return 'Пока нет файлов';
+  return `Пока нет файлов. Нет связи с участниками: ${offline.join(', ')} — их файлы появятся, когда они откроют Pileup в этой сети.`;
 }
 
 const Cell = memo(function Cell({
@@ -72,23 +96,36 @@ export function Timeline({
   onBack: () => void;
   onOpen: (items: TimelineItem[], index: number) => void;
 }) {
-  const [items, setItems] = useState<TimelineItem[]>([]);
+  const [items, setItems] = useState<TimelineItem[]>();
+  const [info, setInfo] = useState(pile);
   const [error, setError] = useState<string>();
   const [refreshing, setRefreshing] = useState(false);
   const { width } = useWindowDimensions();
   const size = width / COLUMNS;
 
   const load = useCallback(async () => {
-    setError(undefined);
     try {
-      setItems(await api.timeline(pile.id));
+      const next = await api.timeline(pile.id);
+      if (next.length === 0) setInfo((await api.piles()).find((p) => p.id === pile.id) ?? pile);
+      setItems((prev) => merge(prev, next));
+      setError(undefined);
     } catch (e) {
       setError(describe(e));
     }
-  }, [api, pile.id]);
+  }, [api, pile]);
 
   useEffect(() => {
     load();
+    let active = true;
+    const timer = setInterval(() => active && load(), REFRESH);
+    const sub = AppState.addEventListener('change', (state) => {
+      active = state === 'active';
+      if (active) load();
+    });
+    return () => {
+      clearInterval(timer);
+      sub.remove();
+    };
   }, [load]);
 
   async function refresh() {
@@ -97,8 +134,10 @@ export function Timeline({
     setRefreshing(false);
   }
 
-  const open = useCallback((index: number) => onOpen(items, index), [onOpen, items]);
-  const rows = useMemo(() => toRows(items), [items]);
+  const latest = useRef({ onOpen, items });
+  latest.current = { onOpen, items };
+  const open = useCallback((index: number) => latest.current.onOpen(latest.current.items ?? [], index), []);
+  const rows = useMemo(() => toRows(items ?? []), [items]);
   const offsets = useMemo(() => {
     const out = [0];
     for (const r of rows) out.push(out[out.length - 1] + ('day' in r ? HEADER : size));
@@ -119,7 +158,11 @@ export function Timeline({
         removeClippedSubviews
         refreshing={refreshing}
         onRefresh={refresh}
-        ListEmptyComponent={<Text style={[styles.muted, { padding: 16 }]}>Пока нет файлов</Text>}
+        ListEmptyComponent={
+          items || !error ? (
+            <Text style={[styles.muted, { padding: 16 }]}>{items ? emptyText(info) : 'Загружаем хронологию…'}</Text>
+          ) : undefined
+        }
         renderItem={({ item: row }) =>
           'day' in row ? (
             <Text style={cell.day}>{row.day}</Text>

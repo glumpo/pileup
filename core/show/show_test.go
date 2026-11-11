@@ -249,7 +249,7 @@ func TestVideoStreamsFromSourceThroughHostWithRange(t *testing.T) {
 	if u, _ := url.Parse(l.url); u.Host == peerAddr(t, a, p) {
 		t.Fatalf("renderer url %s points at the source", l.url)
 	}
-	check(l, theirs, "video/quicktime")
+	check(l, theirs, "video/mp4")
 	eventually(t, "playing", func() bool { return must(t)(b.show.State()).Playing })
 
 	must(t)(b.show.Pause())

@@ -23,6 +23,12 @@ var (
 	ErrUnknownMember = errors.New("show: unknown member")
 )
 
+const (
+	Unsupported = "unsupported"
+	NotLocal    = "not_local"
+	Unreadable  = "unreadable"
+)
+
 type UnavailableError struct{ Reason string }
 
 func (e *UnavailableError) Error() string { return "show: screen is unavailable: " + e.Reason }
@@ -40,6 +46,7 @@ type State struct {
 	Current          state.Asset
 	Playing          bool
 	VideoUnavailable bool
+	VideoReason      string
 	Error            *RendererError
 	Waiting          []state.Asset
 	Hints            []Hint

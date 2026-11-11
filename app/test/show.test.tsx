@@ -2,7 +2,7 @@ import { act, render, screen, userEvent, within } from '@testing-library/react-n
 
 import App from '../App';
 import { Hint, PinEstimate, PinProgress, Screen, ShowState, TimelineItem } from '../src/api';
-import { asset, AUTH, BASE, fakeCore, georgia, INVITE } from './fakeCore';
+import { asset, AUTH, BASE, fakeCore, georgia, INVITE, sourceOf } from './fakeCore';
 
 jest.mock('expo-keep-awake', () => {
   const { useEffect } = require('react');
@@ -79,15 +79,18 @@ function core(screens: Screen[] = [livingRoom, bedroom], start?: [number, unknow
     waiting: [] as TimelineItem[],
     hints: [] as Hint[],
     videoUnavailable: false,
+    videoReason: 'unreachable',
+    codec: undefined as string | undefined,
   };
   const state = (): ShowState => ({
     pile: 'aa01',
     screen: livingRoom,
     index: show.index,
     total: show.files.length,
-    current: show.files.length ? showItem(show.files[show.index]) : nothing,
+    current: show.files.length ? { ...showItem(show.files[show.index]), codec: show.codec } : nothing,
     playing: show.playing,
     video_unavailable: show.videoUnavailable && show.files[show.index]?.kind === 'video',
+    video_reason: show.videoUnavailable && show.files[show.index]?.kind === 'video' ? show.videoReason : undefined,
     renderer_error: show.renderer_error,
     waiting: show.waiting.map(showItem),
     hints: show.hints,
@@ -188,7 +191,7 @@ test('a show started from the pile runs on the chosen screen and the remote show
   expect(screen.getByText('1 / 3')).toBeOnTheScreen();
   expect(await screen.findByText('Аня')).toBeOnTheScreen();
   expect(screen.getByText('2026-07-01 10:00')).toBeOnTheScreen();
-  expect(screen.getByTestId('image').props.source).toEqual({ uri: `${BASE}/piles/aa01/blob/f3/rf3/2`, headers: AUTH });
+  expect(sourceOf(screen.getByTestId('image'))).toEqual({ uri: `${BASE}/piles/aa01/blob/f3/rf3/2`, headers: AUTH });
 });
 
 test('a show started from the full-screen viewer starts at the opened file', async () => {
@@ -215,7 +218,7 @@ test('next and previous move the show and the remote follows', async () => {
   expect(await screen.findByText('2 / 3')).toBeOnTheScreen();
   expect(await screen.findByText('Боря')).toBeOnTheScreen();
   expect(screen.getByText('2026-07-01 10:01 · видео')).toBeOnTheScreen();
-  expect(screen.getByTestId('image').props.source.uri).toBe(`${BASE}/piles/aa01/blob/a1/ra1/2`);
+  expect(sourceOf(screen.getByTestId('image')).uri).toBe(`${BASE}/piles/aa01/blob/a1/ra1/2`);
 
   await user.press(screen.getByRole('button', { name: 'Следующий' }));
   expect(await screen.findByText('3 / 3')).toBeOnTheScreen();
@@ -392,12 +395,60 @@ test('an unavailable video is explained over its poster and the show goes on', a
   await user.press(screen.getByRole('button', { name: 'Следующий' }));
   expect(await screen.findByText(/Видео недоступно/)).toBeOnTheScreen();
   expect(screen.getByText('2 / 3')).toBeOnTheScreen();
-  expect(screen.getByTestId('image').props.source.uri).toBe(`${BASE}/piles/aa01/blob/a1/ra1/2`);
+  expect(sourceOf(screen.getByTestId('image')).uri).toBe(`${BASE}/piles/aa01/blob/a1/ra1/2`);
 
   await user.press(screen.getByRole('button', { name: 'Следующий' }));
   expect(await screen.findByText('3 / 3')).toBeOnTheScreen();
   expect(screen.queryByText(/Видео недоступно/)).toBeNull();
   expect(commands(requests)).toEqual(['POST /show', 'POST /show/next', 'POST /show/next']);
+});
+
+test('a video the screen or its owner cannot give is explained by its reason', async () => {
+  const { show } = core();
+  const user = await startShow();
+  await user.press(screen.getByRole('button', { name: 'Следующий' }));
+  await screen.findByText('2 / 3');
+
+  show.playing = false;
+  show.videoUnavailable = true;
+  show.videoReason = 'unsupported';
+  show.codec = 'hvc1';
+  expect(
+    await screen.findByText(
+      'Экран не воспроизводит это видео в формате HEVC. На экране постер. Посмотрите видео на телефоне, где оно снято, или переходите к следующему файлу.',
+      {},
+      { timeout: 3000 },
+    ),
+  ).toBeOnTheScreen();
+  expect(screen.getByRole('button', { name: 'Воспроизвести' })).toBeOnTheScreen();
+
+  show.codec = undefined;
+  expect(
+    await screen.findByText(
+      'Экран не воспроизводит это видео — вероятно, не поддерживает его формат. На экране постер. Посмотрите видео на телефоне, где оно снято, или переходите к следующему файлу.',
+      {},
+      { timeout: 3000 },
+    ),
+  ).toBeOnTheScreen();
+
+  show.videoReason = 'not_local';
+  expect(
+    await screen.findByText(
+      'Видео участника: Боря — только в iCloud, на телефоне его нет. Откройте его в «Фото» на iPhone, чтобы скачать, и нажмите «Воспроизвести» или переходите к следующему файлу.',
+      {},
+      { timeout: 3000 },
+    ),
+  ).toBeOnTheScreen();
+
+  show.videoReason = 'unreadable';
+  expect(
+    await screen.findByText(
+      'Телефон участника не может прочитать это видео: Боря. Возможно, оно удалено из галереи или у Pileup нет к нему доступа. Переходите к следующему файлу.',
+      {},
+      { timeout: 3000 },
+    ),
+  ).toBeOnTheScreen();
+  expect(screen.queryByText(/Видео недоступно/)).toBeNull();
 });
 
 test('screen errors are explained in Russian by their code', async () => {
@@ -470,7 +521,7 @@ test('a show left without files says so with only stop offered, and the remote r
   show.files = items;
   expect(await screen.findByText('1 / 3', {}, { timeout: 3000 })).toBeOnTheScreen();
   expect(screen.queryByText('В pile не осталось файлов')).toBeNull();
-  expect(screen.getByTestId('image').props.source.uri).toBe(`${BASE}/piles/aa01/blob/f3/rf3/2`);
+  expect(sourceOf(screen.getByTestId('image')).uri).toBe(`${BASE}/piles/aa01/blob/f3/rf3/2`);
   expect(screen.getByRole('button', { name: 'Следующий' })).toBeOnTheScreen();
 });
 

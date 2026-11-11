@@ -40,6 +40,8 @@
 
 **Только в памяти** (теряется при перезапуске): адреса участников pile для загрузки у владельца (`pile.addrs`, 5.1.1); идущие попытки загрузки (`Store.loads`); окно показа, защищённое от вытеснения (`Store.protected`); весь планировщик `prefetch.Cache` (кешированное по его сведениям, «битые» файлы, паузы источников, загрузки в полёте); загрузчики pile в `show.Host`; набор файлов, для которых не удался thumbhash; паузы T1, которые владелец не отдал (5.5).
 
+**Приложение** держит превью из `expo-image` (сетка, слой T1 во viewer, пульт) только в памяти (`cachePolicy="memory"`, A62): адрес содержит порт, токен — в заголовке, оба меняются при каждом запуске ядра, поэтому дисковый кеш по URL не попадал бы и только рос. На iOS `expo-image` сам кладёт на диск картинки thumbhash-заглушек (ключ — строка thumbhash, срок `SDImageCache` по умолчанию — неделя). T2 во viewer грузит `Image` из RN со своими кешами по умолчанию.
+
 ## 3. Модель
 
 - **Ключ** `blob.Key{Owner, Asset, Revision, Tier}`. `asset_id = SHA-256(pubkey владельца ‖ local_id)`, `revision = SHA-256(BE64 modified)` (`core/node/media.go`). Поэтому один и тот же файл владельца, отданный в два pile, имеет в них один ключ, а правка файла даёт новый ключ.
@@ -93,7 +95,7 @@
 | `ErrRefused` (вместе с `ErrUnavailable`) | владелец ответил не 200 и не 404; в тексте — статус и первая строка его ответа |
 | `ErrRender` | свой `RenditionMaker.Rendition` вернул ошибку (файл удалён из галереи, не декодируется); оборачивает её |
 | `func DiskFull(err error) bool` | нет места: `ENOSPC` или `SQLITE_FULL` где-либо в цепочке ошибки |
-| `type RenditionMaker interface{ Rendition(localID, tier) ([]byte, error); OriginalSize(localID) (int64, error); ReadOriginal(localID, offset, length) ([]byte, error) }` | нативный шов: рендер T1/T2 и чтение оригинала |
+| `type RenditionMaker interface{ Rendition(localID, tier) ([]byte, error); OriginalSize(localID) (int64, error); ReadOriginal(localID, offset, length) ([]byte, error) }` | нативный шов: рендер T1/T2 и чтение оригинала. Ошибки из Swift/Kotlin доходят только текстом: ошибка `OriginalSize` или `ReadOriginal`, текст которой начинается с `not_local:`, значит «оригинала нет на устройстве (только в iCloud)» и становится `ErrNotLocal`; любая другая — «оригинал не читается». Признак проверяется у `OriginalSize`: он вызывается на каждый запрос до первого байта, поэтому натив должен отказывать уже в нём |
 | `func (*Node) Blob(ctx, pileID, assetID, revision []byte, tier int) (*os.File, blob.Hash, error)` | T1/T2 текущей ревизии через кеш: свой файл рендерится, чужой загружается у владельца. T3 и другие уровни → `ErrUnknownAsset` |
 | `func (*Node) Cached(pileID, assetID, revision []byte, tier int) (int64, bool)` | удерживает ли pile этот уровень текущей ревизии и какого он размера |
 | `type Display struct{ AssetID, Revision []byte; Size int64 }`, `func (*Node) Displays(pileID []byte) ([]Display, error)` | все T2, удерживаемые pile |
@@ -102,8 +104,8 @@
 | `func (*Node) Pins(id []byte) ([]string, error)` | закреплённые asset_id pile, hex |
 | `func (*Node) SetPins(id []byte, assets []string) error` | заменить закрепления (hex) |
 | `func (*Node) Free() (int64, error)` | свободное место на разделе каталога данных (statfs) |
-| `func (*Node) ServeOriginal(w, r, pileID, assetID, revision []byte)` | стрим T3 с Range: свой — из `ReadOriginal`, чужой — прокси к владельцу с таймаутами заголовков и простоя (5.2). В кеш не попадает |
-| `func (*Node) Timeline(id []byte) (Pile, []state.Asset, error)` | хронология: `taken_at`, затем owner, asset_id; порядок окна |
+| `func (*Node) ServeOriginal(w, r, pileID, assetID, revision []byte) error` | стрим T3 с Range: свой — из `ReadOriginal`, чужой — прокси к владельцу с таймаутами заголовков и простоя (5.2). В кеш не попадает. Возвращает причину, если ответил 502: свой оригинал не читается (`ErrNotLocal` или ошибка натива), владелец недоступен (`ErrUnavailable`) или ответил ошибкой (`ErrUnavailable` + `ErrRefused`, с `ErrNotLocal` для 409; первая строка ответа владельца в тексте и в журнале хоста) |
+| `func (*Node) Timeline(id []byte) (Pile, []state.Asset, error)` | хронология: `taken_at`, затем owner, asset_id; порядок окна. Готовый результат кешируется на pile вместе с каналом `replica.Changed`, взятым до чтения; пока канал тот же, повтор не читает БД (A58). Срез и `Members` общие для всех вызывающих — только для чтения |
 | `func (*Node) Online(pileID []byte) map[op.Author]bool` | участники с живым исходящим соединением синхронизации (A24) |
 | `func (*Node) Presence(pileID []byte, who op.Author) Presence` | на связи ли участник, когда был на связи, класс последней ошибки подключения (`security.md` §5.4) |
 
@@ -133,8 +135,8 @@
 |---|---|---|---|
 | `GET /piles/{id}/blob/{asset}/{revision}/{1\|2}` | UI (Bearer-токен) | `Node.Blob` с контекстом запроса | 200/206/304 (Range, If-None-Match), ETag = hash, `Immutable`; 404 `unknown_pile`/`unknown_asset` (в т. ч. T3, не та ревизия); 502 `source_unavailable` (владелец недоступен; `reason` — класс A46 по `node.Class`: `refused`, `timeout`, `no_route`, `other_device`, `no_address`, `error`), 502 `source_failed` (владелец ответил ошибкой, `ErrRefused` проверяется раньше `ErrUnavailable`); 500 `render_failed` (`ErrRender`); 507 `disk_full`; 500 `internal`. Ответы 500 и 507 пишутся в журнал (A53) |
 | `GET/POST/DELETE /piles/{id}/pins`, `GET /piles/{id}/pins/estimate` | UI | `Host.Pins/Pin/Unpin/Estimate`; `member` — hex автора, без него — весь pile | 200 прогресс/оценка; 404 `unknown_pile`/`unknown_member` |
-| `GET /blob/{asset}/{revision}/{1\|2\|3}` | участник pile (peer-рукопожатие на порту pile) | `serveBlob`: только свои текущие файлы. T1/T2 — через свой кеш (`open` с контекстом узла), T3 — `ReadOriginal` | 200/206, ETag = hash (T1/T2) или revision (T3); 404 — чужой, удалённый, не та ревизия, не тот уровень; 500 — остальные ошибки (нет `RenditionMaker`, ошибка рендера) |
-| `GET /show/{token}/{asset}/{revision}/{2\|3}` | экран Cast на время показа | 2 → `Node.Blob(T2)`; 3 — только для видео → `ServeOriginal` | 403 неверный токен; 404; 502 → у видео чужого владельца включается постер |
+| `GET /blob/{asset}/{revision}/{1\|2\|3}` | участник pile (peer-рукопожатие на порту pile) | `serveBlob`: только свои текущие файлы. T1/T2 — через свой кеш (`open` с контекстом узла), T3 — `ReadOriginal` | 200/206, ETag = hash (T1/T2) или revision (T3); 404 — чужой, удалённый, не та ревизия, не тот уровень; 409 — оригинала нет на устройстве (`ErrNotLocal`); 500 — остальные ошибки (нет `RenditionMaker`, ошибка рендера, оригинал не читается) |
+| `GET /show/{token}/{asset}/{revision}/{2\|3}` | экран Cast на время показа | 2 → `Node.Blob(T2)`; 3 — только для видео → `ServeOriginal`, `video/quicktime` отдаётся как `video/mp4` | 403 неверный токен; 404; 502 → включается постер с причиной из `ServeOriginal` (`unreachable`, `not_local`, `unreadable`), в том числе для своего видео хоста |
 
 Отдельного UI-маршрута для T3 в `core/httpapi` нет.
 
@@ -214,7 +216,7 @@
 | …во время загрузки | при публикации `Valid` не проходит: этому ожидающему `ErrUnknownAsset`, в его pile ничего не сохраняется. Ожидающие из других pile, где файл ещё актуален, получают результат (тест `TestRequestWaitingForCleanupChecksTheAssetAgain`) |
 | …после того как файл попал в кеш | следующий проход `Retain` снимает удержание (5.6) |
 | Потребитель отменил запрос | см. шаг 5: последний ушедший отменяет попытку. Запрос участника к владельцу попытку не отменяет: владелец ждёт результат с контекстом узла и кеширует его |
-| T3 | `Node.Blob` → `ErrUnknownAsset`. Видео на экран: `ServeOriginal`; свой — чтение оригинала кусками по 1 МиБ, чужой — прокси к владельцу с `Range`/`If-Range`/`If-None-Match`, по тому же адресу владельца (5.1.1), с таймаутами `download`: 20 с на соединение и заголовки, 10 с простоя тела; общего срока нет, пауза чтения на стороне экрана простоем не считается. Ошибка соединения или нет заголовков за 20 с → 502. Простой тела обрывает ответ экрану; следующий Range-запрос экрана при молчащем владельце получает 502, и срабатывают постер и подсказка (тест `TestRelayedOriginalIsLimitedByReadIdleTimeout`) |
+| T3 | `Node.Blob` → `ErrUnknownAsset`. Видео на экран: `ServeOriginal`; свой — чтение оригинала кусками по 1 МиБ, чужой — прокси к владельцу с `Range`/`If-Range`/`If-None-Match`, по тому же адресу владельца (5.1.1), с таймаутами `download`: 20 с на соединение и заголовки, 10 с простоя тела; общего срока нет, пауза чтения на стороне экрана простоем не считается. Ошибка соединения или нет заголовков за 20 с → 502. Ответ владельца 409 или 5xx экрану не транслируется: хост отвечает 502, а первая строка ответа владельца попадает в ошибку и в журнал хоста (`stream <asset>`). Простой тела обрывает ответ экрану; следующий Range-запрос экрана при молчащем владельце получает 502, и срабатывают постер и подсказка (тест `TestRelayedOriginalIsLimitedByReadIdleTimeout`) |
 | Нет `RenditionMaker` у владельца | у владельца `ErrUnavailable`; участник получает 500 → `ErrRefused` |
 | Кеш закрыт | `ErrClosed` (UI 500 `internal`) |
 
@@ -272,7 +274,7 @@
 ### 6.1 Загрузчик pile (`core/show/loader.go`)
 
 - Один на pile внутри `show.Host`, живёт до `Host.Close`. Создаётся при первом `Start`, `Pin`, `Unpin`, `Pins` или `Estimate` для этого pile: читает закрепления из `Node.Pins` и запускает тик раз в секунду.
-- **Элементы** — хронология (`Node.Timeline`). `id = hex(asset)/hex(revision)`, источник = owner, `Skip` не выставляется. Они обновляются при каждом `Host.pile(...)` (Pin/Unpin/Pins/Estimate) и при каждом `refresh` активного показа (команды и изменения реплики). Тик хронологию не перечитывает.
+- **Элементы** — хронология (`Node.Timeline`). `id = hex(asset)/hex(revision)`, источник = owner, `Skip` не выставляется. Они обновляются при каждом `Host.pile(...)` (Pin/Unpin/Pins/Estimate) и при каждом `refresh` активного показа (команды и изменения реплики); без изменений pile хронология приходит из кеша узла, БД не читается (A58). Тик хронологию не перечитывает.
 - **Тик**: `SetOnline` по `Node.Online` для чужих источников (свой всегда доступен), `plan()`, запись в журнал о новых «застрявших» источниках.
 - **`plan()`**: `Node.Protect(окно)` → `SetCached(Node.Displays)` (что реально удерживает pile) → `Plan(now)`. На каждый id из плана запускается горутина `Node.Blob(l.ctx, T2)`. Контекст — общий для хоста, поэтому смена курсора загрузку не отменяет; отменяет только `Host.Close`.
 - **Итог загрузки**: успех → `Loaded`, отметка «нет места» снимается. `DiskFull` (своя ошибка записи) → `Broken(now)` и отметка «нет места» до `now + Recheck`: источник не винится. Свой файл (любая ошибка), `ErrUnknownAsset` или `ErrRefused` → `Broken(now)`. Иначе (`ErrUnavailable`) → `Failed(now)`. Затем снова `plan()`.
@@ -296,6 +298,13 @@
 ### 6.4 Как это кормит кеш
 
 Загрузчик сам ничего не хранит и не вытесняет. Он только просит `Node.Blob(T2)` (запрос попадает в общий single-flight, поэтому экран и загрузчик грузят файл один раз) и сообщает кешу, что защищать (`Protect`, `SetPins`). Решения о вытеснении принимает `blob.Store`, а планировщик узнаёт о них из `Displays`. Вытесненный элемент, снова попавший в окно, загружается заново.
+
+### 6.5 Видео на экране Cast (`core/show/renderer.go`, A56)
+
+- **Причина постера** (`State.VideoReason`, в API `video_reason`): `unreachable` — владелец не на связи при переходе к видео или его оригинал не дошёл до хоста; `not_local`, `unreadable` — `ServeOriginal` вернул такую причину (у своего видео хоста тоже); `unsupported` — экран дважды подряд не воспроизвёл видео (LOAD_FAILED или IDLE/ERROR в ответ на LOAD или позже; одна такая ошибка — повтор через 1 с, как A32). Подсказка о владельце (`hints`) — только для `unreachable`. Фото повторяются после ошибки без предела (A32).
+- **«Воспроизвести»** при постере — ручная попытка (для `unreachable` — когда владелец снова на связи); счётчик ошибок экрана сбрасывается. Для `unreachable` из-за ответа хоста экрану (не при переходе к видео) хост сам пробует видео один раз, как только загрузчик снова считает владельца доступным (проверка раз в 2 с).
+- **Позиция.** `currentTime` из каждого MEDIA_STATUS текущего видео (кроме IDLE с нулём) запоминается; пока PLAYING, она продолжает расти по часам хоста (ресивер шлёт статус только при смене состояния). При LOAD другого содержимого и обрыве соединения позиция замирает. Повторный LOAD того же видео (переподключение, ручное «Воспроизвести», повтор после ошибки) передаёт `currentTime`. Переход к другому файлу сбрасывает позицию.
+- **Конец видео** (IDLE/FINISHED): экран получает постер без причины, `playing` = false; «Воспроизвести» — LOAD видео сначала, без PLAY по ушедшей медиасессии.
 
 ## 7. Инварианты
 

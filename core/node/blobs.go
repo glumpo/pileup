@@ -40,6 +40,7 @@ const (
 var (
 	ErrUnavailable = errors.New("node: asset owner is unavailable")
 	ErrRefused     = errors.New("node: owner refused")
+	ErrNotLocal    = errors.New("node: original is not on the owner's device")
 	ErrRender      = errors.New("node: rendition failed")
 	errNoOwner     = errors.New("node: owner address is unknown")
 	errNotOwner    = errors.New("node: another device answers at the owner address")
@@ -504,6 +505,8 @@ func (n *Node) serveBlob(p *pile, w http.ResponseWriter, r *http.Request) {
 	switch {
 	case errors.Is(err, ErrUnknownAsset):
 		http.NotFound(w, r)
+	case errors.Is(err, ErrNotLocal):
+		http.Error(w, err.Error(), http.StatusConflict)
 	case err != nil:
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 	default:
@@ -512,7 +515,7 @@ func (n *Node) serveBlob(p *pile, w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func (n *Node) ServeOriginal(w http.ResponseWriter, r *http.Request, pileID, assetID, revision []byte) {
+func (n *Node) ServeOriginal(w http.ResponseWriter, r *http.Request, pileID, assetID, revision []byte) error {
 	p, err := n.find(pileID)
 	var a state.Asset
 	if err == nil {
@@ -520,25 +523,25 @@ func (n *Node) ServeOriginal(w http.ResponseWriter, r *http.Request, pileID, ass
 	}
 	if err != nil {
 		http.NotFound(w, r)
-		return
+		return nil
 	}
 	if a.Owner != n.Author() {
-		n.relayOriginal(p, a, w, r)
-		return
+		return n.relayOriginal(p, a, w, r)
 	}
 	content, err := n.original(p, assetID)
 	n.report(diag.Media, p.ID, "", fmt.Sprintf("original %x", assetID), err)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusBadGateway)
-		return
+		return err
 	}
 	w.Header().Set("ETag", `"`+hex.EncodeToString(revision)+`"`)
 	w.Header().Set("Content-Type", a.Meta.MIME)
 	w.Header().Set("Cache-Control", Immutable)
 	http.ServeContent(w, r, "", time.Time{}, content)
+	return nil
 }
 
-func (n *Node) relayOriginal(p *pile, a state.Asset, w http.ResponseWriter, r *http.Request) {
+func (n *Node) relayOriginal(p *pile, a state.Asset, w http.ResponseWriter, r *http.Request) error {
 	u := fmt.Sprintf("http://%x/blob/%x/%x/%d", a.Owner[:], a.Meta.AssetID, a.Meta.Revision, T3)
 	ctx, cancel := context.WithCancelCause(r.Context())
 	defer cancel(nil)
@@ -547,7 +550,7 @@ func (n *Node) relayOriginal(p *pile, a state.Asset, w http.ResponseWriter, r *h
 	req, err := http.NewRequestWithContext(ctx, r.Method, u, nil)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
+		return nil
 	}
 	for _, h := range []string{"Range", "If-Range", "If-None-Match"} {
 		if v := r.Header.Get(h); v != "" {
@@ -556,10 +559,21 @@ func (n *Node) relayOriginal(p *pile, a state.Asset, w http.ResponseWriter, r *h
 	}
 	resp, err := p.stream.Do(req)
 	err = silent(ctx, err)
+	if err == nil && (resp.StatusCode == http.StatusConflict || resp.StatusCode >= http.StatusInternalServerError) {
+		reason, _ := bufio.NewReader(io.LimitReader(resp.Body, 512)).ReadString('\n')
+		resp.Body.Close()
+		err = fmt.Errorf("%w: %w: %s: %s", ErrUnavailable, ErrRefused, resp.Status, strings.TrimSpace(reason))
+		if resp.StatusCode == http.StatusConflict {
+			err = fmt.Errorf("%w: %w", ErrNotLocal, err)
+		}
+	}
 	n.report(diag.Media, p.ID, hex.EncodeToString(a.Owner[:]), fmt.Sprintf("stream %x", a.Meta.AssetID), err)
 	if err != nil {
 		http.Error(w, ErrUnavailable.Error(), http.StatusBadGateway)
-		return
+		if !errors.Is(err, ErrUnavailable) {
+			err = fmt.Errorf("%w: %w", ErrUnavailable, err)
+		}
+		return err
 	}
 	defer resp.Body.Close()
 	for _, h := range []string{"Accept-Ranges", "Cache-Control", "Content-Length", "Content-Range", "Content-Type", "ETag"} {
@@ -570,6 +584,7 @@ func (n *Node) relayOriginal(p *pile, a state.Asset, w http.ResponseWriter, r *h
 	w.WriteHeader(resp.StatusCode)
 	_, err = io.Copy(w, idle{r: resp.Body, deadline: deadline})
 	n.report(diag.Media, p.ID, hex.EncodeToString(a.Owner[:]), fmt.Sprintf("stream %x", a.Meta.AssetID), silentOnly(ctx, err))
+	return nil
 }
 
 func silentOnly(ctx context.Context, err error) error {
@@ -585,6 +600,9 @@ func (n *Node) original(p *pile, assetID []byte) (io.ReadSeeker, error) {
 		return nil, err
 	}
 	size, err := n.cfg.Renditions.OriginalSize(local)
+	if err != nil && strings.HasPrefix(err.Error(), "not_local:") {
+		err = fmt.Errorf("%w: %w", ErrNotLocal, err)
+	}
 	if err != nil {
 		return nil, err
 	}

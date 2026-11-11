@@ -234,7 +234,8 @@ paths:
       description: >-
         Order is (taken_at, author, asset_id), the same on every member's
         device. Days are not part of the model; the UI may draw day separators
-        by taken_at + local_offset.
+        by taken_at + local_offset. The response carries an ETag; a request
+        with If-None-Match equal to it gets 304 while the pile is unchanged.
       responses:
         "200":
           description: Assets of all members in timeline order.
@@ -244,6 +245,8 @@ paths:
                 type: array
                 items:
                   $ref: "#/components/schemas/TimelineItem"
+        "304":
+          description: Timeline is unchanged since the ETag in If-None-Match.
         "401":
           description: Missing or invalid token.
         "404":
@@ -957,6 +960,11 @@ components:
         taken_at:
           type: integer
           format: int64
+        codec:
+          type: string
+          description: >-
+            Video codec from the owner's media library (hvc1, avc1, …);
+            absent when the owner's platform does not read it (Android).
     ShowState:
       type: object
       required:
@@ -988,10 +996,21 @@ components:
         video_unavailable:
           type: boolean
           description: >-
-            The current file is a video whose owner is not answering; the
-            screen shows its poster (T2) instead, hints name the owner. The
-            show goes on with next; play retries the video once the owner is
-            back.
+            The current video is not played; the screen shows its poster (T2)
+            instead and video_reason says why. The show goes on with next;
+            play retries the video from where it stopped (for unreachable,
+            once the owner is back).
+        video_reason:
+          type: string
+          description: >-
+            Set with video_unavailable. unreachable: the owner is not
+            answering, hints name the owner; after a short outage the host
+            retries the video once by itself when the owner is back.
+            unsupported: the screen failed to play the video twice in a row
+            (codec or format it does not support). not_local: the original is
+            not on the owner's device (only in iCloud). unreadable: the owner
+            cannot read the original (deleted from the gallery, no access).
+            Newer versions may add others.
         renderer_error:
           type: object
           description: >-

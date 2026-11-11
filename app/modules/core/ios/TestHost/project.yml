@@ -1,0 +1,35 @@
+name: PileupNativeTests
+options:
+  deploymentTarget:
+    iOS: "16.4"
+packages:
+  PileupNative:
+    path: ..
+settings:
+  base:
+    GENERATE_INFOPLIST_FILE: YES
+    CODE_SIGN_STYLE: Manual
+    CODE_SIGN_IDENTITY: "-"
+targets:
+  TestHost:
+    type: application
+    platform: iOS
+    sources: [TestHost.swift]
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.glumpo.pileup.testhost
+  PileupNativeTests:
+    type: bundle.unit-test
+    platform: iOS
+    sources: [../Tests]
+    dependencies:
+      - target: TestHost
+      - package: PileupNative
+schemes:
+  PileupNativeTests:
+    build:
+      targets:
+        TestHost: all
+        PileupNativeTests: [test]
+    test:
+      targets: [PileupNativeTests]

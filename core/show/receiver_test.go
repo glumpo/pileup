@@ -12,6 +12,7 @@ import (
 	"math/big"
 	"net"
 	"net/http"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -30,7 +31,10 @@ type message struct {
 	payload                        map[string]any
 }
 
-type load struct{ url, contentType string }
+type load struct {
+	url, contentType string
+	at               float64
+}
 
 type receiver struct {
 	addr     string
@@ -41,10 +45,13 @@ type receiver struct {
 	fail     bool
 	fetch    bool
 	idle     bool
+	rejects  string
 	shown    []string
 	media    int
 	state    string
+	time     float64
 	loads    []load
+	answered int
 	commands []string
 }
 
@@ -114,6 +121,9 @@ func (r *receiver) serve(c net.Conn) {
 		if reply != nil {
 			r.mu.Lock()
 			writeMessage(c, message{m.destination, m.source, m.namespace, reply})
+			if typ == "LOAD" {
+				r.answered++
+			}
 			r.mu.Unlock()
 		}
 	}
@@ -127,6 +137,9 @@ func (r *receiver) control(typ string, id any, p map[string]any) map[string]any 
 	defer r.mu.Unlock()
 	r.commands = append(r.commands, typ)
 	if sid, _ := p["mediaSessionId"].(float64); r.media == 0 || int(sid) != r.media {
+		return map[string]any{"type": "INVALID_REQUEST", "requestId": id, "reason": "INVALID_MEDIA_SESSION_ID"}
+	}
+	if r.state == "IDLE" && typ != "STOP" {
 		return map[string]any{"type": "INVALID_REQUEST", "requestId": id, "reason": "INVALID_MEDIA_SESSION_ID"}
 	}
 	switch typ {
@@ -145,6 +158,7 @@ func (r *receiver) load(id any, p map[string]any) map[string]any {
 	media, _ := p["media"].(map[string]any)
 	url, _ := media["contentId"].(string)
 	ct, _ := media["contentType"].(string)
+	at, _ := p["currentTime"].(float64)
 	r.mu.Lock()
 	fetch := r.fetch
 	r.mu.Unlock()
@@ -154,14 +168,19 @@ func (r *receiver) load(id any, p map[string]any) map[string]any {
 	}
 	r.mu.Lock()
 	defer r.mu.Unlock()
-	r.loads = append(r.loads, load{url, ct})
+	r.loads = append(r.loads, load{url, ct, at})
 	if r.fail || !fetched {
 		return map[string]any{"type": "LOAD_FAILED", "requestId": id, "detailedErrorCode": 905}
+	}
+	r.media++
+	r.time = at
+	if r.rejects != "" && strings.HasPrefix(ct, r.rejects) {
+		r.state = "IDLE"
+		return r.status(id, "ERROR")
 	}
 	if fetch {
 		r.shown = append(r.shown, body)
 	}
-	r.media++
 	if r.idle {
 		r.state = "IDLE"
 		return r.status(id, "ERROR")
@@ -182,7 +201,7 @@ func download(url string) (string, bool) {
 }
 
 func (r *receiver) status(id any, idleReason string) map[string]any {
-	st := map[string]any{"mediaSessionId": r.media, "playerState": r.state}
+	st := map[string]any{"mediaSessionId": r.media, "playerState": r.state, "currentTime": r.time}
 	if idleReason != "" {
 		st["idleReason"] = idleReason
 	}
@@ -196,6 +215,23 @@ func (r *receiver) push(state, idleReason string) {
 	for _, c := range r.conns {
 		writeMessage(c, message{transport, "*", nsMedia, r.status(0, idleReason)})
 	}
+}
+
+func (r *receiver) seek(at float64) {
+	r.mu.Lock()
+	r.time = at
+	r.mu.Unlock()
+}
+
+func (r *receiver) progress(at float64) {
+	r.seek(at)
+	r.push("PLAYING", "")
+}
+
+func (r *receiver) rejecting(contentType string) {
+	r.mu.Lock()
+	r.rejects = contentType
+	r.mu.Unlock()
 }
 
 func (r *receiver) failLoads(fail bool) {
@@ -257,7 +293,11 @@ func (r *receiver) commanded() []string {
 
 func (r *receiver) waitLoad(t *testing.T, n int) load {
 	t.Helper()
-	eventually(t, "LOAD", func() bool { return len(r.loaded()) >= n })
+	eventually(t, "LOAD", func() bool {
+		r.mu.Lock()
+		defer r.mu.Unlock()
+		return r.answered >= n
+	})
 	l := r.loaded()
 	if len(l) != n {
 		t.Fatalf("receiver got %d LOADs, want %d: %v", len(l), n, l)

@@ -29,12 +29,13 @@ type library struct {
 	displays  map[string]int
 	reads     map[string]int
 	broken    map[string]bool
+	lost      map[string]string
 	content   map[string]string
 	gate      chan struct{}
 }
 
 func newLibrary() *library {
-	return &library{originals: map[string][]byte{}, displays: map[string]int{}, reads: map[string]int{}, broken: map[string]bool{}, content: map[string]string{}}
+	return &library{originals: map[string][]byte{}, displays: map[string]int{}, reads: map[string]int{}, broken: map[string]bool{}, lost: map[string]string{}, content: map[string]string{}}
 }
 
 func (l *library) add(local, kind, mime string, minute int, original []byte) {
@@ -53,6 +54,26 @@ func (l *library) add(local, kind, mime string, minute int, original []byte) {
 		Modified:     at,
 	})
 	l.originals[local] = original
+}
+
+func (l *library) codec(local, codec string) {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	for i := range l.items {
+		if l.items[i].LocalID == local {
+			l.items[i].Codec = codec
+		}
+	}
+}
+
+func (l *library) lose(local, reason string) {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	if reason == "" {
+		delete(l.lost, local)
+	} else {
+		l.lost[local] = reason
+	}
 }
 
 func (l *library) photo(local string, minute int) {
@@ -92,6 +113,9 @@ func (l *library) Rendition(local string, tier int) ([]byte, error) {
 func (l *library) OriginalSize(local string) (int64, error) {
 	l.mu.Lock()
 	defer l.mu.Unlock()
+	if reason, ok := l.lost[local]; ok {
+		return 0, errors.New(reason)
+	}
 	return int64(len(l.originals[local])), nil
 }
 

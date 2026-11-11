@@ -59,14 +59,14 @@ func TestShowPhotoThenVideoWithControls(t *testing.T) {
 	s := connect(t, f)
 	ctx := timeout(t)
 
-	photo, err := s.Load(ctx, "http://192.168.1.20:8080/t2/1.jpg", "image/jpeg")
+	photo, err := s.Load(ctx, "http://192.168.1.20:8080/t2/1.jpg", "image/jpeg", 0)
 	if err != nil {
 		t.Fatal(err)
 	}
 	if photo.State != "PLAYING" {
 		t.Fatalf("photo state %q", photo.State)
 	}
-	video, err := s.Load(ctx, "http://192.168.1.20:8080/v/2.mp4", "video/mp4")
+	video, err := s.Load(ctx, "http://192.168.1.20:8080/v/2.mp4", "video/mp4", 0)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -107,12 +107,12 @@ func TestLoadFailedIsReported(t *testing.T) {
 	s := connect(t, f)
 	ctx := timeout(t)
 
-	_, err := s.Load(ctx, "http://192.168.1.20:8080/broken.mp4", "video/mp4")
+	_, err := s.Load(ctx, "http://192.168.1.20:8080/broken.mp4", "video/mp4", 0)
 	var ce *cast.Error
 	if !errors.As(err, &ce) || ce.Type != "LOAD_FAILED" || ce.Code != 905 {
 		t.Fatalf("got %v, want LOAD_FAILED with code 905", err)
 	}
-	if _, err := s.Load(ctx, "http://192.168.1.20:8080/t2/3.jpg", "image/jpeg"); err != nil {
+	if _, err := s.Load(ctx, "http://192.168.1.20:8080/t2/3.jpg", "image/jpeg", 0); err != nil {
 		t.Fatalf("session unusable after failed load: %v", err)
 	}
 }
@@ -164,7 +164,7 @@ func TestHeartbeatKeepsSessionAlive(t *testing.T) {
 		t.Fatalf("session ended: %v", s.Err())
 	default:
 	}
-	if _, err := s.Load(timeout(t), "http://192.168.1.20:8080/t2/1.jpg", "image/jpeg"); err != nil {
+	if _, err := s.Load(timeout(t), "http://192.168.1.20:8080/t2/1.jpg", "image/jpeg", 0); err != nil {
 		t.Fatal(err)
 	}
 }
@@ -176,7 +176,7 @@ func TestSilentReceiverIsDetected(t *testing.T) {
 
 	loaded := make(chan error, 1)
 	go func() {
-		_, err := s.Load(context.Background(), "http://192.168.1.20:8080/t2/1.jpg", "image/jpeg")
+		_, err := s.Load(context.Background(), "http://192.168.1.20:8080/t2/1.jpg", "image/jpeg", 0)
 		loaded <- err
 	}()
 	if err := waitDone(t, s, 10*heartbeat); !errors.Is(err, cast.ErrNoHeartbeat) {
@@ -195,12 +195,12 @@ func TestReconnectAfterReceiverDropsConnection(t *testing.T) {
 	if err := waitDone(t, s, time.Second); !errors.Is(err, cast.ErrClosed) {
 		t.Fatalf("got %v, want ErrClosed", err)
 	}
-	if _, err := s.Load(timeout(t), "http://192.168.1.20:8080/t2/1.jpg", "image/jpeg"); !errors.Is(err, cast.ErrClosed) {
+	if _, err := s.Load(timeout(t), "http://192.168.1.20:8080/t2/1.jpg", "image/jpeg", 0); !errors.Is(err, cast.ErrClosed) {
 		t.Fatalf("load on dropped session got %v, want ErrClosed", err)
 	}
 
 	s = connect(t, f)
-	if _, err := s.Load(timeout(t), "http://192.168.1.20:8080/t2/2.jpg", "image/jpeg"); err != nil {
+	if _, err := s.Load(timeout(t), "http://192.168.1.20:8080/t2/2.jpg", "image/jpeg", 0); err != nil {
 		t.Fatal(err)
 	}
 }
@@ -208,7 +208,7 @@ func TestReconnectAfterReceiverDropsConnection(t *testing.T) {
 func TestPlaybackChangesAreReported(t *testing.T) {
 	f := newFakeReceiver(t)
 	s := connect(t, f)
-	m, err := s.Load(timeout(t), "http://192.168.1.20:8080/v/2.mp4", "video/mp4")
+	m, err := s.Load(timeout(t), "http://192.168.1.20:8080/v/2.mp4", "video/mp4", 0)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -251,7 +251,7 @@ func TestOtherReceiverStatusKeepsSession(t *testing.T) {
 	f.mu.Unlock()
 	f.push("receiver-0", nsReceive, map[string]any{"type": "RECEIVER_STATUS", "requestId": 0, "status": status})
 
-	if _, err := s.Load(timeout(t), "http://192.168.1.20:8080/t2/1.jpg", "image/jpeg"); err != nil {
+	if _, err := s.Load(timeout(t), "http://192.168.1.20:8080/t2/1.jpg", "image/jpeg", 0); err != nil {
 		t.Fatal(err)
 	}
 }

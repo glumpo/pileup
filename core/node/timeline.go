@@ -8,10 +8,23 @@ import (
 	"github.com/glumpo/pileup/core/crdt/state"
 )
 
+type timeline struct {
+	changed <-chan struct{}
+	pile    Pile
+	items   []state.Asset
+}
+
 func (n *Node) Timeline(id []byte) (Pile, []state.Asset, error) {
 	p, err := n.find(id)
 	if err != nil {
 		return Pile{}, nil, err
+	}
+	changed := p.replica.Changed()
+	n.mu.Lock()
+	c := p.cached
+	n.mu.Unlock()
+	if c.changed == changed {
+		return c.pile, c.items, nil
 	}
 	v, err := p.store.View()
 	if err != nil {
@@ -28,7 +41,11 @@ func (n *Node) Timeline(id []byte) (Pile, []state.Asset, error) {
 			bytes.Compare(x.Meta.AssetID, y.Meta.AssetID),
 		)
 	})
-	return Pile{ID: p.ID, Name: v.PileName, Members: v.Members}, out, nil
+	c = timeline{changed: changed, pile: Pile{ID: p.ID, Name: v.PileName, Members: v.Members}, items: out}
+	n.mu.Lock()
+	p.cached = c
+	n.mu.Unlock()
+	return c.pile, c.items, nil
 }
 
 func (n *Node) Changed(id []byte) (<-chan struct{}, error) {

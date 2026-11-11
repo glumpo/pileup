@@ -8,6 +8,7 @@ import (
 	"net"
 	"net/http"
 	"net/netip"
+	"strings"
 	"time"
 
 	"github.com/glumpo/pileup/core/cast"
@@ -23,6 +24,8 @@ const (
 	requestTimeout = 30 * time.Second
 	stopTimeout    = 2 * time.Second
 	reload         = time.Second
+	again          = 2 * time.Second
+	misses         = 2
 )
 
 var firstPause, maxPause = time.Second, 30 * time.Second
@@ -68,24 +71,36 @@ func (s *session) serve(w http.ResponseWriter, r *http.Request) {
 	case ok && tier == "2":
 		s.display(w, r, a)
 	case ok && tier == "3" && a.Meta.Kind == op.KindVideo:
-		sw := &statusWriter{ResponseWriter: w, status: http.StatusOK}
-		s.n.ServeOriginal(sw, r, s.pile, a.Meta.AssetID, a.Meta.Revision)
-		if sw.status == http.StatusBadGateway && a.Owner != s.self {
-			s.unavailable(a)
+		if err := s.n.ServeOriginal(castWriter{w}, r, s.pile, a.Meta.AssetID, a.Meta.Revision); err != nil {
+			s.unavailable(a, why(err))
 		}
 	default:
 		http.NotFound(w, r)
 	}
 }
 
-type statusWriter struct {
-	http.ResponseWriter
-	status int
+func why(err error) string {
+	switch {
+	case errors.Is(err, node.ErrNotLocal):
+		return NotLocal
+	case errors.Is(err, node.ErrUnavailable) && !errors.Is(err, node.ErrRefused):
+		return Unreachable
+	}
+	return Unreadable
 }
 
-func (w *statusWriter) WriteHeader(code int) {
-	w.status = code
+type castWriter struct{ http.ResponseWriter }
+
+func (w castWriter) WriteHeader(code int) {
+	w.Header().Set("Content-Type", castType(w.Header().Get("Content-Type")))
 	w.ResponseWriter.WriteHeader(code)
+}
+
+func castType(mime string) string {
+	if mime == "video/quicktime" {
+		return "video/mp4"
+	}
+	return mime
 }
 
 func (s *session) display(w http.ResponseWriter, r *http.Request, a state.Asset) {
@@ -110,16 +125,16 @@ func (s *session) display(w http.ResponseWriter, r *http.Request, a state.Asset)
 
 func (s *session) media(a state.Asset) (string, string) {
 	u := fmt.Sprintf("%s/%x/%x/", s.base, a.Meta.AssetID, a.Meta.Revision)
-	if a.Meta.Kind == op.KindVideo && !s.videoDown {
-		return u + "3", a.Meta.MIME
+	if a.Meta.Kind == op.KindVideo && !s.videoDown && !s.ended {
+		return u + "3", castType(a.Meta.MIME)
 	}
 	return u + "2", "image/jpeg"
 }
 
 func (s *session) drive() {
 	defer s.wg.Done()
-	loaded := ""
-	var retry <-chan time.Time
+	loaded, missed := "", false
+	var retry, revive <-chan time.Time
 	for {
 		s.mu.Lock()
 		var cur state.Asset
@@ -132,17 +147,24 @@ func (s *session) drive() {
 		if url == loaded {
 			command, s.command = s.command, ""
 		}
+		switch {
+		case !s.reviving():
+			revive = nil
+		case revive == nil:
+			revive = time.After(again)
+		}
 		s.mu.Unlock()
 		switch {
 		case url != loaded && url == "":
 			loaded, retry = "", nil
 			s.request("command_failed", "stop", s.cast.Stop)
 		case url != loaded:
-			loaded, retry = url, nil
+			loaded, retry, missed = url, nil, false
+			at := s.position(url)
 			if !s.request("load_failed", fmt.Sprintf("load %x", cur.Meta.AssetID), func(ctx context.Context) (cast.Media, error) {
-				return s.cast.Load(ctx, url, contentType)
+				return s.cast.Load(ctx, url, contentType, at)
 			}) {
-				retry = time.After(reload)
+				retry, missed = s.miss(url, missed), true
 			}
 		case command == playing:
 			s.request("command_failed", "play", s.cast.Play)
@@ -160,11 +182,20 @@ func (s *session) drive() {
 		case <-s.wake:
 		case <-retry:
 			loaded, retry = "", nil
+		case <-revive:
+			revive = nil
+			s.revive()
 		case <-s.cast.Changed():
-			if !s.status(s.cast.Media()) {
-				retry = time.After(reload)
+			if !s.status(s.cast.Media(), loaded) {
+				retry, missed = s.miss(loaded, missed), true
 			}
 		case <-s.cast.Done():
+			select {
+			case <-s.cast.Changed():
+				s.status(s.cast.Media(), loaded)
+			default:
+			}
+			s.position("")
 			s.failed("reconnecting", "connection", s.cast.Err())
 			s.srv.Close()
 			if !s.reconnect() {
@@ -204,15 +235,89 @@ func (s *session) request(code, what string, f func(context.Context) (cast.Media
 	return true
 }
 
-func (s *session) status(m cast.Media) bool {
+func (s *session) status(m cast.Media, loaded string) bool {
 	s.mu.Lock()
 	s.player = m.State
+	if s.playingVideo(loaded) {
+		switch {
+		case m.State == "IDLE" && m.IdleReason == "FINISHED":
+			s.ended, s.offset, s.since = true, 0, time.Time{}
+			s.signal()
+		case m.State == "IDLE" && m.CurrentTime == 0:
+			s.hold()
+		default:
+			s.offset, s.since = m.CurrentTime, time.Time{}
+			if m.State == playing {
+				s.since = time.Now()
+			}
+		}
+	}
 	s.mu.Unlock()
 	if m.State == "IDLE" && m.IdleReason == "ERROR" {
 		s.failed("playback_failed", "playback", errors.New("media receiver failed to play the file"))
 		return false
 	}
 	return true
+}
+
+func (s *session) playingVideo(url string) bool {
+	if s.cursor < 0 || s.items[s.cursor].Meta.Kind != op.KindVideo {
+		return false
+	}
+	u, _ := s.media(s.items[s.cursor])
+	return u == url && strings.HasSuffix(u, "/3")
+}
+
+func (s *session) position(url string) float64 {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.hold()
+	if !s.playingVideo(url) {
+		return 0
+	}
+	return s.offset
+}
+
+func (s *session) hold() {
+	if !s.since.IsZero() {
+		s.offset += time.Since(s.since).Seconds()
+		s.since = time.Time{}
+	}
+}
+
+func (s *session) miss(url string, missed bool) <-chan time.Time {
+	s.mu.Lock()
+	if !s.playingVideo(url) {
+		s.mu.Unlock()
+		return time.After(reload)
+	}
+	if !missed {
+		s.misses++
+	}
+	if s.misses < misses {
+		s.mu.Unlock()
+		return time.After(reload)
+	}
+	cur := s.items[s.cursor]
+	s.videoDown, s.why = true, Unsupported
+	s.signal()
+	s.mu.Unlock()
+	s.posterOnly(cur, Unsupported)
+	return nil
+}
+
+func (s *session) reviving() bool {
+	return s.cursor >= 0 && s.videoDown && s.why == Unreachable && !s.revived
+}
+
+func (s *session) revive() {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.reviving() && s.l.reachable(s.items[s.cursor].Owner) {
+		s.revived = true
+		s.videoDown, s.why = false, ""
+		s.signal()
+	}
 }
 
 func (s *session) failed(code, what string, err error) {
