@@ -336,14 +336,16 @@ func TestAddressTakenOverByAnotherMemberIsReattributed(t *testing.T) {
 	}
 }
 
-func TestPileWithoutPeerKeysDoesNotOpen(t *testing.T) {
+func TestUnreadablePilesFileIsSetAside(t *testing.T) {
 	for _, c := range []struct {
 		name  string
 		peers any
+		raw   string
 	}{
-		{"no peers field", nil},
-		{"list of addresses", []string{"127.0.0.1:1"}},
-		{"short key", map[string][]byte{"127.0.0.1:1": {1, 2}}},
+		{name: "not json", raw: "{broken"},
+		{name: "no peers field"},
+		{name: "list of addresses", peers: []string{"127.0.0.1:1"}},
+		{name: "short key", peers: map[string][]byte{"127.0.0.1:1": {1, 2}}},
 	} {
 		t.Run(c.name, func(t *testing.T) {
 			s := newSaved(t)
@@ -364,14 +366,29 @@ func TestPileWithoutPeerKeysDoesNotOpen(t *testing.T) {
 			if b, err = json.Marshal(entries); err != nil {
 				t.Fatal(err)
 			}
+			if c.raw != "" {
+				b = []byte(c.raw)
+			}
 			if err := os.WriteFile(path, b, 0o600); err != nil {
 				t.Fatal(err)
 			}
+
 			n, err := node.Open(node.Config{Dir: s.dir, Keystore: device.File(filepath.Join(s.dir, "device.key")), Platform: "android", Addrs: loopback})
-			if err == nil {
-				n.Close()
-				t.Fatal("pile opened")
+			if err != nil {
+				t.Fatalf("node with an unreadable piles.json: %v", err)
 			}
+			t.Cleanup(func() { n.Close() })
+			if ps, err := n.Piles(); err != nil || len(ps) != 0 {
+				t.Errorf("piles %v, %v; want none", ps, err)
+			}
+			aside, _ := filepath.Glob(path + ".broken-*")
+			if len(aside) != 1 {
+				t.Fatalf("set aside %v, want one copy", aside)
+			}
+			if got, err := os.ReadFile(aside[0]); err != nil || string(got) != string(b) {
+				t.Errorf("set aside copy %q, %v; want the unreadable file", got, err)
+			}
+			eventually(t, "the set aside file is logged", logged(n, diag.Sync, node.Pile{}, "", filepath.Base(aside[0])))
 		})
 	}
 }
