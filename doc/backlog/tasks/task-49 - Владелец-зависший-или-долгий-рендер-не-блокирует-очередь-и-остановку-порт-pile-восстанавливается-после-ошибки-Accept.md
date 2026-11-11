@@ -3,11 +3,11 @@ id: TASK-49
 title: >-
   Владелец: зависший или долгий рендер не блокирует очередь и остановку; порт
   pile восстанавливается после ошибки Accept
-status: In Progress
+status: Done
 assignee:
   - '@claude'
 created_date: '2026-11-11T01:41:00Z'
-updated_date: '2026-11-11T02:04:00Z'
+updated_date: '2026-11-11T02:07:00Z'
 labels:
   - core
   - review
