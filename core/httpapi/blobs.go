@@ -31,7 +31,7 @@ func blobs(mux *http.ServeMux, n *node.Node) {
 		case errors.Is(err, node.ErrRefused):
 			reply(w, http.StatusBadGateway, problem("source_failed"))
 		case errors.Is(err, node.ErrUnavailable):
-			reply(w, http.StatusBadGateway, problem("source_unavailable"))
+			reply(w, http.StatusBadGateway, map[string]string{"error": "source_unavailable", "reason": node.Class(err)})
 		case err != nil:
 			fail(w, r, err)
 		default:

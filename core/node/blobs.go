@@ -339,10 +339,58 @@ func (t *turns) returned(local string, settled *bool) bool {
 
 func (n *Node) fetch(p *pile, owner op.Author, assetID, revision []byte, tier int) blob.Load {
 	return func(ctx context.Context, w io.Writer) error {
-		err := n.download(ctx, p, owner, assetID, revision, tier, w)
+		err := n.away(p, owner)
+		if err == nil {
+			err = n.download(ctx, p, owner, assetID, revision, tier, w)
+			n.answered(ctx, p, owner, err)
+		}
 		n.report(diag.Media, p.ID, hex.EncodeToString(owner[:]), fmt.Sprintf("fetch %x T%d", assetID, tier), err)
 		return err
 	}
+}
+
+type absence struct {
+	until   time.Time
+	err     error
+	probing bool
+}
+
+func (n *Node) away(p *pile, owner op.Author) error {
+	n.mu.Lock()
+	defer n.mu.Unlock()
+	if pr := p.presence(owner); !pr.Online && pr.LastError != "" {
+		return fmt.Errorf("%w: %w", ErrUnavailable, offline(pr.LastError))
+	}
+	a := p.away[owner]
+	switch {
+	case a == nil:
+		return nil
+	case a.probing || time.Now().Before(a.until):
+		return fmt.Errorf("%w: not asked again yet: %w", ErrUnavailable, a.err)
+	}
+	a.probing = true
+	return nil
+}
+
+func (n *Node) answered(ctx context.Context, p *pile, owner op.Author, err error) {
+	n.mu.Lock()
+	defer n.mu.Unlock()
+	switch {
+	case ctx.Err() != nil:
+		if a := p.away[owner]; a != nil {
+			a.probing = false
+		}
+	case errors.Is(err, ErrUnavailable) && !errors.Is(err, ErrRefused):
+		p.away[owner] = &absence{until: time.Now().Add(ownerPause), err: err}
+	default:
+		delete(p.away, owner)
+	}
+}
+
+func (n *Node) back(p *pile, who op.Author) {
+	n.mu.Lock()
+	defer n.mu.Unlock()
+	delete(p.away, who)
 }
 
 func (n *Node) download(ctx context.Context, p *pile, owner op.Author, assetID, revision []byte, tier int, w io.Writer) error {
@@ -673,7 +721,7 @@ func (n *Node) fetchThumbnails(p *pile, broken map[blob.Key]time.Time) time.Dura
 	wg.Wait()
 	switch {
 	case len(offline) > 0:
-		return retry
+		return ownerPause
 	case len(broken) > 0:
 		return brokenPause
 	}

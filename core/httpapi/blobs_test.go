@@ -207,10 +207,17 @@ func TestUnavailableOwnerIsClassed(t *testing.T) {
 	if err := a.Close(); err != nil {
 		t.Fatal(err)
 	}
-	resp, body := getBlob(t, b.url, blobPath(p, photo, "2"), "secret")
-	var out struct{ Error, Reason string }
-	json.Unmarshal(body, &out)
-	if resp.StatusCode != http.StatusBadGateway || out.Error != "source_unavailable" || out.Reason != node.Refused {
-		t.Fatalf("T2 of the owner whose Pileup is closed: status %d, body %s; want source_unavailable with reason %q", resp.StatusCode, body, node.Refused)
+	deadline = time.Now().Add(10 * time.Second)
+	for {
+		resp, body := getBlob(t, b.url, blobPath(p, photo, "2"), "secret")
+		var out struct{ Error, Reason string }
+		json.Unmarshal(body, &out)
+		if resp.StatusCode == http.StatusBadGateway && out.Error == "source_unavailable" && out.Reason == node.Refused {
+			break
+		}
+		if time.Now().After(deadline) {
+			t.Fatalf("T2 of the owner whose Pileup is closed: status %d, body %s; want source_unavailable with reason %q", resp.StatusCode, body, node.Refused)
+		}
+		time.Sleep(10 * time.Millisecond)
 	}
 }

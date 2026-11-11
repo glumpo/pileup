@@ -36,7 +36,14 @@ func (n *Node) Presence(pileID []byte, who op.Author) Presence {
 	}
 	n.mu.Lock()
 	defer n.mu.Unlock()
-	if who == n.Author() || p.online[who] > 0 {
+	if who == n.Author() {
+		return Presence{Online: true, LastSeen: time.Now()}
+	}
+	return p.presence(who)
+}
+
+func (p *pile) presence(who op.Author) Presence {
+	if p.online[who] > 0 {
 		return Presence{Online: true, LastSeen: time.Now()}
 	}
 	out := Presence{LastSeen: p.seen[who], LastError: NoAddress}
@@ -71,6 +78,23 @@ func class(err error) string {
 	return Failed
 }
 
+type offline string
+
+func (o offline) Error() string {
+	return "node: owner is not connected, last failure: " + string(o)
+}
+
 func Class(err error) string {
-	return ""
+	var o offline
+	switch {
+	case !errors.Is(err, ErrUnavailable) || errors.Is(err, ErrRefused):
+		return ""
+	case errors.As(err, &o):
+		return string(o)
+	case errors.Is(err, errNoOwner):
+		return NoAddress
+	case errors.Is(err, errNotOwner):
+		return OtherDevice
+	}
+	return class(err)
 }

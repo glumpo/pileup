@@ -1126,7 +1126,11 @@ components:
             properties:
               reason:
                 type: string
-                description: With screen_unavailable, the screen's reason to show as is.
+                description: >-
+                  With screen_unavailable, the screen's reason to show as is.
+                  With source_unavailable, why the owner of the file is
+                  unavailable, as last_error of a member: refused, timeout,
+                  no_route, other_device, no_address or error.
               error:
                 type: string
                 enum:
