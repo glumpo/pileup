@@ -23,12 +23,14 @@ const messages: Record<string, string> = {
   media_failed: 'Нет доступа к медиатеке. Разрешите доступ к фото и видео в настройках телефона.',
 };
 
+const restarting = 'Pileup перезапускается после сбоя: подождите несколько секунд.';
+
 export function describe(error: unknown): string {
   if (error instanceof ApiError && error.code === 'screen_unavailable' && error.reason) return error.reason;
-  if (error instanceof ApiError && error.status === 401) return 'Сессия устарела: закройте приложение и откройте снова.';
+  if (error instanceof ApiError && error.status === 401) return restarting;
   if (error instanceof ApiError) return messages[error.code] ?? `Ошибка ядра: ${error.code}`;
   if (error instanceof TypeError && error.message === 'Network request failed')
-    return 'Pileup не отвечает: закройте приложение и откройте снова.';
+    return restarting;
   return String(error);
 }
 

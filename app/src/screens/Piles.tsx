@@ -30,7 +30,10 @@ export function Piles({
   const [error, setError] = useState<string>();
 
   useEffect(() => {
-    api.piles().then(setPiles, (e) => setError(describe(e)));
+    api.piles().then((p) => {
+      setPiles(p);
+      setError(undefined);
+    }, (e) => setError(describe(e)));
   }, [api]);
 
   async function create() {

@@ -112,12 +112,23 @@ export class ApiError extends Error {
   }
 }
 
-export function connect(port: number, token: string) {
+export function connect(port: number, token: string, lost?: () => void) {
   const base = `http://127.0.0.1:${port}`;
   const auth = { Authorization: `Bearer ${token}` };
 
+  async function send(url: string, init: RequestInit) {
+    try {
+      const res = await fetch(url, init);
+      if (res.status === 401) lost?.();
+      return res;
+    } catch (e) {
+      if (e instanceof TypeError) lost?.();
+      throw e;
+    }
+  }
+
   async function call<T>(method: string, path: string, body?: unknown): Promise<T> {
-    const res = await fetch(base + path, {
+    const res = await send(base + path, {
       method,
       headers: body === undefined ? auth : { ...auth, 'Content-Type': 'application/json' },
       body: body === undefined ? undefined : JSON.stringify(body),
@@ -132,7 +143,7 @@ export function connect(port: number, token: string) {
   reportTo((kind, message) => call<void>('POST', '/diag', { kind, message }));
 
   async function text(path: string): Promise<string> {
-    const res = await fetch(base + path, { headers: auth });
+    const res = await send(base + path, { headers: auth });
     if (!res.ok) throw new ApiError(res.status, 'internal');
     return res.text();
   }
@@ -169,7 +180,7 @@ export function connect(port: number, token: string) {
       headers: auth,
     }),
     checkBlob: async (pile: string, item: { id: string; revision: string }, tier: 1 | 2) => {
-      const res = await fetch(`${base}/piles/${pile}/blob/${item.id}/${item.revision}/${tier}`, {
+      const res = await send(`${base}/piles/${pile}/blob/${item.id}/${item.revision}/${tier}`, {
         headers: auth,
       });
       if (!res.ok) {

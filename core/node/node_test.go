@@ -187,6 +187,28 @@ func TestInviteWithWrongSecretFailsToJoin(t *testing.T) {
 	}
 }
 
+func TestFailedJoinWithoutNetworkIsOffline(t *testing.T) {
+	a := open(t, t.TempDir(), "android")
+	reachable := inviteTo(t, a, create(t, a, "Грузия", "Аня"))
+	gone := inviteTo(t, a, create(t, a, "Армения", "Аня"))
+	dir := t.TempDir()
+	b, err := node.Open(node.Config{
+		Dir:      dir,
+		Keystore: device.File(filepath.Join(dir, "device.key")),
+		Platform: "ios",
+		Addrs:    func() []netip.Addr { return nil },
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer b.Close()
+	join(t, b, reachable, "Боря")
+	a.Close()
+	if _, err := b.Join(context.Background(), gone, "Боря"); !errors.Is(err, node.ErrOffline) {
+		t.Fatalf("err = %v, want ErrOffline", err)
+	}
+}
+
 func TestMalformedInviteIsRejected(t *testing.T) {
 	b := open(t, t.TempDir(), "ios")
 	if _, err := b.Join(context.Background(), "PILEUP:XYZ", "Боря"); !errors.Is(err, invite.ErrFormat) {
