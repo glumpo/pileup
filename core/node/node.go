@@ -129,6 +129,7 @@ type Node struct {
 
 	selecting sync.Mutex
 	rendering turns
+	streamed  meter
 }
 
 func Open(cfg Config) (*Node, error) {

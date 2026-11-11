@@ -80,6 +80,9 @@ func TestStaleLoadDoesNotCountAgainstNextVideo(t *testing.T) {
 		t.Fatalf("retry after the first error of V2: %+v", l)
 	}
 	resumedAt(t, l, 0, since)
+	if !logged(a, `(video/mp4, codec "")`) {
+		t.Fatalf("playback error without the format of the file: %+v", a.Diag().Events())
+	}
 	time.Sleep(100 * time.Millisecond)
 	if st := must(t)(a.show.State()); st.VideoUnavailable {
 		t.Fatalf("one error of V2 gave the poster: %+v", st)

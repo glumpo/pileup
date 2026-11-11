@@ -100,6 +100,10 @@ func (h *Host) loader(pileID []byte) (*loader, error) {
 func (h *Host) pile(pileID, member []byte) (*loader, error) {
 	h.mu.Lock()
 	defer h.mu.Unlock()
+	changed, err := h.n.Changed(pileID)
+	if err != nil {
+		return nil, err
+	}
 	p, items, err := h.n.Timeline(pileID)
 	if err != nil {
 		return nil, err
@@ -111,7 +115,9 @@ func (h *Host) pile(pileID, member []byte) (*loader, error) {
 	if err != nil {
 		return nil, err
 	}
-	l.setItems(p, items)
+	if l.since(changed) {
+		l.setItems(p, items)
+	}
 	return l, nil
 }
 
@@ -172,7 +178,11 @@ func (h *Host) Close() {
 func (h *Host) Start(pileID []byte, screenID string, assetID []byte) (State, error) {
 	h.mu.Lock()
 	defer h.mu.Unlock()
-	h.stop()
+	if s := h.cur; s != nil && bytes.Equal(s.pile, pileID) && s.screen.ID == screenID {
+		if screen, err := h.screen(screenID); s.retry(screen, err == nil) {
+			return s.state(), nil
+		}
+	}
 	screen, err := h.screen(screenID)
 	if err != nil {
 		return State{}, err
@@ -201,15 +211,17 @@ func (h *Host) Start(pileID []byte, screenID string, assetID []byte) (State, err
 	}
 	ctx, cancel := context.WithCancel(h.ctx)
 	s := &session{
-		n:      h.n,
-		pile:   pileID,
-		self:   h.n.Author(),
-		screen: screen,
-		token:  rand.Text(),
-		ctx:    ctx,
-		cancel: cancel,
-		wake:   make(chan struct{}, 1),
-		l:      l,
+		n:       h.n,
+		pile:    pileID,
+		self:    h.n.Author(),
+		screen:  screen,
+		token:   rand.Text(),
+		ctx:     ctx,
+		cancel:  cancel,
+		wake:    make(chan struct{}, 1),
+		kick:    make(chan struct{}, 1),
+		answers: make(chan answer),
+		l:       l,
 	}
 	if screen.Kind == "cast" {
 		if err := s.connect(); err != nil {
@@ -217,6 +229,7 @@ func (h *Host) Start(pileID []byte, screenID string, assetID []byte) (State, err
 			return State{}, err
 		}
 	}
+	h.stop()
 	s.begin(p, items, cursor, changed)
 	h.cur = s
 	return s.state(), nil

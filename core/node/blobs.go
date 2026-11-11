@@ -516,6 +516,7 @@ func (n *Node) serveBlob(p *pile, w http.ResponseWriter, r *http.Request) {
 }
 
 func (n *Node) ServeOriginal(w http.ResponseWriter, r *http.Request, pileID, assetID, revision []byte) error {
+	w = counted{w, &n.streamed}
 	p, err := n.find(pileID)
 	var a state.Asset
 	if err == nil {
