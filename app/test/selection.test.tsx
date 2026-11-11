@@ -186,9 +186,10 @@ test('a file switch moves at once and moves back when the core refuses', async (
   await openSelection();
 
   const toggle = await screen.findByLabelText('В pile: IMG_0001.HEIC');
-  await fireEvent(toggle, 'valueChange', false);
-  expect(screen.getByLabelText('В pile: IMG_0001.HEIC').props.value).toBe(false);
+  const pressed = fireEvent(toggle, 'valueChange', false);
+  await waitFor(() => expect(screen.getByLabelText('В pile: IMG_0001.HEIC').props.value).toBe(false));
   answer([507, { error: 'disk_full' }]);
+  await pressed;
   await waitFor(() => expect(screen.getByLabelText('В pile: IMG_0001.HEIC').props.value).toBe(true));
   expect(screen.getByText('На телефоне закончилось место. Освободите место и повторите.')).toBeOnTheScreen();
 });
