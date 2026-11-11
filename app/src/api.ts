@@ -76,6 +76,10 @@ export type ShowState = {
   playing: boolean;
   video_unavailable: boolean;
   video_reason?: string;
+  buffering?: boolean;
+  stalled?: boolean;
+  need_bps?: number;
+  rate_bps?: number;
   renderer_error?: { code: string; message: string };
   waiting: ShowItem[];
   hints: Hint[];

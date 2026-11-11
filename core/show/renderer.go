@@ -30,6 +30,8 @@ const (
 
 var firstPause, maxPause = time.Second, 30 * time.Second
 
+var stall = 2 * time.Second
+
 func (s *session) connect() error {
 	ctx, cancel := context.WithTimeout(s.ctx, connectTimeout)
 	defer cancel()

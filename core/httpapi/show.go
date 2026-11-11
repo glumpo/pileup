@@ -41,6 +41,10 @@ type showState struct {
 	Playing          bool           `json:"playing"`
 	VideoUnavailable bool           `json:"video_unavailable"`
 	VideoReason      string         `json:"video_reason,omitempty"`
+	Buffering        bool           `json:"buffering"`
+	Stalled          bool           `json:"stalled"`
+	NeedBitrate      int64          `json:"need_bps,omitempty"`
+	Bitrate          int64          `json:"rate_bps,omitempty"`
 	RendererError    *rendererError `json:"renderer_error,omitempty"`
 	Waiting          []showItem     `json:"waiting"`
 	Hints            []hint         `json:"hints"`
@@ -72,6 +76,10 @@ func toShowState(st show.State) showState {
 		Playing:          st.Playing,
 		VideoUnavailable: st.VideoUnavailable,
 		VideoReason:      st.VideoReason,
+		Buffering:        st.Buffering,
+		Stalled:          st.Stalled,
+		NeedBitrate:      int64(st.NeedBitrate),
+		Bitrate:          int64(st.Bitrate),
 		Waiting:          []showItem{},
 		Hints:            []hint{},
 	}

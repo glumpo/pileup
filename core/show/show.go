@@ -47,6 +47,10 @@ type State struct {
 	Playing          bool
 	VideoUnavailable bool
 	VideoReason      string
+	Buffering        bool
+	Stalled          bool
+	NeedBitrate      float64
+	Bitrate          float64
 	Error            *RendererError
 	Waiting          []state.Asset
 	Hints            []Hint
