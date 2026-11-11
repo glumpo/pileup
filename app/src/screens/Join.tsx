@@ -1,6 +1,6 @@
 import { CameraView, useCameraPermissions } from 'expo-camera';
 import { useState } from 'react';
-import { ActivityIndicator, ScrollView, StyleSheet, Text } from 'react-native';
+import { ActivityIndicator, Linking, ScrollView, StyleSheet, Text } from 'react-native';
 
 import { Api, ApiError, Pile } from '../api';
 import { Button, describe, ErrorText, Field, Screen, styles } from '../ui';
@@ -32,11 +32,15 @@ export function Join({ api, onBack, onJoined }: { api: Api; onBack: () => void; 
   const [member, setMember] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string>();
+  const [blocked, setBlocked] = useState(false);
 
   async function scan() {
     setError(undefined);
-    if (permission?.granted || (await requestPermission()).granted) setScanning(true);
-    else setError('Нет доступа к камере: вставьте приглашение текстом');
+    const camera = permission?.granted ? permission : await requestPermission();
+    setBlocked(!camera.granted && !camera.canAskAgain);
+    if (camera.granted) setScanning(true);
+    else if (camera.canAskAgain) setError('Нет доступа к камере: вставьте приглашение текстом');
+    else setError('Нет доступа к камере. Разрешите его в настройках телефона или вставьте приглашение текстом.');
   }
 
   async function join() {
@@ -72,6 +76,7 @@ export function Join({ api, onBack, onJoined }: { api: Api; onBack: () => void; 
         ) : (
           <Button title="Сканировать QR" onPress={scan} />
         )}
+        {blocked && <Button title="Открыть настройки" onPress={() => Linking.openSettings()} />}
         <Text style={styles.muted}>или вставьте приглашение текстом</Text>
         <Field label="Приглашение" value={invite} onChangeText={setInvite} autoCapitalize="characters" multiline />
         <Field label="Ваше имя" value={member} onChangeText={setMember} />

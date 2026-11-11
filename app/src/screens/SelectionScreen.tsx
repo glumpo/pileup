@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
-import { FlatList, Switch, Text, View } from 'react-native';
+import { FlatList, Linking, Platform, Switch, Text, View } from 'react-native';
 
 import { Api, ApiError, Pile, Selection } from '../api';
 import { requestMediaPermissions } from '../core';
@@ -78,6 +78,12 @@ export function SelectionScreen({ api, pile, onBack }: { api: Api; pile: Pile; o
         <View style={styles.body}>
           <Text>Нет доступа к медиатеке. Разрешите доступ к фото и видео, чтобы добавить их в pile.</Text>
           <Button title="Разрешить" onPress={start} />
+          <Text style={styles.muted}>
+            {Platform.OS === 'ios'
+              ? 'Если окно с вопросом больше не появляется, откройте настройки Pileup, пункт «Фото», и выберите «Полный доступ».'
+              : 'Если окно с вопросом больше не появляется, откройте настройки Pileup, раздел «Разрешения», и разрешите доступ к фото и видео.'}
+          </Text>
+          <Button title="Открыть настройки" onPress={() => Linking.openSettings()} />
           <ErrorText error={error} />
         </View>
       </Screen>
