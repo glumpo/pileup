@@ -1,0 +1,5 @@
+68848	app/modules/core/ios/Mobile.xcframework/ios-arm64_x86_64-simulator/Mobile.framework/Mobile
+35012	app/modules/core/ios/Mobile.xcframework/ios-arm64/Mobile.framework/Mobile
+53340	app/ios/build/Build/Products/Release-iphonesimulator/app.app
+15084	app/ios/build/Build/Products/Release-iphonesimulator/app.app/app
+app/ios/build/Build/Intermediates.noindex/app.build/Release-iphonesimulator/app.build/app-LinkMap-normal-arm64.txt: linked without zerofill 12713512 bytes, core 12340886 bytes
