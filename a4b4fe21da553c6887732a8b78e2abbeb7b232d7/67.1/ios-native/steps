@@ -1,0 +1,5 @@
+env began=22:40:41 exit=0 seconds=29
+ios-boot began=22:41:11 exit=0 seconds=7
+mobile-ios began=22:41:19 exit=0 seconds=415
+ios-test began=22:48:15 exit=0 seconds=141
+finished 22:50:37
