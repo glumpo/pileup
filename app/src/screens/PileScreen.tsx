@@ -26,22 +26,23 @@ export function PileScreen({
   const [pile, setPile] = useState(initial);
   const [invite, setInvite] = useState<string>();
   const [error, setError] = useState<string>();
+  const [failure, setFailure] = useState<string>();
   const [refreshing, setRefreshing] = useState(false);
   const [sources, setSources] = useState<Source[]>([]);
   const pins = usePins(api, initial.id);
   const { width } = useWindowDimensions();
 
   const load = useCallback(async () => {
-    setError(undefined);
+    setFailure(undefined);
     api.timeline(initial.id).then((items) => {
       const names = new Map(items.map((i) => [i.author, i.author_name]));
       setSources([...names].map(([author, name]) => ({ author, name })));
-    }, (e) => setError(describe(e)));
+    }, (e) => setFailure(describe(e)));
     try {
       const piles = await api.piles();
       setPile(piles.find((p) => p.id === initial.id) ?? initial);
     } catch (e) {
-      setError(describe(e));
+      setFailure(describe(e));
     }
   }, [api, initial]);
 
@@ -50,15 +51,26 @@ export function PileScreen({
   }, [load]);
 
   useEffect(() => {
-    const timer = setInterval(
-      () =>
-        api.piles().then(
-          (piles) => setPile((p) => piles.find((x) => x.id === p.id) ?? p),
-          (e) => setError(describe(e)),
-        ),
-      3000,
-    );
-    return () => clearInterval(timer);
+    let live = true;
+    let timer: ReturnType<typeof setTimeout>;
+    const poll = () =>
+      api
+        .piles()
+        .then(
+          (piles) => {
+            setPile((p) => piles.find((x) => x.id === p.id) ?? p);
+            setFailure(undefined);
+          },
+          (e) => setFailure(describe(e)),
+        )
+        .finally(() => {
+          if (live) timer = setTimeout(poll, 3000);
+        });
+    timer = setTimeout(poll, 3000);
+    return () => {
+      live = false;
+      clearTimeout(timer);
+    };
   }, [api]);
 
   async function showInvite() {
@@ -90,6 +102,7 @@ export function PileScreen({
         <Button title="Хронология" onPress={() => onTimeline(pile)} />
         <Button title="Мои файлы" onPress={() => onSelection(pile)} />
         <Button title="Показать на экране" onPress={() => onShow(pile)} />
+        <ErrorText error={failure} />
         <ErrorText error={error} />
         <Text style={{ fontSize: 17, fontWeight: '600' }}>Загрузка на это устройство</Text>
         {sources.map((s) => (

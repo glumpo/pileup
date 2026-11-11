@@ -1,7 +1,7 @@
 SHELL := /bin/bash
 .SHELLFLAGS := -eo pipefail -c
 
-.PHONY: check test build licenses licenses-go licenses-npm app mobile-android android-debug mobile-ios ios-boot ios-test ios-prebuild ios-build ios-smoke ios-simulator
+.PHONY: check test build licenses licenses-go licenses-npm app mobile-android android-debug android-test mobile-ios ios-boot ios-test ios-prebuild ios-build ios-smoke ios-simulator
 
 CORE_AAR := app/modules/core/android/libs/pileup-core.aar
 CORE_XCFRAMEWORK := app/modules/core/ios/Mobile.xcframework
@@ -40,6 +40,9 @@ android-debug: mobile-android
 	cd app && npm ci --no-audit --no-fund
 	cd app && CI=1 npx expo prebuild --platform android --clean --no-install
 	cd app/android && ./gradlew :app:assembleDebug
+
+android-test:
+	cd app/android && ./gradlew :core:testDebugUnitTest
 
 mobile-ios:
 	cd core && GOBIN=$(TOOLS_BIN) go install tool

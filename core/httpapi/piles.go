@@ -140,7 +140,7 @@ func fail(w http.ResponseWriter, r *http.Request, err error) {
 	case errors.Is(err, node.ErrLocalNetwork):
 		reply(w, http.StatusBadGateway, problem("local_network_denied"))
 	case errors.Is(err, node.ErrUnreachable):
-		reply(w, http.StatusBadGateway, problem("inviter_unreachable"))
+		reply(w, http.StatusBadGateway, map[string]string{"error": "inviter_unreachable", "reason": node.Class(err)})
 	case errors.Is(err, node.ErrOffline):
 		reply(w, http.StatusServiceUnavailable, problem("offline"))
 	case errors.Is(err, node.ErrUnknownAsset):
