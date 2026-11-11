@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   FlatList,
@@ -41,6 +41,7 @@ function Page({ api, pile, item, style }: { api: Api; pile: string; item: Timeli
   const [attempt, setAttempt] = useState(0);
   const [problem, setProblem] = useState<Problem>();
   const [loaded, setLoaded] = useState(false);
+  const reloaded = useRef(false);
 
   useEffect(() => {
     if (!problem?.retry) return;
@@ -50,7 +51,10 @@ function Page({ api, pile, item, style }: { api: Api; pile: string; item: Timeli
 
   const failed = () =>
     api.checkBlob(pile, item, 2).then(
-      () => setProblem({ text: 'Не удалось показать файл', retry: false }),
+      () =>
+        reloaded.current
+          ? setProblem({ text: 'Не удалось показать файл', retry: false })
+          : ((reloaded.current = true), setAttempt((a) => a + 1)),
       (e) => setProblem(problemOf(e, item.author_name)),
     );
 
@@ -75,6 +79,14 @@ function Page({ api, pile, item, style }: { api: Api; pile: string; item: Timeli
         onError={failed}
       />
       {!loaded && !problem && <ActivityIndicator testID="loading" style={StyleSheet.absoluteFill} color="#fff" />}
+      {item.kind === 'video' && (
+        <View style={styles.video} pointerEvents="none">
+          <Text testID="video" style={styles.play}>
+            ▶
+          </Text>
+          <Text style={styles.text}>Видео воспроизводится на экране: нажмите «На экран».</Text>
+        </View>
+      )}
       {problem && <Text style={styles.problem}>{problem.text}</Text>}
     </View>
   );
@@ -114,7 +126,7 @@ export function Viewer({
         initialScrollIndex={index}
         initialNumToRender={1}
         maxToRenderPerBatch={2}
-        windowSize={3}
+        windowSize={5}
         keyExtractor={(i) => i.id}
         getItemLayout={(_, i) => ({ length: width, offset: width * i, index: i })}
         onMomentumScrollEnd={(e) => setCurrent(Math.round(e.nativeEvent.contentOffset.x / width))}
@@ -165,6 +177,8 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(0,0,0,0.4)',
   },
   text: { color: '#fff', fontSize: 16 },
+  video: { position: 'absolute', top: 0, right: 0, bottom: 0, left: 0, alignItems: 'center', justifyContent: 'center', gap: 12, padding: 32 },
+  play: { color: '#fff', fontSize: 64, textShadowColor: 'rgba(0,0,0,0.6)', textShadowRadius: 8 },
   problem: {
     position: 'absolute',
     left: 0,

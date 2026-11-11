@@ -87,7 +87,7 @@ func (o offline) Error() string {
 func Class(err error) string {
 	var o offline
 	switch {
-	case !errors.Is(err, ErrUnavailable) || errors.Is(err, ErrRefused):
+	case !errors.Is(err, ErrUnavailable) && !errors.Is(err, ErrUnreachable) || errors.Is(err, ErrRefused):
 		return ""
 	case errors.As(err, &o):
 		return string(o)

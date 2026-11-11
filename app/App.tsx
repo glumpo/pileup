@@ -65,25 +65,44 @@ export default function App() {
   const [error, setError] = useState<string>();
   const [stack, setStack] = useState<Route[]>([{ name: 'piles' }]);
   const restarting = useRef(false);
+  const checking = useRef(false);
+  const lost = useRef(() => {});
+  const onLost = useCallback(() => lost.current(), []);
 
   const start = useCallback(() => {
     setError(undefined);
-    startCore().then(setApi, (e) => setError(String(e)));
-  }, []);
+    startCore(onLost).then(setApi, (e) => setError(String(e)));
+  }, [onLost]);
   useEffect(start, [start]);
 
   const restart = useCallback(async () => {
     if (restarting.current) return;
     restarting.current = true;
     try {
-      setApi(await restartCore());
+      const fresh = await restartCore(onLost);
+      setApi(fresh);
+      return fresh;
     } catch (e) {
       setApi(undefined);
       setError(String(e));
     } finally {
       restarting.current = false;
     }
-  }, []);
+  }, [onLost]);
+
+  lost.current = () => {
+    if (!api || checking.current || restarting.current) return;
+    checking.current = true;
+    alive(api)
+      .then(async (ok) => {
+        const fresh = ok ? undefined : await restart();
+        if (fresh && !(await alive(fresh))) {
+          setApi(undefined);
+          setError('core does not answer after restart');
+        }
+      })
+      .finally(() => (checking.current = false));
+  };
 
   const depth = stack.length;
   const showing = stack[depth - 1].name === 'show';
@@ -100,7 +119,7 @@ export default function App() {
     if (!api) return;
     const sub = AppState.addEventListener('change', (state) => {
       if (state !== 'active') return;
-      alive(api).then((ok) => (ok ? api.reconnect().catch(() => {}) : restart()));
+      alive(api).then((ok) => void (ok ? api.reconnect().catch(() => {}) : restart()));
     });
     return () => sub.remove();
   }, [api, restart]);

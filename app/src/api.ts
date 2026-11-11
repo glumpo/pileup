@@ -116,12 +116,24 @@ export class ApiError extends Error {
   }
 }
 
-export function connect(port: number, token: string) {
+export function connect(port: number, token: string, lost?: () => void) {
   const base = `http://127.0.0.1:${port}`;
   const auth = { Authorization: `Bearer ${token}` };
+  const timelines = new Map<string, { etag: string; items: TimelineItem[] }>();
+
+  async function send(url: string, init: RequestInit) {
+    try {
+      const res = await fetch(url, init);
+      if (res.status === 401) lost?.();
+      return res;
+    } catch (e) {
+      if (e instanceof TypeError) lost?.();
+      throw e;
+    }
+  }
 
   async function call<T>(method: string, path: string, body?: unknown): Promise<T> {
-    const res = await fetch(base + path, {
+    const res = await send(base + path, {
       method,
       headers: body === undefined ? auth : { ...auth, 'Content-Type': 'application/json' },
       body: body === undefined ? undefined : JSON.stringify(body),
@@ -136,7 +148,7 @@ export function connect(port: number, token: string) {
   reportTo((kind, message) => call<void>('POST', '/diag', { kind, message }));
 
   async function text(path: string): Promise<string> {
-    const res = await fetch(base + path, { headers: auth });
+    const res = await send(base + path, { headers: auth });
     if (!res.ok) throw new ApiError(res.status, 'internal');
     return res.text();
   }
@@ -152,7 +164,21 @@ export function connect(port: number, token: string) {
       call<void>('PUT', `/piles/${pile}/selection`, { from, to }),
     setSelected: (pile: string, asset: string, selected: boolean) =>
       call<void>('PUT', `/piles/${pile}/selection/${asset}`, { selected }),
-    timeline: (pile: string) => call<TimelineItem[]>('GET', `/piles/${pile}/timeline`),
+    timeline: async (pile: string) => {
+      const known = timelines.get(pile);
+      const res = await send(`${base}/piles/${pile}/timeline`, {
+        headers: known ? { ...auth, 'If-None-Match': known.etag } : auth,
+      });
+      if (known && res.status === 304) return known.items;
+      if (!res.ok) {
+        const problem = await res.json().catch(() => ({}));
+        throw new ApiError(res.status, problem.error ?? 'internal', problem.reason);
+      }
+      const items: TimelineItem[] = await res.json();
+      const etag = res.headers.get('ETag');
+      if (etag) timelines.set(pile, { etag, items });
+      return items;
+    },
     diag: () => call<DiagEvent[]>('GET', '/diag'),
     reconnect: () => call<void>('POST', '/reconnect'),
     diagExport: () => text('/diag/export'),
@@ -173,7 +199,7 @@ export function connect(port: number, token: string) {
       headers: auth,
     }),
     checkBlob: async (pile: string, item: { id: string; revision: string }, tier: 1 | 2) => {
-      const res = await fetch(`${base}/piles/${pile}/blob/${item.id}/${item.revision}/${tier}`, {
+      const res = await send(`${base}/piles/${pile}/blob/${item.id}/${item.revision}/${tier}`, {
         headers: auth,
       });
       if (!res.ok) {

@@ -337,7 +337,16 @@ func (n *Node) reach(ctx context.Context, i invite.Invite) (string, op.Author, e
 		n.report(diag.Connection, i.PileID, a, "join", err)
 		errs = append(errs, err)
 	}
-	return "", op.Author{}, fmt.Errorf("%w: %w", ErrUnreachable, errors.Join(errs...))
+	if len(n.cfg.Addrs()) == 0 {
+		return "", op.Author{}, fmt.Errorf("%w: %w", ErrOffline, errors.Join(errs...))
+	}
+	best := NoAddress
+	for _, err := range errs {
+		if c := class(err); slices.Index(hopeful, c) < slices.Index(hopeful, best) {
+			best = c
+		}
+	}
+	return "", op.Author{}, fmt.Errorf("%w: %w: %w", ErrUnreachable, offline(best), errors.Join(errs...))
 }
 
 func (n *Node) add(e entry, addrs map[op.Author]string, changes ...op.Change) (Pile, error) {
