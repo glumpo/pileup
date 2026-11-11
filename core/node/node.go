@@ -94,6 +94,7 @@ type pile struct {
 	peers   map[string]op.Author
 	faults  map[string]string
 	loops   map[string]*loop
+	ln      net.Listener
 }
 
 type broken struct {
@@ -399,10 +400,12 @@ func (n *Node) start(e entry, addrs map[op.Author]string, changes ...op.Change) 
 	return p, nil
 }
 
+var netListen = net.Listen
+
 func listen(port uint16) (net.Listener, error) {
-	ln, err := net.Listen("tcp", fmt.Sprintf(":%d", port))
+	ln, err := netListen("tcp", fmt.Sprintf(":%d", port))
 	if err != nil && port != 0 {
-		return net.Listen("tcp", ":0")
+		return netListen("tcp", ":0")
 	}
 	return ln, err
 }
@@ -420,18 +423,52 @@ func (n *Node) serve(p *pile, ln net.Listener) {
 		BaseContext:       func(net.Listener) context.Context { return n.ctx },
 		ConnContext:       func(ctx context.Context, c net.Conn) context.Context { return context.WithValue(ctx, connKey{}, c) },
 	}
-	l := peer.NewListener(ln, n.key, func(id []byte) ([]byte, bool) {
+	secrets := func(id []byte) ([]byte, bool) {
 		return p.Secret, bytes.Equal(id, p.ID)
-	})
+	}
+	p.ln = ln
 	n.wg.Add(1)
 	go func() {
 		defer n.wg.Done()
-		srv.Serve(l)
+		for {
+			err := srv.Serve(peer.NewListener(ln, n.key, secrets))
+			if n.ctx.Err() != nil {
+				return
+			}
+			n.diag.Add(diag.Connection, p.ID, "", fmt.Sprintf("port %d stopped accepting connections: %v", p.Port, err))
+			for ln, err = netListen("tcp", fmt.Sprintf(":%d", p.Port)); err != nil; ln, err = netListen("tcp", fmt.Sprintf(":%d", p.Port)) {
+				n.report(diag.Connection, p.ID, "", fmt.Sprintf("listen on port %d", p.Port), err)
+				if pause(n.ctx, retry) != nil {
+					return
+				}
+			}
+			n.mu.Lock()
+			p.ln = ln
+			n.mu.Unlock()
+			n.diag.Add(diag.Connection, p.ID, "", fmt.Sprintf("listening on port %d", p.Port))
+		}
 	}()
 	context.AfterFunc(n.ctx, func() {
 		srv.Close()
-		ln.Close()
+		n.mu.Lock()
+		p.ln.Close()
+		n.mu.Unlock()
 	})
+}
+
+func (n *Node) check(p *pile, ln net.Listener) {
+	defer n.wg.Done()
+	ctx, cancel := context.WithTimeout(n.ctx, dialTimeout)
+	defer cancel()
+	c, err := peer.Dial(ctx, fmt.Sprintf("127.0.0.1:%d", p.Port), n.key, p.ID, p.Secret)
+	if err == nil {
+		c.Close()
+		return
+	}
+	if n.ctx.Err() == nil {
+		n.diag.Add(diag.Connection, p.ID, "", fmt.Sprintf("port %d does not accept connections (%v), reopening", p.Port, err))
+		ln.Close()
+	}
 }
 
 func (n *Node) tracked(h http.Handler) http.Handler {

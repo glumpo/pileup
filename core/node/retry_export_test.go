@@ -2,6 +2,7 @@ package node
 
 import (
 	"context"
+	"net"
 	"slices"
 	"time"
 )
@@ -37,4 +38,10 @@ func (n *Node) Dialing(pileID []byte) []string {
 	}
 	slices.Sort(out)
 	return out
+}
+
+func SetListen(f func(network, addr string) (net.Listener, error)) (restore func()) {
+	old := netListen
+	netListen = f
+	return func() { netListen = old }
 }
