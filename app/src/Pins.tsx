@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { Text, View } from 'react-native';
 
 import { Api, PinEstimate, PinProgress } from './api';
+import { adviceFor } from './presence';
 import { Button, describe, ErrorText, styles } from './ui';
 
 export type Source = { author: string; name: string };
@@ -26,7 +27,7 @@ export function usePins(api: Api, pile: string) {
   const [offer, setOffer] = useState<{ member?: Source; estimate: PinEstimate }>();
   const [error, setError] = useState<string>();
   const [failure, setFailure] = useState<string>();
-  const loading = progress.some((p) => p.done + p.failed < p.total);
+  const loading = progress.some((p) => p.done + p.failed < p.total || p.failed > 0);
 
   const refresh = useCallback(
     () =>
@@ -46,8 +47,17 @@ export function usePins(api: Api, pile: string) {
 
   useEffect(() => {
     if (!loading) return;
-    const timer = setInterval(refresh, 1000);
-    return () => clearInterval(timer);
+    let live = true;
+    let timer: ReturnType<typeof setTimeout>;
+    const poll = () =>
+      refresh().finally(() => {
+        if (live) timer = setTimeout(poll, 1000);
+      });
+    timer = setTimeout(poll, 1000);
+    return () => {
+      live = false;
+      clearTimeout(timer);
+    };
   }, [refresh, loading]);
 
   async function run(action: () => Promise<void>) {
@@ -73,6 +83,19 @@ export function usePins(api: Api, pile: string) {
     cancel: () => setOffer(undefined),
     unpin: (member?: string) => run(async () => setProgress(await api.unpin(pile, member))),
   };
+}
+
+const waiting: Record<string, string> = {
+  unreachable: 'нет связи с участником',
+  timeout: 'участник отвечает медленно',
+};
+
+function line(p: PinProgress): string {
+  const count = `${p.name}: ${p.done}/${p.total}`;
+  if (p.reason && waiting[p.reason]) return `${count} — ждём: ${waiting[p.reason]}. ${adviceFor()}`;
+  if (p.failed > 0)
+    return `${count}, не загрузилось: ${p.failed}. Возможно, файлы удалены из галереи или в неподдерживаемом формате — Pileup попробует ещё раз через 5 минут.`;
+  return count;
 }
 
 export function PinsPanel({ pins }: { pins: ReturnType<typeof usePins> }) {
@@ -106,7 +129,7 @@ export function PinsPanel({ pins }: { pins: ReturnType<typeof usePins> }) {
       {progress.map((p) => (
         <View key={p.author} style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
           <Text style={{ flex: 1 }}>
-            {`${p.name}: ${p.done}/${p.total}${p.failed > 0 ? `, ошибок: ${p.failed}` : ''}`}
+            {line(p)}
           </Text>
           <Button
             title="Снять закрепление"
