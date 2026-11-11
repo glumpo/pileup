@@ -8,6 +8,5 @@ let package = Package(
   targets: [
     .binaryTarget(name: "Mobile", path: "Mobile.xcframework"),
     .target(name: "PileupNative", dependencies: ["Mobile"], path: "Native", linkerSettings: [.linkedLibrary("resolv")]),
-    .testTarget(name: "PileupNativeTests", dependencies: ["PileupNative"], path: "Tests"),
   ]
 )

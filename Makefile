@@ -1,12 +1,12 @@
 SHELL := /bin/bash
 .SHELLFLAGS := -eo pipefail -c
 
-.PHONY: check test build licenses licenses-go licenses-npm app mobile-android android-debug mobile-ios ios-test ios-prebuild ios-build ios-smoke ios-simulator
+.PHONY: check test build licenses licenses-go licenses-npm app mobile-android android-debug mobile-ios ios-boot ios-test ios-prebuild ios-build ios-smoke ios-simulator
 
 CORE_AAR := app/modules/core/android/libs/pileup-core.aar
 CORE_XCFRAMEWORK := app/modules/core/ios/Mobile.xcframework
 IOS_APP := app/ios/build/Build/Products/Release-iphonesimulator/app.app
-IOS_SIMULATOR ?= $(shell xcrun simctl list devices available -j | jq -r '[.devices | to_entries[] | select(.key | contains("iOS")) | .value[] | select(.name | startswith("iPhone"))] | last | .udid')
+IOS_SIMULATOR ?= $(shell xcrun simctl list devices available -j | jq -r '[.devices | to_entries | sort_by(.key)[] | select(.key | contains("iOS")) | .value[] | select(.name | startswith("iPhone"))] | last | .udid')
 TOOLS_BIN := $(CURDIR)/build/bin
 
 check: test build licenses app
@@ -45,8 +45,12 @@ mobile-ios:
 	rm -rf $(CORE_XCFRAMEWORK)
 	cd core && PATH=$(TOOLS_BIN):$$PATH gomobile bind -target=ios -iosversion 16.4 -o ../$(CORE_XCFRAMEWORK) ./mobile
 
+ios-boot:
+	xcrun simctl boot $(IOS_SIMULATOR) || true
+
 ios-test:
-	cd app/modules/core/ios && xcodebuild test -scheme PileupNative -destination id=$(IOS_SIMULATOR) -derivedDataPath .build/xcode
+	cd app/modules/core/ios/TestHost && xcodegen generate
+	cd app/modules/core/ios/TestHost && xcodebuild test -project PileupNativeTests.xcodeproj -scheme PileupNativeTests -destination id=$(IOS_SIMULATOR) -derivedDataPath ../.build/xcode
 
 ios-prebuild:
 	cd app && npm ci --no-audit --no-fund
