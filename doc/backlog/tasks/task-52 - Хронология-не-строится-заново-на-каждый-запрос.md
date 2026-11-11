@@ -1,11 +1,11 @@
 ---
 id: TASK-52
 title: Хронология не строится заново на каждый запрос
-status: In Progress
+status: Done
 assignee:
   - '@claude'
 created_date: '2026-11-11T01:54:00Z'
-updated_date: '2026-11-11T12:09:00Z'
+updated_date: '2026-11-11T12:20:00Z'
 labels:
   - core
   - review
@@ -55,6 +55,8 @@ ordinal: 52000
 Промежуточно (только кеш Node.Timeline, без кеша JSON): GET timeline 3,9 мс (600) и 62 мс (10 тыс.) — остаток был сборкой и сериализацией JSON; с кешем тела 200-ответ — это передача 3,6 МБ по loopback.
 Что осталось O(N) в памяти: show.Pins — loader.setItems (карты и prefetch.SetItems) и plan() на каждый опрос; show.Next — refresh → setItems → plan. Это core/show (TASK-51 и соседние), не трогал. Числа Next сильно шумят (фоновые рендеры T2 при 10 тыс.).
 Канал Changed у реплики при синхронизации закрывается после всей пачки GET /ops (defer notify в replica.fetch), поэтому ops от пира видны в хронологии после окончания пачки, а не по одной, как раньше. Это совпадает с семантикой A32 (follow), тестом TestTimelineAndPileListShowEveryAppliedChange покрыто «видно после применения».
+
+Лид: слито в master. Оговорка к критерию 2: опрос закреплений больше не читает БД, но по-прежнему пересобирает загрузчик и план по всем файлам в памяти (core/show) — передано в TASK-51. Клиентская часть 304 (If-None-Match в app/src/api.ts) не сделана — сделать после TASK-55.
 <!-- SECTION:NOTES:END -->
 
 ## Final Summary

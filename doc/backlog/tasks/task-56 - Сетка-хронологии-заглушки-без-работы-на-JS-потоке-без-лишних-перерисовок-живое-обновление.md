@@ -3,11 +3,11 @@ id: TASK-56
 title: >-
   Сетка хронологии: заглушки без работы на JS-потоке, без лишних перерисовок,
   живое обновление
-status: In Progress
+status: Done
 assignee:
   - '@claude'
 created_date: '2026-11-11T01:54:00Z'
-updated_date: '2026-11-11T12:12:00Z'
+updated_date: '2026-11-11T21:45:00Z'
 labels:
   - app
   - ui
@@ -55,6 +55,8 @@ ordinal: 56000
 Тесты красного коммита поправлены после исправления в одном месте: отсутствие заглушки у expo-image — пустой массив, а не undefined (placeholder ?? []).
 
 Лид: слито в master. Нативная сборка Android и iOS с expo-image не проверена локально — закрыть задачу после зелёной сборки в CI (ios-app после слияния ios/core; задание сборки Android).
+
+Лид: сборка iOS с expo-image зелёная в CI на master (ios-app, коммит 0139e6e). Сборка Android с expo-image остаётся непроверенной — отслеживается вместе с TASK-54 (нужно задание сборки Android).
 <!-- SECTION:NOTES:END -->
 
 ## Final Summary

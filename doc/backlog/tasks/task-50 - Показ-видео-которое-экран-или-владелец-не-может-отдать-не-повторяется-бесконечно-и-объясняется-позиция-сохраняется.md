@@ -3,11 +3,11 @@ id: TASK-50
 title: >-
   Показ: видео, которое экран или владелец не может отдать, не повторяется
   бесконечно и объясняется; позиция сохраняется
-status: In Progress
+status: Done
 assignee:
   - '@claude'
 created_date: '2026-11-11T01:54:00Z'
-updated_date: '2026-11-11T12:16:00Z'
+updated_date: '2026-11-11T21:45:00Z'
 labels:
   - core
   - app

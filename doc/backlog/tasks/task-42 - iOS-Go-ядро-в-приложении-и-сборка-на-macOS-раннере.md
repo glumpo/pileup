@@ -1,11 +1,11 @@
 ---
 id: TASK-42
 title: 'iOS: Go-ядро в приложении и сборка на macOS-раннере'
-status: In Progress
+status: Done
 assignee:
   - '@claude'
 created_date: '2026-11-11T01:20:00Z'
-updated_date: '2026-11-11T11:58:00Z'
+updated_date: '2026-11-11T21:45:00Z'
 labels:
   - ios
   - app
@@ -65,6 +65,8 @@ iOS-часть TASK-3 не сделана: Swift-модуль `app/modules/core/
 
 Доказательства: прогон 40 (коммит 7e1c284), ci-logs: 7e1c284a…/40.1/{check,ios-native,ios-app}/ — все success; 19 XCTest прошли; smoke: два запуска, /health без токена 401, после terminate порт закрыт; скриншот launch-*.png — экран Pileup без ошибки.
 Не проверено: доставка willTerminate (simctl terminate убивает процесс); 200 с токеном внутри настоящего приложения автоматически (есть в hosted-тесте и косвенно по скриншоту); сборка под устройство (нет аккаунта Apple).
+
+Лид: слито в master (0139e6e). На master после слияния все три задания CI зелёные (ci-logs: 0139e6e…, 8f03874…), в том числе сборка приложения под симулятор с expo-image (TASK-56).
 <!-- SECTION:NOTES:END -->
 
 ## Final Summary
