@@ -345,10 +345,12 @@ func (n *Node) start(e entry, addrs map[op.Author]string, changes ...op.Change) 
 	return p, nil
 }
 
+var netListen = net.Listen
+
 func listen(port uint16) (net.Listener, error) {
-	ln, err := net.Listen("tcp", fmt.Sprintf(":%d", port))
+	ln, err := netListen("tcp", fmt.Sprintf(":%d", port))
 	if err != nil && port != 0 {
-		return net.Listen("tcp", ":0")
+		return netListen("tcp", ":0")
 	}
 	return ln, err
 }
