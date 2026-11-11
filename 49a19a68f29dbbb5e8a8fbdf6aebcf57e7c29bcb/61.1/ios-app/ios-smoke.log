@@ -1,0 +1,15 @@
+scripts/ios-smoke.sh app/ios/build/Build/Products/Release-iphonesimulator/app.app 23C8F95C-765D-46A9-AE82-0BEE2921C8D7 build/ios-smoke
+An error was encountered processing the command (domain=com.apple.CoreSimulator.SimError, code=405):
+Unable to boot device in current state: Booted
+Monitoring boot status for iPhone 17 (23C8F95C-765D-46A9-AE82-0BEE2921C8D7).
+Device already booted, nothing to do.
+
+launch 1: pid 41739, core port 64346, /health without token: 401
+Detected file type from extension: PNG
+Note: No display specified. Defaulting to display: E00928CF-BD20-4CC9-B444-B93B2BADB327 (screenID: 1, name: LCD)
+Wrote screenshot to: /Users/runner/work/pileup/pileup/build/ios-smoke/launch-1.png
+launch 2: pid 42611, core port 64503, /health without token: 401
+Detected file type from extension: PNG
+Note: No display specified. Defaulting to display: E00928CF-BD20-4CC9-B444-B93B2BADB327 (screenID: 1, name: LCD)
+Wrote screenshot to: /Users/runner/work/pileup/pileup/build/ios-smoke/launch-2.png
+smoke ok
