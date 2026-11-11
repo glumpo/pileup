@@ -287,11 +287,14 @@ func (h *Host) do(f func(s *session) error) (State, error) {
 	if s == nil {
 		return State{}, ErrNoShow
 	}
-	s.mu.Lock()
-	err := f(s)
-	s.mu.Unlock()
-	if err != nil {
+	if err := s.locked(f); err != nil {
 		return State{}, err
 	}
 	return s.state(), nil
+}
+
+func (s *session) locked(f func(s *session) error) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return f(s)
 }

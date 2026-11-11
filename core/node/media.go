@@ -8,6 +8,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io/fs"
 	"os"
 	"path/filepath"
@@ -23,6 +24,7 @@ import (
 var (
 	ErrNoMedia      = errors.New("node: no media library on this device")
 	ErrUnknownAsset = errors.New("node: unknown asset")
+	ErrMedia        = errors.New("node: media library failed")
 )
 
 type MediaProvider interface {
@@ -194,7 +196,7 @@ func (n *Node) candidates(c store.Selection) ([]Candidate, error) {
 	}
 	b, err := n.cfg.Media.Media(c.From, c.To)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("%w: %w", ErrMedia, err)
 	}
 	var items []MediaItem
 	if err := json.Unmarshal(b, &items); err != nil {

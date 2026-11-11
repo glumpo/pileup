@@ -91,22 +91,22 @@ func shows(mux *http.ServeMux, h *show.Host) {
 		}
 		pile, err := hex.DecodeString(req.Pile)
 		if err != nil {
-			fail(w, node.ErrUnknownPile)
+			fail(w, r, node.ErrUnknownPile)
 			return
 		}
 		var asset []byte
 		if req.Asset != "" {
 			if asset, err = hex.DecodeString(req.Asset); err != nil {
-				fail(w, node.ErrUnknownAsset)
+				fail(w, r, node.ErrUnknownAsset)
 				return
 			}
 		}
 		st, err := h.Start(pile, req.Screen, asset)
-		showReply(w, http.StatusCreated, st, err)
+		showReply(w, r, http.StatusCreated, st, err)
 	})
 	mux.HandleFunc("GET /show", func(w http.ResponseWriter, r *http.Request) {
 		st, err := h.State()
-		showReply(w, http.StatusOK, st, err)
+		showReply(w, r, http.StatusOK, st, err)
 	})
 	mux.HandleFunc("DELETE /show", func(w http.ResponseWriter, r *http.Request) {
 		h.Stop()
@@ -120,7 +120,7 @@ func shows(mux *http.ServeMux, h *show.Host) {
 	} {
 		mux.HandleFunc("POST "+path, func(w http.ResponseWriter, r *http.Request) {
 			st, err := f()
-			showReply(w, http.StatusOK, st, err)
+			showReply(w, r, http.StatusOK, st, err)
 		})
 	}
 	mux.HandleFunc("POST /show/goto", func(w http.ResponseWriter, r *http.Request) {
@@ -130,15 +130,15 @@ func shows(mux *http.ServeMux, h *show.Host) {
 		}
 		asset, err := hex.DecodeString(req.Asset)
 		if err != nil {
-			fail(w, node.ErrUnknownAsset)
+			fail(w, r, node.ErrUnknownAsset)
 			return
 		}
 		st, err := h.Goto(asset)
-		showReply(w, http.StatusOK, st, err)
+		showReply(w, r, http.StatusOK, st, err)
 	})
 }
 
-func showReply(w http.ResponseWriter, status int, st show.State, err error) {
+func showReply(w http.ResponseWriter, r *http.Request, status int, st show.State, err error) {
 	var unavailable *show.UnavailableError
 	switch {
 	case err == nil:
@@ -156,6 +156,6 @@ func showReply(w http.ResponseWriter, status int, st show.State, err error) {
 	case errors.Is(err, show.ErrUnreachable):
 		reply(w, http.StatusBadGateway, problem("screen_unreachable"))
 	default:
-		fail(w, err)
+		fail(w, r, err)
 	}
 }

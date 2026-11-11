@@ -319,6 +319,8 @@ paths:
           description: Range not satisfiable.
         "502":
           $ref: "#/components/responses/Error"
+        "507":
+          $ref: "#/components/responses/Error"
   /piles/{id}/pins:
     parameters:
       - $ref: "#/components/parameters/PileID"
@@ -860,8 +862,9 @@ components:
         kind:
           type: string
           description: >-
-            discovery, connection, sync, timeout, renderer or media; newer
-            versions may add others.
+            discovery, connection, sync, timeout, renderer, media or api
+            (a request answered with 500 or 507: route pattern and error
+            text); newer versions may add others.
         pile:
           type: string
           pattern: "^[0-9a-f]+$"
@@ -1050,8 +1053,9 @@ components:
           type: string
           description: >-
             unreachable — no connection to the member's device; timeout —
-            connected, but requests to it fail or time out. Newer versions
-            may add others.
+            connected, but requests to it fail or time out; disk_full — the
+            hint is about this device (author is its own key): its disk is
+            full and loading stopped. Newer versions may add others.
         last_error:
           type: string
           description: >-
@@ -1091,7 +1095,8 @@ components:
           type: string
           description: >-
             Present while files remain and the member is not answering:
-            unreachable or timeout, as in Hint.
+            unreachable or timeout, as in Hint; disk_full while files remain
+            and this device's disk is full.
   responses:
     PinProgress:
       description: Members with pinned files, by name.
@@ -1108,7 +1113,10 @@ components:
           schema:
             $ref: "#/components/schemas/ShowState"
     Error:
-      description: Request failed.
+      description: >-
+        Request failed. 500 (internal, media_failed, render_failed) and 507
+        (disk_full) are written to the diagnostics log with the route and
+        the error text.
       content:
         application/json:
           schema:
@@ -1132,6 +1140,10 @@ components:
                   - unknown_asset
                   - no_media
                   - source_unavailable
+                  - source_failed
+                  - render_failed
+                  - media_failed
+                  - disk_full
                   - no_show
                   - unknown_screen
                   - screen_unavailable
