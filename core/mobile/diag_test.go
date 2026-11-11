@@ -63,8 +63,8 @@ func TestReportReachesLogBeforeStartWhileRunningAndAfterStop(t *testing.T) {
 	mobile.Report("discovery", "nsd: stop discovery failed, error 0")
 	start(t, d)
 	es := events(t)
-	if len(find(es, "discovery", "nsd: stop discovery")) != 1 || len(find(es, "media", "no cursor")) != 1 || len(find(es, "app", "1.4.0")) != 2 {
-		t.Fatalf("events after restart %+v, want the report after Stop, the earlier events and two starts", es)
+	if len(find(es, "discovery", "nsd: stop discovery")) != 1 || len(find(es, "media", "no cursor")) != 1 || len(find(es, "app", "1.4.0 android started")) != 1 || find(es, "app", "1.4.0 android started")[0].Count != 2 {
+		t.Fatalf("events after restart %+v, want the report after Stop, the earlier events and the start counted twice", es)
 	}
 }
 

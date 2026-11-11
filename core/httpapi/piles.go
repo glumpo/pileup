@@ -69,7 +69,7 @@ func WithNode(token string, n *node.Node, h *show.Host) http.Handler {
 	blobs(mux, n)
 	timeline(mux, n)
 	screens(mux, n)
-	diagnostics(mux, n)
+	diagnostics(mux, n, token)
 	reconnect(mux, n)
 	shows(mux, h)
 	pins(mux, h)

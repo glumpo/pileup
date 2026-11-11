@@ -11,6 +11,8 @@ const kinds: Record<string, string> = {
   timeout: 'Таймаут',
   renderer: 'Экран',
   media: 'Файлы',
+  app: 'Приложение',
+  crash: 'Сбой ядра',
 };
 
 const two = (n: number) => String(n).padStart(2, '0');

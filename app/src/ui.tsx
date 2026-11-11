@@ -1,7 +1,8 @@
-import { Component, ReactNode } from 'react';
+import { Component, ErrorInfo, ReactNode } from 'react';
 import { Pressable, StyleSheet, Text, TextInput, TextInputProps, View } from 'react-native';
 
 import { ApiError } from './api';
+import { report } from './report';
 
 const messages: Record<string, string> = {
   bad_invite: 'Это не приглашение Pileup',
@@ -89,8 +90,9 @@ export class Boundary extends Component<
     return { failed: true };
   }
 
-  componentDidCatch(error: unknown) {
+  componentDidCatch(error: unknown, info: ErrorInfo) {
     console.warn('render', error);
+    report(error, info.componentStack ?? '');
   }
 
   componentDidUpdate(prev: { item: unknown }) {

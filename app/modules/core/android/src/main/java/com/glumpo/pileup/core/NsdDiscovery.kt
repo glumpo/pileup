@@ -4,6 +4,7 @@ import android.content.Context
 import android.net.nsd.NsdManager
 import android.net.nsd.NsdServiceInfo
 import android.net.wifi.WifiManager
+import mobile.Mobile
 
 class NsdDiscovery(context: Context) : mobile.DiscoveryProvider {
   private val nsd = context.getSystemService(NsdManager::class.java)
@@ -24,9 +25,9 @@ class NsdDiscovery(context: Context) : mobile.DiscoveryProvider {
     }
     val listener = object : NsdManager.RegistrationListener {
       override fun onServiceRegistered(info: NsdServiceInfo) {}
-      override fun onRegistrationFailed(info: NsdServiceInfo, error: Int) {}
+      override fun onRegistrationFailed(info: NsdServiceInfo, error: Int) = failed("advertise $service", error)
       override fun onServiceUnregistered(info: NsdServiceInfo) {}
-      override fun onUnregistrationFailed(info: NsdServiceInfo, error: Int) {}
+      override fun onUnregistrationFailed(info: NsdServiceInfo, error: Int) = failed("stop advertising $service", error)
     }
     session.begin { nsd.unregisterService(listener) }
     nsd.registerService(info, NsdManager.PROTOCOL_DNS_SD, listener)
@@ -36,8 +37,8 @@ class NsdDiscovery(context: Context) : mobile.DiscoveryProvider {
     val listener = object : NsdManager.DiscoveryListener {
       override fun onDiscoveryStarted(type: String) {}
       override fun onDiscoveryStopped(type: String) {}
-      override fun onStartDiscoveryFailed(type: String, error: Int) {}
-      override fun onStopDiscoveryFailed(type: String, error: Int) {}
+      override fun onStartDiscoveryFailed(type: String, error: Int) = failed("browse $service", error)
+      override fun onStopDiscoveryFailed(type: String, error: Int) = failed("stop browsing $service", error)
       override fun onServiceFound(info: NsdServiceInfo) = resolves.add(info to handler)
       override fun onServiceLost(info: NsdServiceInfo) = handler.lost(info.serviceName)
     }
@@ -50,9 +51,14 @@ class NsdDiscovery(context: Context) : mobile.DiscoveryProvider {
     session.end()
   }
 
+  private fun failed(what: String, error: Int) = Mobile.report("discovery", "nsd: $what failed, error $error")
+
   private fun resolve(found: NsdServiceInfo, handler: mobile.DiscoveryHandler, done: () -> Unit) {
     val listener = object : NsdManager.ResolveListener {
-      override fun onResolveFailed(info: NsdServiceInfo, error: Int) = done()
+      override fun onResolveFailed(info: NsdServiceInfo, error: Int) {
+        failed("resolve ${found.serviceType}", error)
+        done()
+      }
       override fun onServiceResolved(info: NsdServiceInfo) {
         try {
           info.host?.hostAddress?.let { handler.found(found.serviceName, it, info.port.toLong(), txtRecord(info.attributes)) }
@@ -64,6 +70,7 @@ class NsdDiscovery(context: Context) : mobile.DiscoveryProvider {
     try {
       nsd.resolveService(found, listener)
     } catch (e: IllegalArgumentException) {
+      Mobile.report("discovery", "nsd: resolve ${found.serviceType}: $e")
       done()
     }
   }

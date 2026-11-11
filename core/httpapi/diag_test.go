@@ -65,7 +65,7 @@ func TestDiagListsEventsNewestFirst(t *testing.T) {
 	after := time.Now().UnixMilli()
 	var got []event
 	c.do("GET", "/diag", nil, http.StatusOK, &got)
-	for i, e := range got {
+	for i, e := range got[:min(2, len(got))] {
 		if e.Time < before || e.Time > after {
 			t.Fatalf("event %d time %d not in [%d, %d]", i, e.Time, before, after)
 		}
@@ -75,7 +75,7 @@ func TestDiagListsEventsNewestFirst(t *testing.T) {
 		{Kind: "renderer", Message: "cast lost", Count: 2},
 		{Kind: "sync", Pile: "ab01", Peer: "10.0.0.2:4000", Message: "sync established", Count: 1},
 	}
-	if len(got) != 3 || !reflect.DeepEqual(got[:2], want) {
+	if len(got) != 3 || !reflect.DeepEqual(got[:2], want) || got[2].Kind != "app" {
 		t.Fatalf("events %+v, want %+v and the start", got, want)
 	}
 }
