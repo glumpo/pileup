@@ -4,6 +4,8 @@ import App from '../App';
 import { Selection } from '../src/api';
 import { fakeCore, georgia, INVITE, Reply } from './fakeCore';
 
+const native = jest.requireMock('../modules/core/src/PileupCoreModule').default;
+
 const internal =
   'Что-то пошло не так в Pileup. Подробности записаны в «Журнал» на главном экране — отправьте его разработчику.';
 
@@ -15,22 +17,28 @@ test('an unexpected core error says where the details are instead of a code', as
   expect(screen.queryByText(/internal/)).toBeNull();
 });
 
-test('a lost connection to the core is explained instead of a TypeError', async () => {
+const restarting = 'Pileup перезапускается после сбоя: подождите несколько секунд.';
+
+test('a lost connection to the core says that Pileup restarts by itself', async () => {
   globalThis.fetch = jest.fn(async () => {
     throw new TypeError('Network request failed');
   }) as unknown as typeof fetch;
+  native.stop.mockReturnValueOnce(new Promise(() => {}));
   await render(<App />);
 
-  expect(await screen.findByText('Pileup не отвечает: закройте приложение и откройте снова.')).toBeOnTheScreen();
-  expect(screen.queryByText(/TypeError/)).toBeNull();
+  expect(await screen.findByText(restarting)).toBeOnTheScreen();
+  expect(screen.queryByText(/TypeError|закройте приложение/)).toBeNull();
+  await waitFor(() => expect(native.stop).toHaveBeenCalled(), { timeout: 5000 });
 });
 
-test('a rejected session is explained instead of an internal error', async () => {
+test('a rejected session restarts Pileup instead of an internal error', async () => {
   fakeCore({ 'GET /piles': [401, ''] });
+  native.stop.mockReturnValueOnce(new Promise(() => {}));
   await render(<App />);
 
-  expect(await screen.findByText('Сессия устарела: закройте приложение и откройте снова.')).toBeOnTheScreen();
-  expect(screen.queryByText(/internal/)).toBeNull();
+  expect(await screen.findByText(restarting)).toBeOnTheScreen();
+  expect(screen.queryByText(/internal|закройте приложение/)).toBeNull();
+  await waitFor(() => expect(native.stop).toHaveBeenCalled(), { timeout: 5000 });
 });
 
 const photo = (id: string, name: string) => ({
