@@ -1,9 +1,9 @@
 import { StatusBar } from 'expo-status-bar';
-import { useEffect, useState } from 'react';
-import { AppState, BackHandler, StyleSheet, Text, View } from 'react-native';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import { AppState, BackHandler, Share, StyleSheet, Text, View } from 'react-native';
 
 import { Api, Pile, ShowState, TimelineItem } from './src/api';
-import { startCore } from './src/core';
+import { restartCore, startCore } from './src/core';
 import { Join } from './src/screens/Join';
 import { Log } from './src/screens/Log';
 import { PileScreen } from './src/screens/PileScreen';
@@ -13,7 +13,7 @@ import { ScreenPicker } from './src/screens/ScreenPicker';
 import { SelectionScreen } from './src/screens/SelectionScreen';
 import { Timeline } from './src/screens/Timeline';
 import { Viewer } from './src/screens/Viewer';
-import { styles } from './src/ui';
+import { Boundary, Button, styles } from './src/ui';
 
 type Route =
   | { name: 'piles' }
@@ -26,13 +26,63 @@ type Route =
   | { name: 'screens'; pile: Pile; asset?: string }
   | { name: 'show'; pile: Pile; state: ShowState };
 
+function startFailure(error: string) {
+  if (error.includes('device key'))
+    return 'Pileup не может прочитать ключ этого телефона. Данные не удалены. Нажмите «Поделиться подробностями» и отправьте их разработчикам.';
+  if (/no space left|disk is full|\(4874\)/.test(error))
+    return 'На телефоне закончилось место. Освободите место и нажмите «Повторить».';
+  return 'Не удалось запустить Pileup. Чаще всего причина — нехватка места на телефоне: освободите место и нажмите «Повторить».';
+}
+
+function StartFailure({ error, onRetry }: { error: string; onRetry: () => void }) {
+  return (
+    <View style={[styles.screen, styles.body, { justifyContent: 'center' }]}>
+      <Text style={{ fontSize: 17 }}>{startFailure(error)}</Text>
+      <Button title="Повторить" onPress={onRetry} />
+      <Button
+        title="Поделиться подробностями"
+        onPress={() => Share.share({ title: 'Ошибка запуска Pileup', message: error }).catch(() => {})}
+      />
+    </View>
+  );
+}
+
+function alive(api: Api) {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  return Promise.race([
+    api.health().then(
+      () => true,
+      () => false,
+    ),
+    new Promise<boolean>((resolve) => {
+      timer = setTimeout(() => resolve(false), 2000);
+    }),
+  ]).finally(() => clearTimeout(timer));
+}
+
 export default function App() {
   const [api, setApi] = useState<Api>();
   const [error, setError] = useState<string>();
   const [stack, setStack] = useState<Route[]>([{ name: 'piles' }]);
+  const restarting = useRef(false);
 
-  useEffect(() => {
+  const start = useCallback(() => {
+    setError(undefined);
     startCore().then(setApi, (e) => setError(String(e)));
+  }, []);
+  useEffect(start, [start]);
+
+  const restart = useCallback(async () => {
+    if (restarting.current) return;
+    restarting.current = true;
+    try {
+      setApi(await restartCore());
+    } catch (e) {
+      setApi(undefined);
+      setError(String(e));
+    } finally {
+      restarting.current = false;
+    }
   }, []);
 
   const depth = stack.length;
@@ -49,15 +99,17 @@ export default function App() {
   useEffect(() => {
     if (!api) return;
     const sub = AppState.addEventListener('change', (state) => {
-      if (state === 'active') api.reconnect().catch(() => {});
+      if (state !== 'active') return;
+      alive(api).then((ok) => (ok ? api.reconnect().catch(() => {}) : restart()));
     });
     return () => sub.remove();
-  }, [api]);
+  }, [api, restart]);
 
   if (!api) {
+    if (error) return <StartFailure error={error} onRetry={start} />;
     return (
       <View style={[styles.screen, { alignItems: 'center', justifyContent: 'center' }]}>
-        <Text>{error ?? 'Запуск ядра…'}</Text>
+        <Text>Запуск ядра…</Text>
       </View>
     );
   }
@@ -76,6 +128,7 @@ export default function App() {
             onOpen={(pile) => push({ name: 'pile', pile })}
             onJoin={() => push({ name: 'join' })}
             onLog={() => push({ name: 'log' })}
+            onRestart={restart}
           />
         );
       case 'log':
@@ -133,7 +186,16 @@ export default function App() {
   const visible = top.name === 'viewer' ? stack.slice(-2) : [top];
   return (
     <>
-      {visible.map((route, i) => (
+      <Boundary
+        item={stack}
+        fallback={
+          <View style={[styles.screen, styles.body]}>
+            <Text style={{ fontSize: 17 }}>Этот экран не удалось показать из-за ошибки в приложении.</Text>
+            <Button title="К списку pile" onPress={() => setStack([{ name: 'piles' }])} />
+          </View>
+        }
+      >
+        {visible.map((route, i) => (
         <View
           key={stack.length - visible.length + i}
           style={StyleSheet.absoluteFill}
@@ -142,7 +204,8 @@ export default function App() {
         >
           {render(route)}
         </View>
-      ))}
+        ))}
+      </Boundary>
       <StatusBar style={top.name === 'viewer' ? 'light' : 'auto'} />
     </>
   );

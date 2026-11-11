@@ -13,6 +13,7 @@ import (
 	"sync/atomic"
 	"testing"
 	"testing/synctest"
+	"time"
 
 	"github.com/glumpo/pileup/core/blob"
 )
@@ -671,5 +672,24 @@ func TestCacheIsConsistentAfterLosingLastCommits(t *testing.T) {
 	equal(t, "files after the lost commits", contents(t, dir), nil)
 	if got := read(t, s, req("A", key("y", 2), 2, fixed("y"))); got != "y" {
 		t.Fatalf("object loaded again: %q", got)
+	}
+}
+
+func TestPanicWhileCheckingRequestDoesNotLockStore(t *testing.T) {
+	s := open(t, t.TempDir(), budget)
+	func() {
+		defer func() { recover() }()
+		r := req("A", key("x", 1), 1, fixed("превью"))
+		r.Valid = func() error { panic("broken asset") }
+		s.Get(context.Background(), r)
+	}()
+	done := async(context.Background(), s, req("A", key("y", 1), 1, fixed("другое превью")))
+	select {
+	case got := <-done:
+		if got.err != nil || got.content != "другое превью" {
+			t.Fatalf("next request: %+v", got)
+		}
+	case <-time.After(5 * time.Second):
+		t.Fatal("next request hangs after a panic inside the store")
 	}
 }
