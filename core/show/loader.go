@@ -22,6 +22,7 @@ import (
 const (
 	Unreachable = "unreachable"
 	Timeout     = "timeout"
+	DiskFull    = "disk_full"
 	typicalT2   = 400 << 10
 )
 
@@ -64,6 +65,7 @@ type loader struct {
 	pinned  map[string]bool
 	online  map[op.Author]bool
 	stalled map[string]bool
+	full    time.Time
 	cache   *prefetch.Cache
 }
 
@@ -159,7 +161,10 @@ func (l *loader) progress() []Progress {
 	out := []Progress{}
 	for src, p := range l.cache.Progress() {
 		h := l.hint(author(src))
-		if p.Done+p.Failed == p.Total || !l.cache.Unavailable(src) {
+		switch {
+		case p.Done < p.Total && l.diskFull():
+			h.Reason = DiskFull
+		case p.Done+p.Failed == p.Total || !l.cache.Unavailable(src):
 			h.Reason = ""
 		}
 		out = append(out, Progress{Hint: h, Total: p.Total, Done: p.Done, Failed: p.Failed})
@@ -241,7 +246,16 @@ func (l *loader) status(extra ...op.Author) ([]state.Asset, []Hint) {
 	for _, a := range extra {
 		add(a)
 	}
+	if l.diskFull() {
+		h := l.hint(l.self)
+		h.Reason = DiskFull
+		hints = append(hints, h)
+	}
 	return waiting, hints
+}
+
+func (l *loader) diskFull() bool {
+	return time.Now().Before(l.full)
 }
 
 func (l *loader) reachable(a op.Author) bool {
@@ -292,6 +306,10 @@ func (l *loader) fetch(k string, owner op.Author) {
 	switch {
 	case err == nil:
 		l.cache.Loaded(k)
+		l.full = time.Time{}
+	case node.DiskFull(err):
+		l.cache.Broken(k, time.Now())
+		l.full = time.Now().Add(prefetch.Recheck)
 	case owner == l.self || errors.Is(err, node.ErrUnknownAsset) || errors.Is(err, node.ErrRefused):
 		l.cache.Broken(k, time.Now())
 	default:

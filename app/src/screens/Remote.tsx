@@ -3,7 +3,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { ScrollView, Text, View } from 'react-native';
 
 import { Api, Hint, Pile, ShowState, TimelineItem } from '../api';
-import { PinsPanel, usePins } from '../Pins';
+import { diskFull, PinsPanel, usePins } from '../Pins';
 import { adviceFor } from '../presence';
 import { Preview } from '../Preview';
 import { dayOf, timeOf } from '../time';
@@ -71,6 +71,8 @@ export function Remote({
   const item = byId.get(current.id);
   const author = names.get(current.author);
   const ownerAway = state.hints.some((h) => h.author === current.author);
+  const hints = state.hints.filter((h) => h.reason !== 'disk_full');
+  const full = hints.length < state.hints.length && !pins.progress.some((p) => p.reason === 'disk_full');
   const rendererError = state.renderer_error?.code === 'load_failed' && ownerAway ? undefined : state.renderer_error;
 
   if (state.total === 0) {
@@ -121,9 +123,10 @@ export function Remote({
           {dayOf(item ?? current)} {timeOf(item ?? current)}
           {current.kind === 'video' ? ' · видео' : ''}
         </Text>
-        {state.hints.length > 0 && (
+        {full && <ErrorText error={diskFull} />}
+        {hints.length > 0 && (
           <View testID="waiting" style={{ backgroundColor: '#fff3cd', borderRadius: 8, padding: 12, gap: 8 }}>
-            {state.hints.map((h) => (
+            {hints.map((h) => (
               <View key={h.author} style={{ gap: 8 }}>
                 <Text>{hintText(h)}</Text>
                 <Button

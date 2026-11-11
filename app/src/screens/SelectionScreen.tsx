@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { FlatList, Switch, Text, View } from 'react-native';
 
-import { Api, Pile, Selection } from '../api';
+import { Api, ApiError, Pile, Selection } from '../api';
 import { requestMediaPermissions } from '../core';
 import { dayOf, timeOf } from '../time';
 import { Button, describe, ErrorText, Field, Screen, styles } from '../ui';
@@ -66,7 +66,9 @@ export function SelectionScreen({ api, pile, onBack }: { api: Api; pile: Pile; o
       await api.setSelected(pile.id, asset, selected);
       setSelection((s) => s && { ...s, assets: s.assets.map((a) => (a.id === asset ? { ...a, selected } : a)) });
     } catch (e) {
-      setError(describe(e));
+      const gone = e instanceof ApiError && e.code === 'unknown_asset';
+      setError(gone ? 'Файла больше нет в галерее — список обновлён.' : describe(e));
+      if (gone) load().catch((e) => setError(describe(e)));
     }
   }
 

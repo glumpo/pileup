@@ -32,7 +32,7 @@ func media(mux *http.ServeMux, n *node.Node) {
 		}
 		s, err := n.Selection(id)
 		if err != nil {
-			fail(w, err)
+			fail(w, r, err)
 			return
 		}
 		out := selection{From: s.From, To: s.To, Assets: make([]asset, 0, len(s.Items))}
@@ -64,7 +64,7 @@ func media(mux *http.ServeMux, n *node.Node) {
 			return
 		}
 		if err := n.Select(r.Context(), id, *req.From, *req.To); err != nil {
-			fail(w, err)
+			fail(w, r, err)
 			return
 		}
 		w.WriteHeader(http.StatusNoContent)
@@ -87,7 +87,7 @@ func media(mux *http.ServeMux, n *node.Node) {
 			return
 		}
 		if err := n.Decide(r.Context(), id, a, *req.Selected); err != nil {
-			fail(w, err)
+			fail(w, r, err)
 			return
 		}
 		w.WriteHeader(http.StatusNoContent)
@@ -97,7 +97,7 @@ func media(mux *http.ServeMux, n *node.Node) {
 func pathHex(w http.ResponseWriter, r *http.Request, name string, notFound error) ([]byte, bool) {
 	b, err := hex.DecodeString(r.PathValue(name))
 	if err != nil {
-		fail(w, notFound)
+		fail(w, r, notFound)
 		return nil, false
 	}
 	return b, true

@@ -13,6 +13,16 @@ const advice = 'Возможно, погас экран — попросите �
 function problemOf(error: unknown, author: string): Problem {
   const code = error instanceof ApiError ? error.code : undefined;
   if (code === 'source_unavailable') return { text: `Нет ответа от участника: ${author}. ${advice}`, retry: true };
+  if (code === 'source_failed')
+    return {
+      text: `Телефон участника не смог подготовить файл: ${author}. Возможно, файл удалён из галереи или в неподдерживаемом формате.`,
+      retry: false,
+    };
+  if (code === 'render_failed')
+    return {
+      text: 'Не удалось открыть файл на этом телефоне. Возможно, он удалён из галереи или в неподдерживаемом формате.',
+      retry: false,
+    };
   if (code === 'unknown_asset') return { text: 'Файл удалён или изменён: обновите хронологию', retry: false };
   return { text: `Не удалось загрузить файл. ${describe(error)}`, retry: false };
 }

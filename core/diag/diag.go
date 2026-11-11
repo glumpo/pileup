@@ -21,6 +21,7 @@ const (
 	Timeout    Kind = "timeout"
 	Renderer   Kind = "renderer"
 	Media      Kind = "media"
+	API        Kind = "api"
 )
 
 type Event struct {
