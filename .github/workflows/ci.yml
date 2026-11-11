@@ -15,3 +15,10 @@ jobs:
         with:
           node-version: 26
       - run: make check
+
+  macos-runner-check:
+    runs-on: macos-latest
+    steps:
+      - run: |
+          uname -a
+          sw_vers
