@@ -1,6 +1,7 @@
 package node
 
 import (
+	"bufio"
 	"bytes"
 	"context"
 	"encoding/hex"
@@ -12,6 +13,7 @@ import (
 	"os"
 	"slices"
 	"strconv"
+	"strings"
 	"sync"
 	"time"
 
@@ -38,6 +40,7 @@ const (
 var (
 	ErrUnavailable = errors.New("node: asset owner is unavailable")
 	ErrRefused     = errors.New("node: owner refused")
+	ErrRender      = errors.New("node: rendition failed")
 	errNoOwner     = errors.New("node: owner address is unknown")
 	errNotOwner    = errors.New("node: another device answers at the owner address")
 	errSilent      = fmt.Errorf("node: owner went silent: %w", context.DeadlineExceeded)
@@ -186,7 +189,7 @@ func (n *Node) render(p *pile, assetID []byte, tier int) blob.Load {
 		b, err := n.rendition(ctx, local, tier)
 		n.report(diag.Media, p.ID, "", fmt.Sprintf("render %x T%d", assetID, tier), err)
 		if err != nil {
-			return err
+			return fmt.Errorf("%w: %w", ErrRender, err)
 		}
 		_, err = w.Write(b)
 		return err
@@ -362,7 +365,8 @@ func (n *Node) download(ctx context.Context, p *pile, owner op.Author, assetID, 
 	case http.StatusNotFound:
 		return ErrUnknownAsset
 	}
-	return fmt.Errorf("%w: %w: %s", ErrUnavailable, ErrRefused, resp.Status)
+	reason, _ := bufio.NewReader(io.LimitReader(resp.Body, 512)).ReadString('\n')
+	return fmt.Errorf("%w: %w: %s: %s", ErrUnavailable, ErrRefused, resp.Status, strings.TrimSpace(reason))
 }
 
 func silent(ctx context.Context, err error) error {

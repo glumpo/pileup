@@ -33,7 +33,7 @@ func timeline(mux *http.ServeMux, n *node.Node) {
 		}
 		p, assets, err := n.Timeline(id)
 		if err != nil {
-			fail(w, err)
+			fail(w, r, err)
 			return
 		}
 		out := make([]item, 0, len(assets))

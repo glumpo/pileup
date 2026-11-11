@@ -16,11 +16,18 @@ const messages: Record<string, string> = {
   no_show: 'Показ уже остановлен',
   not_video: 'Сейчас на экране не видео',
   unknown_member: 'Участник не найден в pile',
+  internal:
+    'Что-то пошло не так в Pileup. Подробности записаны в «Журнал» на главном экране — отправьте его разработчику.',
+  disk_full: 'На телефоне закончилось место. Освободите место и повторите.',
+  media_failed: 'Нет доступа к медиатеке. Разрешите доступ к фото и видео в настройках телефона.',
 };
 
 export function describe(error: unknown): string {
   if (error instanceof ApiError && error.code === 'screen_unavailable' && error.reason) return error.reason;
+  if (error instanceof ApiError && error.status === 401) return 'Сессия устарела: закройте приложение и откройте снова.';
   if (error instanceof ApiError) return messages[error.code] ?? `Ошибка ядра: ${error.code}`;
+  if (error instanceof TypeError && error.message === 'Network request failed')
+    return 'Pileup не отвечает: закройте приложение и откройте снова.';
   return String(error);
 }
 

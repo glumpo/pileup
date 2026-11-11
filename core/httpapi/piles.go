@@ -2,6 +2,7 @@ package httpapi
 
 import (
 	"bytes"
+	"context"
 	"encoding/hex"
 	"encoding/json"
 	"errors"
@@ -9,6 +10,7 @@ import (
 	"slices"
 
 	"github.com/glumpo/pileup/core/crdt/op"
+	"github.com/glumpo/pileup/core/diag"
 	"github.com/glumpo/pileup/core/invite"
 	"github.com/glumpo/pileup/core/node"
 	"github.com/glumpo/pileup/core/show"
@@ -19,7 +21,7 @@ func WithNode(token string, n *node.Node, h *show.Host) http.Handler {
 	mux.HandleFunc("GET /piles", func(w http.ResponseWriter, r *http.Request) {
 		ps, err := n.Piles()
 		if err != nil {
-			fail(w, err)
+			fail(w, r, err)
 			return
 		}
 		out := make([]pile, 0, len(ps))
@@ -35,7 +37,7 @@ func WithNode(token string, n *node.Node, h *show.Host) http.Handler {
 		}
 		p, err := n.Create(req.Name, req.Member)
 		if err != nil {
-			fail(w, err)
+			fail(w, r, err)
 			return
 		}
 		reply(w, http.StatusCreated, toJSON(n, p))
@@ -43,12 +45,12 @@ func WithNode(token string, n *node.Node, h *show.Host) http.Handler {
 	mux.HandleFunc("GET /piles/{id}/invite", func(w http.ResponseWriter, r *http.Request) {
 		id, err := hex.DecodeString(r.PathValue("id"))
 		if err != nil {
-			fail(w, node.ErrUnknownPile)
+			fail(w, r, node.ErrUnknownPile)
 			return
 		}
 		s, err := n.Invite(id)
 		if err != nil {
-			fail(w, err)
+			fail(w, r, err)
 			return
 		}
 		reply(w, http.StatusOK, map[string]string{"invite": s})
@@ -60,7 +62,7 @@ func WithNode(token string, n *node.Node, h *show.Host) http.Handler {
 		}
 		p, err := n.Join(r.Context(), req.Invite, req.Member)
 		if err != nil {
-			fail(w, err)
+			fail(w, r, err)
 			return
 		}
 		reply(w, http.StatusCreated, toJSON(n, p))
@@ -73,7 +75,7 @@ func WithNode(token string, n *node.Node, h *show.Host) http.Handler {
 	reconnect(mux, n)
 	shows(mux, h)
 	pins(mux, h)
-	return authorized(token, mux)
+	return authorized(token, journaled(n.Diag(), mux))
 }
 
 type member struct {
@@ -120,7 +122,7 @@ func decode(w http.ResponseWriter, r *http.Request, v any) bool {
 	return true
 }
 
-func fail(w http.ResponseWriter, err error) {
+func fail(w http.ResponseWriter, r *http.Request, err error) {
 	switch {
 	case errors.Is(err, invite.ErrFormat):
 		reply(w, http.StatusBadRequest, problem("bad_invite"))
@@ -140,9 +142,29 @@ func fail(w http.ResponseWriter, err error) {
 		reply(w, http.StatusNotFound, problem("unknown_asset"))
 	case errors.Is(err, node.ErrNoMedia):
 		reply(w, http.StatusNotImplemented, problem("no_media"))
+	case node.DiskFull(err):
+		failed(w, r, http.StatusInsufficientStorage, "disk_full", err)
+	case errors.Is(err, node.ErrMedia):
+		failed(w, r, http.StatusInternalServerError, "media_failed", err)
+	case errors.Is(err, node.ErrRender):
+		failed(w, r, http.StatusInternalServerError, "render_failed", err)
 	default:
-		reply(w, http.StatusInternalServerError, problem("internal"))
+		failed(w, r, http.StatusInternalServerError, "internal", err)
 	}
+}
+
+type journalKey struct{}
+
+func journaled(log *diag.Log, h http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		h.ServeHTTP(w, r.WithContext(context.WithValue(r.Context(), journalKey{}, log)))
+	})
+}
+
+func failed(w http.ResponseWriter, r *http.Request, status int, code string, err error) {
+	pile, _ := hex.DecodeString(r.PathValue("id"))
+	r.Context().Value(journalKey{}).(*diag.Log).Add(diag.API, pile, "", r.Pattern+": "+err.Error())
+	reply(w, status, problem(code))
 }
 
 func problem(code string) map[string]string {

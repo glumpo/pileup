@@ -32,21 +32,21 @@ func pins(mux *http.ServeMux, h *show.Host) {
 	mux.HandleFunc("GET /piles/{id}/pins", func(w http.ResponseWriter, r *http.Request) {
 		id, err := hex.DecodeString(r.PathValue("id"))
 		if err != nil {
-			fail(w, node.ErrUnknownPile)
+			fail(w, r, node.ErrUnknownPile)
 			return
 		}
 		list, err := h.Pins(id)
-		progressReply(w, list, err)
+		progressReply(w, r, list, err)
 	})
 	mux.HandleFunc("POST /piles/{id}/pins", func(w http.ResponseWriter, r *http.Request) {
 		var req struct{ Member string }
 		if !decode(w, r, &req) {
 			return
 		}
-		pinned(w, r.PathValue("id"), req.Member, h.Pin)
+		pinned(w, r, r.PathValue("id"), req.Member, h.Pin)
 	})
 	mux.HandleFunc("DELETE /piles/{id}/pins", func(w http.ResponseWriter, r *http.Request) {
-		pinned(w, r.PathValue("id"), r.URL.Query().Get("member"), h.Unpin)
+		pinned(w, r, r.PathValue("id"), r.URL.Query().Get("member"), h.Unpin)
 	})
 	mux.HandleFunc("GET /piles/{id}/pins/estimate", func(w http.ResponseWriter, r *http.Request) {
 		id, member, err := pileMember(r.PathValue("id"), r.URL.Query().Get("member"))
@@ -55,7 +55,7 @@ func pins(mux *http.ServeMux, h *show.Host) {
 			e, err = h.Estimate(id, member)
 		}
 		if err != nil {
-			pinFail(w, err)
+			pinFail(w, r, err)
 			return
 		}
 		reply(w, http.StatusOK, estimate{Files: e.Files, Missing: e.Missing, Bytes: e.Bytes, Budget: e.Budget, Free: e.Free, OverBudget: e.OverBudget})
@@ -77,18 +77,18 @@ func pileMember(pile, member string) ([]byte, []byte, error) {
 	return id, m, nil
 }
 
-func pinned(w http.ResponseWriter, pile, member string, f func(pileID, member []byte) ([]show.Progress, error)) {
+func pinned(w http.ResponseWriter, r *http.Request, pile, member string, f func(pileID, member []byte) ([]show.Progress, error)) {
 	id, m, err := pileMember(pile, member)
 	var list []show.Progress
 	if err == nil {
 		list, err = f(id, m)
 	}
-	progressReply(w, list, err)
+	progressReply(w, r, list, err)
 }
 
-func progressReply(w http.ResponseWriter, list []show.Progress, err error) {
+func progressReply(w http.ResponseWriter, r *http.Request, list []show.Progress, err error) {
 	if err != nil {
-		pinFail(w, err)
+		pinFail(w, r, err)
 		return
 	}
 	out := []pinProgress{}
@@ -106,10 +106,10 @@ func progressReply(w http.ResponseWriter, list []show.Progress, err error) {
 	reply(w, http.StatusOK, out)
 }
 
-func pinFail(w http.ResponseWriter, err error) {
+func pinFail(w http.ResponseWriter, r *http.Request, err error) {
 	if errors.Is(err, show.ErrUnknownMember) {
 		reply(w, http.StatusNotFound, problem("unknown_member"))
 		return
 	}
-	fail(w, err)
+	fail(w, r, err)
 }
