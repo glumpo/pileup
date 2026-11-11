@@ -5,12 +5,16 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"maps"
 	"net/http"
 	"path/filepath"
+	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
 	"github.com/glumpo/pileup/core/device"
+	"github.com/glumpo/pileup/core/diag"
 	"github.com/glumpo/pileup/core/node"
 )
 
@@ -114,4 +118,180 @@ func TestOwnerRendersWaitingDisplayBeforeWaitingThumbnails(t *testing.T) {
 	if next != "T2 of IMG_0" {
 		t.Fatalf("after %s the owner rendered %s, want T2 of IMG_0 before the waiting thumbnails", first, next)
 	}
+}
+
+type hanging struct {
+	*media
+	file    string
+	release chan struct{}
+	free    func()
+
+	mu               sync.Mutex
+	calls            map[string]int
+	running, started int
+}
+
+func newHanging(t *testing.T, file string) *hanging {
+	h := &hanging{media: newMedia(), file: file, release: make(chan struct{}), calls: map[string]int{}}
+	h.free = sync.OnceFunc(func() { close(h.release) })
+	t.Cleanup(h.free)
+	return h
+}
+
+func (h *hanging) Rendition(local string, tier int) ([]byte, error) {
+	h.mu.Lock()
+	h.calls[local]++
+	h.running++
+	h.started++
+	h.mu.Unlock()
+	defer func() {
+		h.mu.Lock()
+		h.running--
+		h.mu.Unlock()
+	}()
+	if h.file == "" || h.file == local {
+		<-h.release
+	}
+	return h.media.Rendition(local, tier)
+}
+
+func (h *hanging) count() (calls map[string]int, running, started int) {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	return maps.Clone(h.calls), h.running, h.started
+}
+
+func openHanging(t *testing.T, h *hanging) *node.Node {
+	t.Helper()
+	dir := t.TempDir()
+	n, err := node.Open(node.Config{Dir: dir, Keystore: device.File(filepath.Join(dir, "device.key")), Platform: "android", Addrs: loopback, Media: h, Renditions: h})
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { n.Close() })
+	t.Cleanup(h.free)
+	return n
+}
+
+func TestStuckRenditionDoesNotBlockOtherFiles(t *testing.T) {
+	t.Cleanup(node.SetRenderTimeout(300 * time.Millisecond))
+	t.Cleanup(node.SetBrokenPause(500 * time.Millisecond))
+	h := newHanging(t, "IMG_0")
+	a := openHanging(t, h)
+	p := create(t, a, "Грузия", "Аня")
+	h.add(photo("IMG_0", day), []byte("broken video"))
+	h.add(photo("IMG_1", day), []byte("jpeg"))
+	shared := share(t, a, p)
+	b := memberOf(t, a, p)
+	eventually(t, "the broken file is being rendered", func() bool { c, _, _ := h.count(); return c["IMG_0"] == 1 })
+
+	resp, body := b.get(blobPath(shared["IMG_1"], node.T2))
+	if resp.StatusCode != http.StatusOK || !bytes.Equal(body, rendition("IMG_1", node.T2)) {
+		t.Fatalf("T2 of another file while one rendering hangs: status %d, %q", resp.StatusCode, body)
+	}
+	eventually(t, "the stuck rendering is logged", logged(a, diag.Timeout, p, "", "render"))
+
+	asked := func(what string) {
+		t.Helper()
+		if resp, _ := b.get(blobPath(shared["IMG_0"], node.T2)); resp.StatusCode != http.StatusInternalServerError {
+			t.Fatalf("%s: T2 of the stuck file: status %d, want 500", what, resp.StatusCode)
+		}
+		if c, _, _ := h.count(); c["IMG_0"] != 1 {
+			t.Fatalf("%s: the stuck file was rendered %d times, want no new native call while it hangs", what, c["IMG_0"])
+		}
+	}
+	asked("right after the timeout")
+	time.Sleep(time.Second)
+	asked("after the pause, still hanging")
+
+	h.free()
+	eventually(t, "the stuck call returns", func() bool { _, running, _ := h.count(); return running == 0 })
+	time.Sleep(time.Second)
+	resp, body = b.get(blobPath(shared["IMG_0"], node.T2))
+	if resp.StatusCode != http.StatusOK || !bytes.Equal(body, rendition("IMG_0", node.T2)) {
+		t.Fatalf("T2 of the file after its call returned and the pause passed: status %d, %q", resp.StatusCode, body)
+	}
+}
+
+func TestStuckRenditionsInFlightAreBounded(t *testing.T) {
+	t.Cleanup(node.SetRenderTimeout(100 * time.Millisecond))
+	h := newHanging(t, "")
+	a := openHanging(t, h)
+	p := create(t, a, "Грузия", "Аня")
+	for i := range 8 {
+		h.add(photo(fmt.Sprintf("IMG_%d", i), day), []byte("broken video"))
+	}
+	share(t, a, p)
+	eventually(t, "renders go on past stuck ones", func() bool { _, running, _ := h.count(); return running == 3 })
+	time.Sleep(time.Second)
+	if _, running, started := h.count(); running != 3 || started != 3 {
+		t.Fatalf("native renders in flight %d, started %d; want at most 3 while they hang", running, started)
+	}
+}
+
+func closeWithin(t *testing.T, n *node.Node, d time.Duration) {
+	t.Helper()
+	closed := make(chan struct{})
+	start := time.Now()
+	go func() {
+		n.Close()
+		close(closed)
+	}()
+	select {
+	case <-closed:
+	case <-time.After(d):
+		t.Fatalf("Close still running after %v", d)
+	}
+	t.Logf("Close took %v", time.Since(start))
+}
+
+func TestCloseDoesNotWaitForQueuedRenders(t *testing.T) {
+	q := &slowRenders{media: newMedia()}
+	dir := t.TempDir()
+	a, err := node.Open(node.Config{Dir: dir, Keystore: device.File(filepath.Join(dir, "device.key")), Platform: "android", Addrs: loopback, Media: q, Renditions: q})
+	if err != nil {
+		t.Fatal(err)
+	}
+	p := create(t, a, "Грузия", "Аня")
+	for i := range 12 {
+		q.add(photo(fmt.Sprintf("IMG_%d", i), day), []byte("jpeg"))
+	}
+	shared := share(t, a, p)
+	b := memberOf(t, a, p)
+	for _, m := range shared {
+		go func() {
+			resp, err := b.http.Get("http://" + b.addr + blobPath(m, node.T2))
+			if err == nil {
+				resp.Body.Close()
+			}
+		}()
+	}
+	time.Sleep(500 * time.Millisecond)
+	before := q.started.Load()
+	closeWithin(t, a, time.Second)
+	time.Sleep(time.Second)
+	if started := q.started.Load() - before; started > 1 {
+		t.Fatalf("%d renders started during and after Close, want at most the one already handed its turn", started)
+	}
+}
+
+func TestCloseDoesNotWaitForStuckRender(t *testing.T) {
+	h := newHanging(t, "IMG_0")
+	a := openHanging(t, h)
+	p := create(t, a, "Грузия", "Аня")
+	h.add(photo("IMG_0", day), []byte("broken video"))
+	share(t, a, p)
+	eventually(t, "the broken file is being rendered", func() bool { _, running, _ := h.count(); return running == 1 })
+	closeWithin(t, a, time.Second)
+}
+
+type slowRenders struct {
+	*media
+	started atomic.Int32
+}
+
+func (s *slowRenders) Rendition(local string, tier int) ([]byte, error) {
+	s.started.Add(1)
+	time.Sleep(300 * time.Millisecond)
+	return s.media.Rendition(local, tier)
 }

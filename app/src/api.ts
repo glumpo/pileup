@@ -9,7 +9,7 @@ export type Member = {
   last_error?: string;
 };
 
-export type Pile = { id: string; name: string; members: Member[] };
+export type Pile = { id: string; name: string; members: Member[]; broken?: string };
 
 export type SelectionAsset = {
   id: string;
@@ -130,6 +130,7 @@ export function connect(port: number, token: string) {
   }
 
   return {
+    health: () => call<{ status: string }>('GET', '/health'),
     piles: () => call<Pile[]>('GET', '/piles'),
     createPile: (name: string, member: string) => call<Pile>('POST', '/piles', { name, member }),
     invite: async (pile: string) => (await call<{ invite: string }>('GET', `/piles/${pile}/invite`)).invite,

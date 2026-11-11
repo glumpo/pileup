@@ -19,6 +19,7 @@ import (
 	"slices"
 	"strconv"
 	"sync"
+	"syscall"
 	"time"
 
 	"github.com/glumpo/pileup/core/blob"
@@ -30,6 +31,8 @@ import (
 	"github.com/glumpo/pileup/core/peer"
 	"github.com/glumpo/pileup/core/replica"
 	"github.com/glumpo/pileup/core/store"
+	"modernc.org/sqlite"
+	sqlite3 "modernc.org/sqlite/lib"
 )
 
 const (
@@ -48,6 +51,7 @@ var (
 	ErrJoined      = errors.New("node: already a member of this pile")
 	ErrUnreachable = errors.New("node: no inviter address accepted the invite")
 	ErrOffline     = errors.New("node: no network address to invite with")
+	ErrBrokenPile  = errors.New("node: pile could not be opened")
 )
 
 type Config struct {
@@ -67,10 +71,12 @@ type Pile struct {
 	ID      []byte
 	Name    string
 	Members map[op.Author]state.Member
+	Broken  string
 }
 
 type entry struct {
 	ID     []byte            `json:"id"`
+	Name   string            `json:"name,omitempty"`
 	Secret []byte            `json:"secret"`
 	Port   uint16            `json:"port"`
 	Peers  map[string][]byte `json:"peers"`
@@ -88,6 +94,12 @@ type pile struct {
 	peers   map[string]op.Author
 	faults  map[string]string
 	loops   map[string]*loop
+	ln      net.Listener
+}
+
+type broken struct {
+	entry
+	reason string
 }
 
 type loop struct {
@@ -108,9 +120,10 @@ type Node struct {
 	blobs  *blob.Store
 	diag   *diag.Log
 
-	mu    sync.Mutex
-	piles []*pile
-	found map[string]map[string]service
+	mu     sync.Mutex
+	piles  []*pile
+	broken []broken
+	found  map[string]map[string]service
 
 	selecting sync.Mutex
 	rendering turns
@@ -120,7 +133,7 @@ func Open(cfg Config) (*Node, error) {
 	cfg.Budget = cmp.Or(cfg.Budget, DefaultBudget)
 	key, err := device.Key(cfg.Keystore)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("node: device key: %w", err)
 	}
 	if err := os.MkdirAll(filepath.Join(cfg.Dir, "piles"), 0o700); err != nil {
 		return nil, err
@@ -129,32 +142,30 @@ func Open(cfg Config) (*Node, error) {
 	if err != nil {
 		return nil, err
 	}
-	blobs, err := blob.Open(filepath.Join(cfg.Dir, "blobs"), cfg.Budget)
+	blobs, cacheAside, err := openBlobs(filepath.Join(cfg.Dir, "blobs"), cfg.Budget)
 	if err != nil {
 		return nil, err
 	}
 	ctx, cancel := context.WithCancel(context.Background())
 	n := &Node{cfg: cfg, key: key, ctx: ctx, cancel: cancel, blobs: blobs, found: map[string]map[string]service{}, diag: diag.Open(cfg.Dir, diagSize)}
 	n.diag.Add(diag.App, nil, "", fmt.Sprintf("Pileup %s %s started", cfg.AppVersion, cfg.Platform))
-	if aside != "" {
-		n.diag.Add(diag.Sync, nil, "", aside)
+	for _, a := range []string{aside, cacheAside} {
+		if a != "" {
+			n.diag.Add(diag.Sync, nil, "", a)
+		}
 	}
 	n.mu.Lock()
 	for _, e := range entries {
-		var p *pile
-		if p, err = n.start(e, map[op.Author]string{}); err != nil {
-			break
+		p, err := n.start(e, map[op.Author]string{})
+		if err != nil {
+			n.diag.Error(diag.Sync, e.ID, "", fmt.Errorf("pile could not be opened: %w", err))
+			n.broken = append(n.broken, broken{e, reason(err)})
+			continue
 		}
 		n.piles = append(n.piles, p)
 	}
-	if err == nil {
-		err = n.save()
-	}
+	n.report(diag.Sync, nil, "", "save piles", n.save())
 	n.mu.Unlock()
-	if err != nil {
-		n.Close()
-		return nil, err
-	}
 	n.discover()
 	n.watchNetwork()
 	return n, nil
@@ -185,6 +196,36 @@ func readPiles(path string) ([]entry, string, error) {
 	return nil, fmt.Sprintf("piles.json could not be read (%v), moved to %s, starting without piles", err, filepath.Base(moved)), nil
 }
 
+func openBlobs(dir string, budget int64) (*blob.Store, string, error) {
+	s, err := blob.Open(dir, budget)
+	if reason(err) != "corrupt" {
+		return s, "", err
+	}
+	path := filepath.Join(dir, "cache.db")
+	moved := path + ".broken-" + time.Now().UTC().Format("20060102T150405")
+	for _, suffix := range []string{"", "-wal", "-shm"} {
+		if rerr := os.Rename(path+suffix, moved+suffix); rerr != nil && (suffix == "" || !errors.Is(rerr, fs.ErrNotExist)) {
+			return nil, "", errors.Join(err, rerr)
+		}
+	}
+	s, rerr := blob.Open(dir, budget)
+	return s, fmt.Sprintf("cache.db could not be read (%v), moved to %s, starting with an empty cache", err, filepath.Base(moved)), rerr
+}
+
+func reason(err error) string {
+	var e *sqlite.Error
+	isSQL := errors.As(err, &e)
+	switch {
+	case err == nil:
+		return ""
+	case errors.Is(err, syscall.ENOSPC), isSQL && (e.Code()&0xff == sqlite3.SQLITE_FULL || e.Code() == sqlite3.SQLITE_IOERR_SHMSIZE):
+		return "no_space"
+	case isSQL && (e.Code()&0xff == sqlite3.SQLITE_CORRUPT || e.Code()&0xff == sqlite3.SQLITE_NOTADB):
+		return "corrupt"
+	}
+	return "failed"
+}
+
 func (n *Node) Close() error {
 	n.stopDiscovery()
 	n.mu.Lock()
@@ -212,8 +253,8 @@ func (n *Node) Join(ctx context.Context, inv, member string) (Pile, error) {
 	if err != nil {
 		return Pile{}, err
 	}
-	if _, err := n.find(i.PileID); err == nil {
-		return Pile{}, ErrJoined
+	if _, err := n.find(i.PileID); !errors.Is(err, ErrUnknownPile) {
+		return Pile{}, cmp.Or(err, ErrJoined)
 	}
 	addr, who, err := n.reach(ctx, i)
 	if err != nil {
@@ -229,15 +270,18 @@ func (n *Node) Join(ctx context.Context, inv, member string) (Pile, error) {
 
 func (n *Node) Piles() ([]Pile, error) {
 	n.mu.Lock()
-	ps := slices.Clone(n.piles)
+	ps, bs := slices.Clone(n.piles), slices.Clone(n.broken)
 	n.mu.Unlock()
-	out := make([]Pile, 0, len(ps))
+	out := make([]Pile, 0, len(ps)+len(bs))
 	for _, p := range ps {
 		info, err := p.info()
 		if err != nil {
-			return nil, err
+			info = Pile{ID: p.ID, Name: p.Name, Broken: reason(err)}
 		}
 		out = append(out, info)
+	}
+	for _, b := range bs {
+		out = append(out, Pile{ID: b.ID, Name: b.Name, Broken: b.reason})
 	}
 	return out, nil
 }
@@ -263,6 +307,11 @@ func (n *Node) find(id []byte) (*pile, error) {
 	for _, p := range n.piles {
 		if bytes.Equal(p.ID, id) {
 			return p, nil
+		}
+	}
+	for _, b := range n.broken {
+		if bytes.Equal(b.ID, id) {
+			return nil, ErrBrokenPile
 		}
 	}
 	return nil, ErrUnknownPile
@@ -326,6 +375,12 @@ func (n *Node) start(e entry, addrs map[op.Author]string, changes ...op.Change) 
 			return nil, err
 		}
 	}
+	v, err := s.View()
+	if err != nil {
+		s.Close()
+		return nil, err
+	}
+	e.Name = v.PileName
 	ln, err := listen(e.Port)
 	if err != nil {
 		s.Close()
@@ -346,10 +401,12 @@ func (n *Node) start(e entry, addrs map[op.Author]string, changes ...op.Change) 
 	return p, nil
 }
 
+var netListen = net.Listen
+
 func listen(port uint16) (net.Listener, error) {
-	ln, err := net.Listen("tcp", fmt.Sprintf(":%d", port))
+	ln, err := netListen("tcp", fmt.Sprintf(":%d", port))
 	if err != nil && port != 0 {
-		return net.Listen("tcp", ":0")
+		return netListen("tcp", ":0")
 	}
 	return ln, err
 }
@@ -367,18 +424,52 @@ func (n *Node) serve(p *pile, ln net.Listener) {
 		BaseContext:       func(net.Listener) context.Context { return n.ctx },
 		ConnContext:       func(ctx context.Context, c net.Conn) context.Context { return context.WithValue(ctx, connKey{}, c) },
 	}
-	l := peer.NewListener(ln, n.key, func(id []byte) ([]byte, bool) {
+	secrets := func(id []byte) ([]byte, bool) {
 		return p.Secret, bytes.Equal(id, p.ID)
-	})
+	}
+	p.ln = ln
 	n.wg.Add(1)
 	go func() {
 		defer n.wg.Done()
-		srv.Serve(l)
+		for {
+			err := srv.Serve(peer.NewListener(ln, n.key, secrets))
+			if n.ctx.Err() != nil {
+				return
+			}
+			n.diag.Add(diag.Connection, p.ID, "", fmt.Sprintf("port %d stopped accepting connections: %v", p.Port, err))
+			for ln, err = netListen("tcp", fmt.Sprintf(":%d", p.Port)); err != nil; ln, err = netListen("tcp", fmt.Sprintf(":%d", p.Port)) {
+				n.report(diag.Connection, p.ID, "", fmt.Sprintf("listen on port %d", p.Port), err)
+				if pause(n.ctx, retry) != nil {
+					return
+				}
+			}
+			n.mu.Lock()
+			p.ln = ln
+			n.mu.Unlock()
+			n.diag.Add(diag.Connection, p.ID, "", fmt.Sprintf("listening on port %d", p.Port))
+		}
 	}()
 	context.AfterFunc(n.ctx, func() {
 		srv.Close()
-		ln.Close()
+		n.mu.Lock()
+		p.ln.Close()
+		n.mu.Unlock()
 	})
+}
+
+func (n *Node) check(p *pile, ln net.Listener) {
+	defer n.wg.Done()
+	ctx, cancel := context.WithTimeout(n.ctx, dialTimeout)
+	defer cancel()
+	c, err := peer.Dial(ctx, fmt.Sprintf("127.0.0.1:%d", p.Port), n.key, p.ID, p.Secret)
+	if err == nil {
+		c.Close()
+		return
+	}
+	if n.ctx.Err() == nil {
+		n.diag.Add(diag.Connection, p.ID, "", fmt.Sprintf("port %d does not accept connections (%v), reopening", p.Port, err))
+		ln.Close()
+	}
 }
 
 func (n *Node) tracked(h http.Handler) http.Handler {
@@ -630,7 +721,7 @@ func (n *Node) Online(pileID []byte) map[op.Author]bool {
 }
 
 func (n *Node) save() error {
-	entries := make([]entry, len(n.piles))
+	entries := make([]entry, len(n.piles), len(n.piles)+len(n.broken))
 	for i, p := range n.piles {
 		e := p.entry
 		e.Peers = map[string][]byte{}
@@ -638,6 +729,9 @@ func (n *Node) save() error {
 			e.Peers[a] = k[:]
 		}
 		entries[i] = e
+	}
+	for _, b := range n.broken {
+		entries = append(entries, b.entry)
 	}
 	b, err := json.Marshal(entries)
 	if err != nil {

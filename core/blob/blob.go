@@ -194,9 +194,7 @@ func (s *Store) path(h Hash) string { return filepath.Join(s.dir, h.String()) }
 
 func (s *Store) Get(ctx context.Context, r Request) (*os.File, Hash, error) {
 	for {
-		s.mu.Lock()
-		f, h, a, w, err := s.request(r)
-		s.mu.Unlock()
+		f, h, a, w, err := s.locked(r)
 		if a == nil {
 			return f, h, err
 		}
@@ -210,6 +208,12 @@ func (s *Store) Get(ctx context.Context, r Request) (*os.File, Hash, error) {
 			return w.f, w.h, w.err
 		}
 	}
+}
+
+func (s *Store) locked(r Request) (*os.File, Hash, *attempt, *waiter, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.request(r)
 }
 
 func (s *Store) request(r Request) (*os.File, Hash, *attempt, *waiter, error) {

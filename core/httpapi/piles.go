@@ -90,10 +90,11 @@ type pile struct {
 	ID      string   `json:"id"`
 	Name    string   `json:"name"`
 	Members []member `json:"members"`
+	Broken  string   `json:"broken,omitempty"`
 }
 
 func toJSON(n *node.Node, p node.Pile) pile {
-	out := pile{ID: hex.EncodeToString(p.ID), Name: p.Name, Members: []member{}}
+	out := pile{ID: hex.EncodeToString(p.ID), Name: p.Name, Members: []member{}, Broken: p.Broken}
 	authors := make([]op.Author, 0, len(p.Members))
 	for a := range p.Members {
 		authors = append(authors, a)
@@ -127,6 +128,8 @@ func fail(w http.ResponseWriter, err error) {
 		reply(w, http.StatusBadRequest, problem("unknown_invite_version"))
 	case errors.Is(err, node.ErrUnknownPile):
 		reply(w, http.StatusNotFound, problem("unknown_pile"))
+	case errors.Is(err, node.ErrBrokenPile):
+		reply(w, http.StatusServiceUnavailable, problem("pile_unavailable"))
 	case errors.Is(err, node.ErrJoined):
 		reply(w, http.StatusConflict, problem("already_joined"))
 	case errors.Is(err, node.ErrUnreachable):

@@ -18,3 +18,9 @@ func SetBrokenPause(d time.Duration) (restore func()) {
 	brokenPause = d
 	return func() { brokenPause = old }
 }
+
+func SetRenderTimeout(d time.Duration) (restore func()) {
+	old := renderTimeout
+	renderTimeout = d
+	return func() { renderTimeout = old }
+}

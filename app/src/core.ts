@@ -6,6 +6,11 @@ export async function startCore() {
   return connect(PileupCore.port(), PileupCore.token());
 }
 
+export async function restartCore() {
+  await PileupCore.stop().catch(() => {});
+  return startCore();
+}
+
 export function requestMediaPermissions(): Promise<boolean> {
   return PileupCore.requestMediaPermissions();
 }
