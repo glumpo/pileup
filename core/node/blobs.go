@@ -39,6 +39,7 @@ var (
 	ErrRefused     = errors.New("node: owner refused")
 	errNoOwner     = errors.New("node: owner address is unknown")
 	errNotOwner    = errors.New("node: another device answers at the owner address")
+	errSilent      = fmt.Errorf("node: owner went silent: %w", context.DeadlineExceeded)
 )
 
 var headerTimeout, readIdle = timeout, 10 * time.Second
@@ -235,9 +236,9 @@ func (n *Node) fetch(p *pile, owner op.Author, assetID, revision []byte, tier in
 }
 
 func (n *Node) download(ctx context.Context, p *pile, owner op.Author, assetID, revision []byte, tier int, w io.Writer) error {
-	ctx, cancel := context.WithCancel(ctx)
-	defer cancel()
-	deadline := time.AfterFunc(headerTimeout, cancel)
+	ctx, cancel := context.WithCancelCause(ctx)
+	defer cancel(nil)
+	deadline := time.AfterFunc(headerTimeout, func() { cancel(errSilent) })
 	defer deadline.Stop()
 	u := fmt.Sprintf("http://%x/blob/%x/%x/%d", owner[:], assetID, revision, tier)
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, u, nil)
@@ -246,17 +247,24 @@ func (n *Node) download(ctx context.Context, p *pile, owner op.Author, assetID, 
 	}
 	resp, err := p.owners.Do(req)
 	if err != nil {
-		return fmt.Errorf("%w: %w", ErrUnavailable, err)
+		return silent(ctx, fmt.Errorf("%w: %w", ErrUnavailable, err))
 	}
 	defer resp.Body.Close()
 	switch resp.StatusCode {
 	case http.StatusOK:
 		_, err = io.Copy(w, idle{r: resp.Body, deadline: deadline})
-		return err
+		return silent(ctx, err)
 	case http.StatusNotFound:
 		return ErrUnknownAsset
 	}
 	return fmt.Errorf("%w: %w: %s", ErrUnavailable, ErrRefused, resp.Status)
+}
+
+func silent(ctx context.Context, err error) error {
+	if err != nil && errors.Is(context.Cause(ctx), errSilent) {
+		return fmt.Errorf("%w: %w", ErrUnavailable, errSilent)
+	}
+	return err
 }
 
 type idle struct {
@@ -373,9 +381,9 @@ func (n *Node) ServeOriginal(w http.ResponseWriter, r *http.Request, pileID, ass
 
 func (n *Node) relayOriginal(p *pile, a state.Asset, w http.ResponseWriter, r *http.Request) {
 	u := fmt.Sprintf("http://%x/blob/%x/%x/%d", a.Owner[:], a.Meta.AssetID, a.Meta.Revision, T3)
-	ctx, cancel := context.WithCancel(r.Context())
-	defer cancel()
-	deadline := time.AfterFunc(headerTimeout, cancel)
+	ctx, cancel := context.WithCancelCause(r.Context())
+	defer cancel(nil)
+	deadline := time.AfterFunc(headerTimeout, func() { cancel(errSilent) })
 	defer deadline.Stop()
 	req, err := http.NewRequestWithContext(ctx, r.Method, u, nil)
 	if err != nil {
@@ -388,6 +396,7 @@ func (n *Node) relayOriginal(p *pile, a state.Asset, w http.ResponseWriter, r *h
 		}
 	}
 	resp, err := p.stream.Do(req)
+	err = silent(ctx, err)
 	n.report(diag.Media, p.ID, hex.EncodeToString(a.Owner[:]), fmt.Sprintf("stream %x", a.Meta.AssetID), err)
 	if err != nil {
 		http.Error(w, ErrUnavailable.Error(), http.StatusBadGateway)
@@ -400,7 +409,15 @@ func (n *Node) relayOriginal(p *pile, a state.Asset, w http.ResponseWriter, r *h
 		}
 	}
 	w.WriteHeader(resp.StatusCode)
-	io.Copy(w, idle{r: resp.Body, deadline: deadline})
+	_, err = io.Copy(w, idle{r: resp.Body, deadline: deadline})
+	n.report(diag.Media, p.ID, hex.EncodeToString(a.Owner[:]), fmt.Sprintf("stream %x", a.Meta.AssetID), silentOnly(ctx, err))
+}
+
+func silentOnly(ctx context.Context, err error) error {
+	if errors.Is(context.Cause(ctx), errSilent) {
+		return silent(ctx, err)
+	}
+	return nil
 }
 
 func (n *Node) original(p *pile, assetID []byte) (io.ReadSeeker, error) {

@@ -125,13 +125,7 @@ func Open(cfg Config) (*Node, error) {
 	if err := os.MkdirAll(filepath.Join(cfg.Dir, "piles"), 0o700); err != nil {
 		return nil, err
 	}
-	var entries []entry
-	b, err := os.ReadFile(filepath.Join(cfg.Dir, "piles.json"))
-	if err == nil {
-		err = json.Unmarshal(b, &entries)
-	} else if errors.Is(err, fs.ErrNotExist) {
-		err = nil
-	}
+	entries, aside, err := readPiles(filepath.Join(cfg.Dir, "piles.json"))
 	if err != nil {
 		return nil, err
 	}
@@ -141,6 +135,9 @@ func Open(cfg Config) (*Node, error) {
 	}
 	ctx, cancel := context.WithCancel(context.Background())
 	n := &Node{cfg: cfg, key: key, ctx: ctx, cancel: cancel, blobs: blobs, found: map[string]map[string]service{}, diag: diag.New(diagSize)}
+	if aside != "" {
+		n.diag.Add(diag.Sync, nil, "", aside)
+	}
 	n.mu.Lock()
 	for _, e := range entries {
 		var p *pile
@@ -160,6 +157,31 @@ func Open(cfg Config) (*Node, error) {
 	n.discover()
 	n.watchNetwork()
 	return n, nil
+}
+
+func readPiles(path string) ([]entry, string, error) {
+	var entries []entry
+	b, err := os.ReadFile(path)
+	if errors.Is(err, fs.ErrNotExist) {
+		return nil, "", nil
+	}
+	if err != nil {
+		return nil, "", err
+	}
+	err = json.Unmarshal(b, &entries)
+	for _, e := range entries {
+		if err == nil {
+			_, err = peersOf(e)
+		}
+	}
+	if err == nil {
+		return entries, "", nil
+	}
+	moved := path + ".broken-" + time.Now().UTC().Format("20060102T150405")
+	if rerr := os.Rename(path, moved); rerr != nil {
+		return nil, "", errors.Join(err, rerr)
+	}
+	return nil, fmt.Sprintf("piles.json could not be read (%v), moved to %s, starting without piles", err, filepath.Base(moved)), nil
 }
 
 func (n *Node) Close() error {
