@@ -5,10 +5,10 @@ SHELL := /bin/bash
 
 CORE_AAR := app/modules/core/android/libs/pileup-core.aar
 CORE_XCFRAMEWORK := app/modules/core/ios/Mobile.xcframework
-XCODEGEN := $(TOOLS_BIN)/xcodegen/bin/xcodegen
 IOS_APP := app/ios/build/Build/Products/Release-iphonesimulator/app.app
 IOS_SIMULATOR ?= $(shell xcrun simctl list devices available -j | jq -r '[.devices | to_entries | sort_by(.key)[] | select(.key | contains("iOS")) | .value[] | select(.name | startswith("iPhone"))] | last | .udid')
 TOOLS_BIN := $(CURDIR)/build/bin
+XCODEGEN := $(TOOLS_BIN)/xcodegen/bin/xcodegen
 
 check: test build licenses app
 
