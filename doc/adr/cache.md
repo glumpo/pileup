@@ -1,6 +1,6 @@
 # Кеш превью (T1/T2), предзагрузка и закрепления
 
-Описание реализации на ветке `master` после TASK-37 (2026-11-10). Источник истины — код. Решения: A15, A18, A19, A24, A26, A27, A30, A33, A34, A35 в [`architecture.md`](../architecture.md). Задачи: TASK-12, TASK-15, TASK-16, TASK-21, TASK-24, TASK-27, TASK-28, TASK-31, TASK-32, TASK-33, TASK-34, TASK-35, TASK-37.
+Описание реализации на ветке `master` после TASK-37 (2026-11-10). Источник истины — код. Решения: A15, A18, A19, A24, A26, A27, A30, A33, A34, A35, A37, A39, A40, A41, A42, A43, A45, A46 в [`architecture.md`](../architecture.md). Задачи: TASK-12, TASK-15, TASK-16, TASK-21, TASK-24, TASK-27, TASK-28, TASK-31, TASK-32, TASK-33, TASK-34, TASK-35, TASK-37.
 
 ## 1. Назначение и границы
 
