@@ -1,6 +1,6 @@
 # iOS: Go-ядро в приложении, сборка и проверка на macOS-раннере
 
-Описание реализации на ветке `ios/core` после TASK-42 (2026-11-11, с влитым `master` после TASK-49). Источник истины — код. Решения: A13, A21, A22, A31, A48 в [`architecture.md`](../architecture.md). Задачи: TASK-3 (Android-образец), TASK-42; дальше на эту базу встают TASK-43 (медиатека), TASK-44 (Bonjour и жизненный цикл), TASK-45 (UI), TASK-18 (AirPlay).
+Описание реализации после TASK-42 и TASK-43 (медиатека, ветка `ios/media`, 2026-11-11). Источник истины — код. Решения: A13, A21, A22, A31, A48, A49 в [`architecture.md`](../architecture.md). Задачи: TASK-3 (Android-образец), TASK-42; дальше на эту базу встают TASK-43 (медиатека), TASK-44 (Bonjour и жизненный цикл), TASK-45 (UI), TASK-18 (AirPlay).
 
 ## 1. Состав
 
@@ -12,8 +12,9 @@
 | `Native/Core.swift` | старт и стоп фасада `mobile.Start`/`Stop`, `port`, `token`; подготовка каталога данных |
 | `Native/KeychainKeystore.swift` | `Keystore`: seed ключа устройства в Keychain |
 | `Native/NetworkAddresses.swift` | `NetworkInfo`: адреса интерфейсов через `getifaddrs` |
-| `Native/MediaLibrary.swift` | `MediaProvider` и `requestPermissions` — заготовка, наполняет TASK-43 |
-| `Native/Renditions.swift` | `RenditionMaker` — заготовка, наполняет TASK-43 |
+| `Native/Media.swift` | чистая логика медиатеки: JSON `node.MediaItem`, интервал запроса, выбор ресурса оригинала, имя и MIME, размеры T1/T2, разрешения, ошибка `not_local:` |
+| `Native/MediaLibrary.swift` | `MediaProvider` (PhotoKit) и `requestPermissions`; общие `fetchAsset`, `videoAsset` |
+| `Native/Renditions.swift` | `RenditionMaker`: T1/T2 через `PHImageManager`, оригинал по диапазонам через кеш открытых файлов `Originals` |
 | `Native/Discovery.swift` | `DiscoveryProvider` — заготовка, наполняет TASK-44 |
 | `PileupCore.podspec` | pod модуля: `PileupCoreModule.swift` + `Native/**`, `vendored_frameworks = Mobile.xcframework`, `libresolv` |
 | `Package.swift` | SwiftPM-пакет `PileupNative` из `Native/` и binaryTarget `Mobile.xcframework` — только для тестов |
@@ -29,7 +30,7 @@
 
 - `start(): Promise<void>` — каталог данных `Application Support/core`, Keychain-сервис `com.glumpo.pileup.device`, платформа `"ios"`, версия — `CFBundleShortVersionString` бандла (A31), провайдеры из `Native/`. Повторный `start` при работающем ядре ничего не меняет (A13).
 - `stop(): Promise<void>`, `port(): number`, `token(): string` — прямо из фасада.
-- `requestMediaPermissions(): Promise<boolean>` — пока всегда `false` без запроса к системе (ключа `NSPhotoLibraryUsageDescription` в Info.plist ещё нет, а вызов PhotoKit без него роняет приложение). Полноценная реализация — TASK-43.
+- `requestMediaPermissions(): Promise<boolean>` — `PHPhotoLibrary.requestAuthorization(for: .readWrite)`; `true` при `.authorized` и `.limited`. Системный диалог показывается только при первом запросе, дальше ответ сразу. Текст диалога — `NSPhotoLibraryUsageDescription` из config plugin модуля (`app.plugin.js`). Объяснение отказа и переход в настройки — на экране (TASK-55).
 
 Жизненный цикл: ядро останавливается в `OnDestroy` модуля (перезагрузка JS, уничтожение модуля) и по `UIApplication.willTerminateNotification`. Уход в фон ядро не останавливает: приостановленное приложение система может убить без уведомления, данные ядра это переживают (SQLite WAL). Перезапуск слушающих сокетов после фона — TASK-44.
 
@@ -61,7 +62,7 @@
 |---|---|
 | `make mobile-ios` | `gomobile bind -target=ios -iosversion 16.4` → `app/modules/core/ios/Mobile.xcframework` (ios-arm64, ios-arm64_x86_64-simulator); gomobile закреплён директивой `tool` в `core/go.mod` |
 | `make ios-boot` | загрузить симулятор (не ждёт; первая загрузка на раннере — до 1,5 мин миграции данных) |
-| `make ios-test` | скачать XcodeGen 2.46.0 в `build/bin` (sha256 проверяется), сгенерировать `TestHost/PileupNativeTests.xcodeproj`, `xcodebuild test` на симуляторе |
+| `make ios-test` | скачать XcodeGen 2.46.0 в `build/bin` (sha256 проверяется), сгенерировать `TestHost/PileupNativeTests.xcodeproj`, дождаться загрузки симулятора, выдать `TestHost` доступ к фото (`simctl privacy … grant photos`), `xcodebuild test` на симуляторе |
 | `make ios-prebuild` | `npm ci`, `expo prebuild --platform ios --clean --no-install`, `pod install` |
 | `make ios-build` | `xcodebuild` Release под симулятор (JS-бандл внутри, Metro не нужен), только активная архитектура, link map для замеров |
 | `make ios-smoke` | `scripts/ios-smoke.sh`: установка и запуск на симуляторе, проверка ядра (раздел 7) |
@@ -74,6 +75,7 @@
 ## 7. Что доказывает проверка в CI
 
 - `ios-test` (hosted XCTest на симуляторе, 19 тестов): Swift-провайдеры совместимы с протоколами gomobile, xcframework линкуется и ядро работает в iOS-процессе; `Core.start` поднимает ядро, `/health` с токеном — 200, без токена и с чужим — 401; участник pile — `platform = ios` с переданной версией; приглашение создаётся (значит, `NetworkInfo` отдал адрес, который Go признал LAN-адресом); после `Stop` порт закрыт, после нового `Start` — новый токен, старый отвергается, pile и ключ устройства сохранились (seed прочитан из Keychain); `stop` и сразу `start` подряд несколько раз (так `restartCore()` в JS перезапускает ядро при потере связи) — каждый раз новый токен и `/health` 200; `stop` без ядра и повторный `start` ничего не меняют. Отдельно — правила адресов, атрибуты элемента Keychain (`AfterFirstUnlockThisDeviceOnly`, без синхронизации), исключение каталога из бэкапа и сброс seed без каталога.
+- Медиатека (`MediaTests`, `OriginalsTests`, `MediaLibraryTests`): тестовые файлы генерируются в самом тесте (JPEG с EXIF-ориентацией 6, PNG, HEIC 2400×1800, видео H.264 с поворотом 90° и HEVC, скрытое фото; двухцветные, чтобы проверить ориентацию по пикселям) и добавляются в медиатеку симулятора через `PHAssetCreationRequest` с заданной `creationDate` — в репозитории медиафайлов нет. Проверяется: поля списка (время, размеры с ориентацией, MIME, имя, размер = длина файла, `codec` `avc1`/`hvc1`, длительность, `hidden`, нет лишних полей), диапазон-подсказка; T1/T2 — JPEG размера `fit`, без EXIF-ориентации, цвета на нужных сторонах; оригинал по кускам 4 КиБ совпадает с файлом; неизвестный `local_id` — ошибка без `not_local:` быстрее 1 с; через ядро (`Core.start`): выбор диапазона видит файлы, скрытый не выбран, thumbhash появляется (T1 отрисован ядром), `GET …/blob/…/2` отдаёт JPEG 1920×1440. Кеш `Originals` — на временных файлах: один `open` на параллельные Range, не больше 2 открытых, простой, memory warning, ошибка открытия не запоминается.
 - `ios-smoke` (настоящее приложение, Release): после запуска процесс приложения слушает порт на `127.0.0.1` (находится через `lsof` по pid — симулятор делит сеть с хостом), `/health` без токена — 401, приложение живо через 10 с; после `simctl terminate` порт не отвечает; второй запуск снова поднимает ядро на новом порту. Это доказывает, что JS вызвал `start()` через Expo-модуль, pod с xcframework слинкован и ядро стартовало с Keychain в подписанном приложении. Ответ 200 с токеном внутри приложения автоматически не проверяется (токена нет вне процесса); его косвенно показывает скриншот `launch-*.png`: экран «Pileup» без ошибки означает, что `GET /piles` с токеном прошёл. Доставка `willTerminate` при `simctl terminate` не проверяется.
 
 ## 8. CI и канал логов
@@ -114,5 +116,46 @@ git show origin/ci-logs:$sha/<run>.<attempt>/ios-app/launch-1.png > /tmp/launch-
 
 - В podspec остался `tvos` из шаблона, а у xcframework нет среза tvOS — сборка модуля под tvOS не пойдёт.
 - Нет сборки под устройство и подписи: нужен Apple-аккаунт (TASK-1).
-- `requestMediaPermissions` всегда `false`, медиатеки и превью нет (TASK-43); обнаружения нет (TASK-44).
+- Обнаружения нет (TASK-44). Медиатека — разделы 11 и 12.
 - Ветка `ci-logs` растёт на 1–3 МБ за прогон iOS-заданий; чистить её можно в любой момент, код от неё не зависит.
+
+## 11. Медиатека (A49)
+
+**Список (`MediaLibrary.media`).** Без доступа (`.denied`, `.restricted`, `.notDetermined`) — пустой массив и событие `media` в журнале; PhotoKit без разрешения не трогается. Иначе `PHAsset.fetchAssets`: фото и видео, `creationDate` в `[from − 14 ч, to + 14 ч]` (точный фильтр по `taken_at` — в ядре, A17), `includeHiddenAssets`; серии — только ключевой кадр (умолчание PhotoKit), общие альбомы не входят. Поля `node.MediaItem`:
+
+| Поле | Откуда |
+|---|---|
+| `local_id` | `localIdentifier` как есть (формат менять нельзя, A21/A49) |
+| `kind` | `video` для `mediaType == .video`, иначе `photo` (живое фото — `photo`) |
+| `platform_time` | `creationDate`, мс (§5.4); `file_time` и EXIF не передаются |
+| `width`, `height` | `pixelWidth`, `pixelHeight` — уже с ориентацией |
+| `duration_ms` | `duration` видео |
+| `size_bytes`, `mime`, `original_name` | ресурс оригинала (ниже): `fileSize` (ключ KVC ресурса, иначе 0), MIME по `uniformTypeIdentifier`, исходное имя (`IMG_0001.HEIC`) с расширением ресурса |
+| `codec` | FourCC первой видеодорожки (`avc1`, `hvc1`) из `requestAVAsset` без сети; кеш в памяти по (local_id, modified); видео только в iCloud — пусто |
+| `modified` | `modificationDate`, мс (ревизия) |
+| `screenshot`, `hidden` | `mediaSubtypes.contains(.photoScreenshot)`, `isHidden` |
+
+GPS не передаётся. Стоимость: на каждый файл — `PHAssetResource.assetResources(for:)` (чтение БД медиатеки, без файла); на каждое видео при первом вызове — `requestAVAsset` и разбор заголовка файла, параллельно (`concurrentPerform`), дальше из кеша. На устройстве не замерено (раздел 12).
+
+**Оригинал — текущая версия.** Ресурс `fullSizePhoto`/`fullSizeVideo`, если файл отредактирован, иначе `photo`/`video` (`servedResource`). `OriginalSize` открывает файл и кладёт его в кеш `Originals`, `ReadOriginal` читает `pread` не больше запрошенной длины:
+
+- видео — файл `AVURLAsset.url` из `requestAVAsset` (`.current`, `.highQualityFormat`); если вернулась `AVComposition` (slow-mo) или файл не открылся — запасной путь;
+- фото и запасной путь — `PHAssetResourceManager.writeData` ресурса во временный файл; файл удаляется сразу после `open`, дескриптор остаётся;
+- открыто не больше 2 оригиналов (вытесняется давно не читанный), закрытие через 60 с простоя (таймер на фоновой очереди) и по `didReceiveMemoryWarning`; всё под одной блокировкой, поэтому параллельные Range одного файла открывают его один раз;
+- обработчики PhotoKit приходят на фоновых очередях, вызовы Go ждут их семафором не дольше 15 с, главная очередь не нужна.
+
+**iCloud.** `isNetworkAccessAllowed = false` везде. Если PhotoKit отвечает `PHPhotosError.networkAccessRequired` или `PHImageResultIsInCloudKey`, ошибка — `not_local: <local_id> is only in iCloud, not on this iPhone` (текст `NSError` доходит до Go как `localizedDescription`, поэтому префикс в начале строки; ядро делает из него `ErrNotLocal`, A56). Отказ приходит уже в `OriginalSize`. Неизвестный `local_id` — обычная ошибка без префикса.
+
+**T1/T2 (`Rendition`).** `PHImageManager.requestImage` синхронно, без сети, `.current`, `.exact`, `aspectFit` в квадрат 256 или 1920: сначала `.highQualityFormat`, при отказе — `.fastFormat` (любой локальный дериватив, так T1/T2 строятся и при «Оптимизировать хранилище»). Размер — `fit` по размерам файла, но не больше полученной картинки (`renditionSize`); картинка перерисовывается `UIGraphicsImageRenderer` (scale 1, sRGB, ориентация применяется к пикселям) в JPEG q85. Для видео PhotoKit отдаёт кадр-постер. Оригинал целиком не декодируется: уменьшение делает PhotoKit.
+
+## 12. Медиатека: что не проверено на симуляторе и как проверить на iPhone
+
+В симуляторе нет iCloud, «Оптимизировать хранилище», отредактированных в «Фото» файлов, slow-mo, Dolby Vision и системного диалога (доступ выдаёт `simctl privacy`). Проверить на устройстве (TASK-20):
+
+1. **iCloud.** Включить «Оптимизировать хранилище», дождаться выгрузки оригиналов (или взять старое видео, у которого в «Фото» есть значок загрузки). Выбрать его в Pileup и показать на ТВ: на пульте «есть только в iCloud», в журнале владельца ответ `OriginalSize` с `not_local:` меньше чем за секунду, трафика из iCloud нет. T1/T2 такого файла строятся, T2 — из локального дериватива (может быть меньше 1920 px).
+2. **Отредактированные фото и видео.** Обрезать фото и видео в «Фото»: T1/T2 и оригинал — обрезанные, `size_bytes` списка совпадает с длиной, которую отдаёт `OriginalSize`; после «Вернуть к оригиналу» ревизия меняется и превью — исходные.
+3. **Slow-mo и живые фото.** Slow-mo отдаётся исходным файлом через временную копию; живое фото — снимком (`photo`).
+4. **Скорость.** Список на 5000 файлов (из них ~300 видео): время первого и повторного `GET /selection`; 4K HEVC на ТВ: время `OriginalSize`, мс на `ReadOriginal` 1 МиБ, память процесса.
+5. **Ревизии.** Отметить фото «избранным», добавить в альбом: меняется ли `modificationDate` (а с ним ревизия и повторный рендер T1) без правки содержимого.
+6. **Разрешения.** Первый запрос — системный диалог с текстом из `app.plugin.js`; «Ограниченный доступ» — список только из выбранных файлов, `requestMediaPermissions` — `true`; «Не разрешать» — `false`, повторный запрос сразу `false`.
+7. **Memory warning** во время показа видео: файлы закрываются, следующий Range открывает заново без ошибки.

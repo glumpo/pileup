@@ -12,7 +12,7 @@ final class OriginalsTests: XCTestCase {
     dir = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
     try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
     for (name, size) in [("a", 300_001), ("b", 10), ("c", 4096)] {
-      let data = Data((0..<size).map { UInt8(truncatingIfNeeded: $0 * 31 + name.unicodeScalars.first!.value) })
+      let data = Data((0..<size).map { UInt8(truncatingIfNeeded: $0 * 31 + Int(name.unicodeScalars.first!.value)) })
       try data.write(to: dir.appendingPathComponent(name))
       contents[name] = data
     }
