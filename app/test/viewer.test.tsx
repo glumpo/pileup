@@ -2,7 +2,7 @@ import { act, render, screen, userEvent, waitFor, within } from '@testing-librar
 
 import App from '../App';
 import { TimelineItem } from '../src/api';
-import { asset, AUTH, BASE, fakeCore, georgia, INVITE, Reply } from './fakeCore';
+import { asset, AUTH, BASE, fakeCore, georgia, INVITE, Reply, sourceOf } from './fakeCore';
 
 type ImageProps = {
   source: { uri: string; headers?: Record<string, string> };
@@ -56,14 +56,15 @@ async function openViewer(id: string, display: Reply | (() => Reply | Promise<Re
 }
 
 const viewer = () => within(screen.getByTestId('viewer'));
-const sources = () => viewer().getAllByTestId('image').map((i) => i.props.source);
+const sources = () => viewer().getAllByTestId('image').map(sourceOf);
 
-test('a page shows the thumbnail instead of the thumbhash while the display version loads', async () => {
+test('a page shows the thumbhash, the thumbnail over it and the display version on top', async () => {
   await openViewer('c9', () => new Promise(() => {}));
 
-  await waitFor(() => expect(viewer().queryAllByTestId('placeholder')).toEqual([]));
-  expect(sources()).toContainEqual({ uri: BASE + blob('c9', 1), headers: AUTH });
-  expect(sources()).toContainEqual({ uri: BASE + blob('c9', 2), headers: AUTH });
+  const [thumbnail, display] = viewer().getAllByTestId('image').filter((i) => sourceOf(i).uri.includes('/c9/'));
+  expect(thumbnail.props.placeholder).toEqual([expect.objectContaining({ uri: expect.stringMatching(/^thumbhash:/) })]);
+  expect(sourceOf(thumbnail)).toEqual({ uri: BASE + blob('c9', 1), headers: AUTH });
+  expect(sourceOf(display)).toEqual({ uri: BASE + blob('c9', 2), headers: AUTH });
 });
 
 const asleep = 'Нет ответа от участника: Боря. Возможно, погас экран — попросите разблокировать телефон и открыть Pileup.';

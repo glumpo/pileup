@@ -3,7 +3,7 @@ import { act, fireEvent, render, screen, userEvent, within } from '@testing-libr
 
 import App from '../App';
 import { TimelineItem } from '../src/api';
-import { asset, AUTH, BASE, fakeCore, georgia, INVITE } from './fakeCore';
+import { asset, AUTH, BASE, fakeCore, georgia, INVITE, sourceOf } from './fakeCore';
 
 const july1 = Date.UTC(2026, 6, 1, 6, 0);
 const minute = 60_000;
@@ -50,17 +50,15 @@ test('the grid shows files in the order of the core with their authors and day s
   expect(within(screen.getByTestId('asset-a1')).getByText('▶ 0:15')).toBeOnTheScreen();
 });
 
-test('a thumbhash is shown until the thumbnail is loaded from the core', async () => {
+const hashed = [expect.objectContaining({ uri: expect.stringMatching(/^thumbhash:/) })];
+
+test('a cell shows its thumbnail from the core over its thumbhash', async () => {
   await openTimeline(items);
   const cell = await screen.findByTestId('asset-c9');
 
-  expect(within(cell).getByTestId('placeholder').props.source.uri).toMatch(/^data:image\/png;base64,/);
   const thumbnail = within(cell).getByTestId('image');
-  expect(thumbnail.props.source).toEqual({ uri: `${BASE}/piles/aa01/blob/c9/rc9/1`, headers: AUTH });
-
-  await fireEvent(thumbnail, 'load');
-  expect(within(cell).queryByTestId('placeholder')).toBeNull();
-  expect(within(screen.getByTestId('asset-f3')).getByTestId('placeholder')).toBeOnTheScreen();
+  expect(sourceOf(thumbnail)).toEqual({ uri: `${BASE}/piles/aa01/blob/c9/rc9/1`, headers: AUTH });
+  expect(thumbnail.props.placeholder).toEqual(hashed);
 });
 
 test('a file opens full screen and is swiped forward and back', async () => {
@@ -75,7 +73,7 @@ test('a file opens full screen and is swiped forward and back', async () => {
   expect(screen.getByText('2 / 5')).toBeOnTheScreen();
   expect(screen.getByText('Боря')).toBeOnTheScreen();
   expect(screen.getByText('2026-07-01 10:01 · видео 0:15')).toBeOnTheScreen();
-  expect(screen.getAllByTestId('image').map((i) => i.props.source)).toContainEqual({
+  expect(screen.getAllByTestId('image').map(sourceOf)).toContainEqual({
     uri: `${BASE}/piles/aa01/blob/a1/ra1/2`,
     headers: AUTH,
   });
@@ -154,16 +152,21 @@ test('a file with a date before year 0 may come first', async () => {
   expect(days().slice(0, 4)).toEqual(['Дата неизвестна', 'Аня', '2026-07-01', 'Аня']);
 });
 
-test('a broken thumbhash leaves a plain placeholder while the thumbnail still loads', async () => {
+const zeros = btoa(String.fromCharCode(...new Array(25).fill(0)));
+
+test.each([
+  ['not base64', 'не base64'],
+  ['too short', 'AAAA'],
+  ['of zero width', zeros],
+])('a broken thumbhash (%s) leaves a plain placeholder while the thumbnail still loads', async (_, broken) => {
   const warn = jest.spyOn(console, 'warn').mockImplementation(() => {});
-  await openTimeline(items.map((i) => (i.id === 'c9' ? { ...i, thumbhash: 'не base64' } : i)));
+  await openTimeline(items.map((i) => (i.id === 'c9' ? { ...i, thumbhash: broken } : i)));
   const cell = await screen.findByTestId('asset-c9');
 
-  expect(within(cell).queryByTestId('placeholder')).toBeNull();
   const thumbnail = within(cell).getByTestId('image');
-  expect(thumbnail.props.source).toEqual({ uri: `${BASE}/piles/aa01/blob/c9/rc9/1`, headers: AUTH });
-  await fireEvent(thumbnail, 'load');
-  expect(within(screen.getByTestId('asset-f3')).getByTestId('placeholder')).toBeOnTheScreen();
+  expect(thumbnail.props.placeholder).toBeUndefined();
+  expect(sourceOf(thumbnail)).toEqual({ uri: `${BASE}/piles/aa01/blob/c9/rc9/1`, headers: AUTH });
+  expect(within(screen.getByTestId('asset-f3')).getByTestId('image').props.placeholder).toEqual(hashed);
   expect(cellIds()).toEqual(['f3', 'a1', 'c9', '07', 'b2']);
   expect(warn).toHaveBeenCalled();
   warn.mockRestore();
@@ -206,7 +209,7 @@ test('broken files are shown normally once the core returns correct data', async
   expect(screen.queryByText('Не удалось показать файл')).toBeNull();
   expect(screen.queryByText('Дата неизвестна')).toBeNull();
   expect(cellIds()).toEqual(['00', 'f3', 'a1', 'c9', '07', 'b2']);
-  expect(within(screen.getByTestId('asset-a1')).getByTestId('placeholder')).toBeOnTheScreen();
+  expect(within(screen.getByTestId('asset-a1')).getByTestId('image').props.placeholder).toEqual(hashed);
 });
 
 test('in full screen a broken file can be swiped past and closed', async () => {
@@ -224,7 +227,7 @@ test('in full screen a broken file can be swiped past and closed', async () => {
 
   await user.press(await screen.findByTestId('asset-a1'));
   expect(screen.getByText('2 / 6')).toBeOnTheScreen();
-  expect(screen.getAllByTestId('image').map((i) => i.props.source)).toContainEqual({
+  expect(screen.getAllByTestId('image').map(sourceOf)).toContainEqual({
     uri: `${BASE}/piles/aa01/blob/a1/ra1/2`,
     headers: AUTH,
   });
