@@ -3,11 +3,11 @@ id: TASK-48
 title: >-
   Запуск ядра без тупика: карантин битых данных, «Повторить», проверка связи при
   возврате приложения
-status: In Progress
+status: Done
 assignee:
   - '@claude'
 created_date: '2026-11-11T01:41:00Z'
-updated_date: '2026-11-11T02:02:00Z'
+updated_date: '2026-11-11T02:03:00Z'
 labels:
   - core
   - app
