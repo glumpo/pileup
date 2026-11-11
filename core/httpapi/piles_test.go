@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/hex"
 	"encoding/json"
+	"net"
 	"net/http"
 	"net/http/httptest"
 	"net/netip"
@@ -125,6 +126,13 @@ func (c client) joinFails(inv string, status int, code string) {
 	}
 }
 
+func (c client) joinReason(inv string) string {
+	c.t.Helper()
+	var out struct{ Error, Reason string }
+	c.do("POST", "/piles/join", map[string]string{"invite": inv, "member": "Боря"}, http.StatusBadGateway, &out)
+	return out.Reason
+}
+
 func TestPileEndpointsRequireToken(t *testing.T) {
 	a := start(t, "android")
 	p := a.create("Грузия", "Аня")
@@ -187,6 +195,19 @@ func TestJoinErrors(t *testing.T) {
 	b.joinFails("PILEUP:AI", http.StatusBadRequest, "unknown_invite_version")
 	i.Secret = make([]byte, 32)
 	b.joinFails(i.String(), http.StatusBadGateway, "inviter_unreachable")
+	if got := b.joinReason(i.String()); got != "other_device" {
+		t.Fatalf("wrong secret: reason = %q, want other_device", got)
+	}
+	l, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	closed := netip.MustParseAddrPort(l.Addr().String())
+	l.Close()
+	i.Addrs = []netip.AddrPort{closed}
+	if got := b.joinReason(i.String()); got != "refused" {
+		t.Fatalf("closed port: reason = %q, want refused", got)
+	}
 
 	var out struct{ Error string }
 	b.do("POST", "/piles/join", nil, http.StatusBadRequest, &out)
