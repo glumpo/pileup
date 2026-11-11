@@ -48,6 +48,7 @@ var (
 	ErrJoined      = errors.New("node: already a member of this pile")
 	ErrUnreachable = errors.New("node: no inviter address accepted the invite")
 	ErrOffline     = errors.New("node: no network address to invite with")
+	ErrBrokenPile  = errors.New("node: pile could not be opened")
 )
 
 type Config struct {
@@ -67,6 +68,7 @@ type Pile struct {
 	ID      []byte
 	Name    string
 	Members map[op.Author]state.Member
+	Broken  string
 }
 
 type entry struct {

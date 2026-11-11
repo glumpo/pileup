@@ -10,7 +10,7 @@ test('returning to the foreground asks the core to retry its connections now', a
     listeners.push(listener);
     return { remove: jest.fn() };
   });
-  const requests = fakeCore({ 'GET /piles': [200, []], 'POST /reconnect': [204] });
+  const requests = fakeCore({ 'GET /piles': [200, []], 'GET /health': [200, { status: 'ok' }], 'POST /reconnect': [204] });
   await render(<App />);
   expect(await screen.findByLabelText('Название поездки')).toBeOnTheScreen();
   const reconnects = () => requests.filter((r) => r.method === 'POST' && r.path === '/reconnect').length;

@@ -18,3 +18,7 @@ func Pauses(t testing.TB, first, max time.Duration) {
 	firstPause, maxPause = first, max
 	t.Cleanup(func() { firstPause, maxPause = oldFirst, oldMax })
 }
+
+func Crash(h *Host) {
+	h.do(func(*session) error { panic("crash") })
+}
