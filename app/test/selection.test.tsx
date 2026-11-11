@@ -1,4 +1,5 @@
 import { fireEvent, render, screen, userEvent } from '@testing-library/react-native';
+import { Linking, Platform } from 'react-native';
 
 import App from '../App';
 import { Selection } from '../src/api';
@@ -87,4 +88,24 @@ test('without access to the media library nothing is requested from the core', a
   await openSelection();
   expect(await screen.findByText(/Нет доступа к медиатеке/)).toBeOnTheScreen();
   expect(requests.map((r) => r.path)).not.toContain('/piles/aa01/selection');
+});
+
+const settingsHint: [string, string][] = [
+  ['android', 'Если окно с вопросом больше не появляется, откройте настройки Pileup, раздел «Разрешения», и разрешите доступ к фото и видео.'],
+  ['ios', 'Если окно с вопросом больше не появляется, откройте настройки Pileup, пункт «Фото», и выберите «Полный доступ».'],
+];
+
+test.each(settingsHint)('a media library denied on %s explains the way through the app settings', async (os, hint) => {
+  jest.replaceProperty(Platform, 'OS', os as typeof Platform.OS);
+  const settings = jest.spyOn(Linking, 'openSettings').mockResolvedValue(undefined);
+  native.requestMediaPermissions.mockResolvedValue(false);
+  core({ from: 0, to: 0, assets: [] });
+  const user = await openSelection();
+
+  expect(await screen.findByText(hint)).toBeOnTheScreen();
+  expect(screen.getByRole('button', { name: 'Разрешить' })).toBeOnTheScreen();
+  await user.press(screen.getByRole('button', { name: 'Открыть настройки' }));
+  expect(settings).toHaveBeenCalled();
+  native.requestMediaPermissions.mockResolvedValue(true);
+  jest.restoreAllMocks();
 });

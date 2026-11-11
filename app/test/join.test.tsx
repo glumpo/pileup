@@ -1,4 +1,5 @@
 import { render, screen, userEvent, waitFor } from '@testing-library/react-native';
+import { Linking } from 'react-native';
 
 import App from '../App';
 import { fakeCore, georgia, INVITE, Reply } from './fakeCore';
@@ -7,7 +8,7 @@ jest.mock('expo-camera', () => {
   const { createElement } = require('react');
   const { Pressable, Text } = require('react-native');
   return {
-    useCameraPermissions: () => [{ granted: true }, async () => ({ granted: true })],
+    useCameraPermissions: () => [mockCamera, async () => mockCamera],
     CameraView: ({ onBarcodeScanned }: { onBarcodeScanned: (r: { type: string; data: string }) => void }) =>
       createElement(
         Pressable,
@@ -18,6 +19,11 @@ jest.mock('expo-camera', () => {
 });
 
 let mockScanned = '';
+let mockCamera = { granted: true, canAskAgain: true };
+
+beforeEach(() => {
+  mockCamera = { granted: true, canAskAgain: true };
+});
 
 function joinable() {
   const piles: (typeof georgia)[] = [];
@@ -155,4 +161,32 @@ test('a cut invite is told apart from text that is not an invite', async () => {
   expect(
     await screen.findByText('Приглашение повреждено или скопировано не полностью: скопируйте его ещё раз.'),
   ).toBeOnTheScreen();
+});
+
+async function scanWithout(camera: { granted: boolean; canAskAgain: boolean }) {
+  joinable();
+  mockCamera = camera;
+  const user = userEvent.setup();
+  await render(<App />);
+  await user.press(await screen.findByRole('button', { name: 'Войти по приглашению' }));
+  await user.press(screen.getByRole('button', { name: 'Сканировать QR' }));
+  return user;
+}
+
+test('a camera that may still be asked for is explained without sending to settings', async () => {
+  await scanWithout({ granted: false, canAskAgain: true });
+
+  expect(await screen.findByText('Нет доступа к камере: вставьте приглашение текстом')).toBeOnTheScreen();
+  expect(screen.queryByRole('button', { name: 'Открыть настройки' })).toBeNull();
+});
+
+test('a camera denied for good is explained and the app settings can be opened', async () => {
+  const settings = jest.spyOn(Linking, 'openSettings').mockResolvedValue(undefined);
+  const user = await scanWithout({ granted: false, canAskAgain: false });
+
+  expect(
+    await screen.findByText('Нет доступа к камере. Разрешите его в настройках телефона или вставьте приглашение текстом.'),
+  ).toBeOnTheScreen();
+  await user.press(screen.getByRole('button', { name: 'Открыть настройки' }));
+  expect(settings).toHaveBeenCalled();
 });
