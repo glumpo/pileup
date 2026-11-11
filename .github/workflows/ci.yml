@@ -1,6 +1,8 @@
 name: CI
 
-on: push
+on:
+  push:
+    branches-ignore: [ci-logs]
 
 jobs:
   check:
@@ -16,9 +18,54 @@ jobs:
           node-version: 26
       - run: make check
 
-  macos-runner-check:
+  ios-native:
     runs-on: macos-latest
+    permissions:
+      contents: write
+    defaults:
+      run:
+        shell: bash
+    env:
+      CI_LOGS: ${{ github.workspace }}/build/ci-logs
     steps:
-      - run: |
-          uname -a
-          sw_vers
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: core/go.mod
+          cache-dependency-path: core/go.sum
+      - run: scripts/ci-step.sh env sh -c 'sw_vers; uname -m; sysctl -n hw.ncpu; xcodebuild -version; xcrun simctl list devices available; go version; df -h .'
+      - run: scripts/ci-step.sh mobile-ios make mobile-ios
+      - run: scripts/ci-step.sh ios-test make ios-test
+      - if: always()
+        run: scripts/ci-logs.sh ios-native "${{ job.status }}"
+
+  ios-app:
+    runs-on: macos-latest
+    permissions:
+      contents: write
+    defaults:
+      run:
+        shell: bash
+    env:
+      CI_LOGS: ${{ github.workspace }}/build/ci-logs
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: core/go.mod
+          cache-dependency-path: core/go.sum
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 26
+          cache: npm
+          cache-dependency-path: app/package-lock.json
+      - run: scripts/ci-step.sh mobile-ios make mobile-ios
+      - run: scripts/ci-step.sh ios-prebuild make ios-prebuild
+      - run: scripts/ci-step.sh ios-build make ios-build
+      - run: scripts/ci-step.sh ios-smoke make ios-smoke
+      - if: always()
+        run: scripts/ci-step.sh sizes scripts/ios-sizes.sh
+      - if: always()
+        run: |
+          cp build/ios-smoke/*.png "$CI_LOGS" || true
+          scripts/ci-logs.sh ios-app "${{ job.status }}"
