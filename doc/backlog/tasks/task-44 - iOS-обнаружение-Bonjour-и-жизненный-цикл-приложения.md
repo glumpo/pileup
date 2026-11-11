@@ -1,11 +1,11 @@
 ---
 id: TASK-44
 title: 'iOS: обнаружение Bonjour и жизненный цикл приложения'
-status: To Do
+status: In Progress
 assignee:
   - '@claude'
 created_date: '2026-11-11T01:20:00Z'
-updated_date: '2026-11-11T12:17:00Z'
+updated_date: '2026-11-11T21:47:00Z'
 labels:
   - ios
   - app
@@ -32,6 +32,18 @@ iPhone должен находить участников и экраны без
 - [ ] #5 Пока приложение уходит в фон во время раздачи, оно доживает короткое время, а по истечении участники получают обрыв сразу, а не ждут таймаут
 - [ ] #6 Чистая логика (TXT, разбор результатов) покрыта unit-тестами на macOS-раннере; doc/adr/ios.md и architecture.md (A50) обновлены
 <!-- AC:END -->
+
+## Implementation Plan
+
+<!-- SECTION:PLAN:BEGIN -->
+1. Ядро: DiscoveryHandler.Denied(bool) — натив сообщает о запрете локальной сети; Node.LocalNetworkDenied, событие discovery в журнале; join при запрете — local_network_denied; GET /local-network. Красные тесты Go, затем реализация.
+2. Приложение: компонент LocalNetworkBanner (новый файл), подключение одной строкой в PileScreen, Join, ScreenPicker; текст local_network_denied в ui.tsx. Красные jest-тесты, затем реализация.
+3. Swift Discovery: DNSServiceRegister для объявления (порт чужого сокета), NWBrowser для поиска (состояния ready/waiting(PolicyDenied) → Denied), DNSServiceResolve + DNSServiceGetAddrInfo (IPv4) для адреса, TXT как есть; restart() — пересоздать всё; ошибки в MobileReport.
+4. Жизненный цикл в PileupCoreModule: willEnterForeground → Core.restartDiscovery (только mDNS; порты и подключения — JS /health → /reconnect, A54/A55); didEnterBackground → beginBackgroundTask, по истечении Core.stop() синхронно на главном потоке (участники получают обрыв; при возврате JS видит мёртвый /health и перезапускает ядро — запасной путь и для ECONNABORTED).
+5. Тесты Swift: unit (разбор результатов, адреса, состояния), интеграция на симуляторе (объявление+поиск в одном процессе, restart, stop).
+6. CI: проверка ATS в Info.plist после prebuild.
+7. doc/adr/ios.md, A50; merge master; три зелёных задания.
+<!-- SECTION:PLAN:END -->
 
 ## Implementation Notes
 
