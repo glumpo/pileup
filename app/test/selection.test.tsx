@@ -7,6 +7,11 @@ import { fakeCore, georgia, INVITE } from './fakeCore';
 
 const native = jest.requireMock('../modules/core/src/PileupCoreModule').default;
 
+const switched = (label: string) => {
+  const toggle = screen.getByLabelText(label);
+  return toggle.props.value ?? toggle.props.on;
+};
+
 const july = (day: number, hour = 0) => new Date(2026, 6, day, hour).getTime();
 
 function core(selection: Selection) {
@@ -66,13 +71,13 @@ test('choosing dates lists my files, and a file can be excluded', async () => {
   );
   expect(await screen.findByText('IMG_0001.HEIC')).toBeOnTheScreen();
   expect(screen.getByText('2026-07-04 09:00 · скриншот')).toBeOnTheScreen();
-  expect(screen.getByLabelText('В pile: IMG_0002.PNG').props.value).toBe(false);
+  expect(switched('В pile: IMG_0002.PNG')).toBe(false);
 
   await fireEvent(screen.getByLabelText('В pile: IMG_0001.HEIC'), 'valueChange', false);
   expect(requests).toContainEqual(
     expect.objectContaining({ method: 'PUT', path: '/piles/aa01/selection/a1', body: { selected: false } }),
   );
-  expect(screen.getByLabelText('В pile: IMG_0001.HEIC').props.value).toBe(false);
+  expect(switched('В pile: IMG_0001.HEIC')).toBe(false);
 });
 
 test('the saved range is shown again', async () => {
@@ -187,9 +192,9 @@ test('a file switch moves at once and moves back when the core refuses', async (
 
   const toggle = await screen.findByLabelText('В pile: IMG_0001.HEIC');
   const pressed = fireEvent(toggle, 'valueChange', false);
-  await waitFor(() => expect(screen.getByLabelText('В pile: IMG_0001.HEIC').props.value).toBe(false));
+  await waitFor(() => expect(switched('В pile: IMG_0001.HEIC')).toBe(false));
   answer([507, { error: 'disk_full' }]);
   await pressed;
-  await waitFor(() => expect(screen.getByLabelText('В pile: IMG_0001.HEIC').props.value).toBe(true));
+  await waitFor(() => expect(switched('В pile: IMG_0001.HEIC')).toBe(true));
   expect(screen.getByText('На телефоне закончилось место. Освободите место и повторите.')).toBeOnTheScreen();
 });

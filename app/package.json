@@ -29,12 +29,25 @@
   },
   "private": true,
   "jest": {
-    "preset": "jest-expo",
-    "transformIgnorePatterns": [
-      "/node_modules/(?!(.pnpm|react-native|@react-native|@react-native-community|expo|@expo))"
-    ],
-    "setupFiles": [
-      "./test/setup.ts"
+    "projects": [
+      {
+        "preset": "jest-expo/ios",
+        "transformIgnorePatterns": [
+          "/node_modules/(?!(.pnpm|react-native|@react-native|@react-native-community|expo|@expo))"
+        ],
+        "setupFiles": [
+          "./test/setup.ts"
+        ]
+      },
+      {
+        "preset": "jest-expo/android",
+        "transformIgnorePatterns": [
+          "/node_modules/(?!(.pnpm|react-native|@react-native|@react-native-community|expo|@expo))"
+        ],
+        "setupFiles": [
+          "./test/setup.ts"
+        ]
+      }
     ],
     "testTimeout": 60000
   }
