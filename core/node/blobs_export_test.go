@@ -24,3 +24,9 @@ func SetRenderTimeout(d time.Duration) (restore func()) {
 	renderTimeout = d
 	return func() { renderTimeout = old }
 }
+
+func SetOwnerPause(d time.Duration) (restore func()) {
+	old := ownerPause
+	ownerPause = d
+	return func() { ownerPause = old }
+}

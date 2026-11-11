@@ -70,3 +70,7 @@ func class(err error) string {
 	}
 	return Failed
 }
+
+func Class(err error) string {
+	return ""
+}

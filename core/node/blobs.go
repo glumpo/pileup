@@ -53,6 +53,8 @@ var brokenPause = 5 * time.Minute
 
 var renderTimeout = 30 * time.Second
 
+var ownerPause = 10 * time.Second
+
 var natives = make(chan struct{}, 3)
 
 type RenditionMaker interface {

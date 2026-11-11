@@ -183,3 +183,34 @@ func TestDisplayOfOfflineOwnerIsUnavailable(t *testing.T) {
 		t.Fatalf("T2 of offline owner: status %d, body %s", resp.StatusCode, body)
 	}
 }
+
+func TestUnavailableOwnerIsClassed(t *testing.T) {
+	a, p, photo := sourceWithPhoto(t)
+	inv, err := a.Invite(p.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	b := start(t, "android")
+	var joined pile
+	b.do("POST", "/piles/join", map[string]string{"invite": inv, "member": "Боря"}, http.StatusCreated, &joined)
+	deadline := time.Now().Add(10 * time.Second)
+	for {
+		resp, _ := getBlob(t, b.url, blobPath(p, photo, "1"), "secret")
+		if resp.StatusCode == http.StatusOK {
+			break
+		}
+		if time.Now().After(deadline) {
+			t.Fatalf("T1 from the owner: status %d", resp.StatusCode)
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	if err := a.Close(); err != nil {
+		t.Fatal(err)
+	}
+	resp, body := getBlob(t, b.url, blobPath(p, photo, "2"), "secret")
+	var out struct{ Error, Reason string }
+	json.Unmarshal(body, &out)
+	if resp.StatusCode != http.StatusBadGateway || out.Error != "source_unavailable" || out.Reason != node.Refused {
+		t.Fatalf("T2 of the owner whose Pileup is closed: status %d, body %s; want source_unavailable with reason %q", resp.StatusCode, body, node.Refused)
+	}
+}
