@@ -1,11 +1,11 @@
 ---
 id: TASK-53
 title: Молчащий участник не останавливает остальные картинки и сразу назван причиной
-status: In Progress
+status: Done
 assignee:
   - '@claude'
 created_date: '2026-11-11T01:54:00Z'
-updated_date: '2026-11-11T12:02:00Z'
+updated_date: '2026-11-11T12:08:00Z'
 labels:
   - core
   - app
