@@ -25,9 +25,20 @@ export function usePins(api: Api, pile: string) {
   const [progress, setProgress] = useState<PinProgress[]>([]);
   const [offer, setOffer] = useState<{ member?: Source; estimate: PinEstimate }>();
   const [error, setError] = useState<string>();
+  const [failure, setFailure] = useState<string>();
   const loading = progress.some((p) => p.done + p.failed < p.total);
 
-  const refresh = useCallback(() => api.pins(pile).then(setProgress, (e) => setError(describe(e))), [api, pile]);
+  const refresh = useCallback(
+    () =>
+      api.pins(pile).then(
+        (p) => {
+          setProgress(p);
+          setFailure(undefined);
+        },
+        (e) => setFailure(describe(e)),
+      ),
+    [api, pile],
+  );
 
   useEffect(() => {
     refresh();
@@ -51,7 +62,7 @@ export function usePins(api: Api, pile: string) {
   return {
     progress,
     offer,
-    error,
+    error: error ?? failure,
     ask: (member?: Source) =>
       run(async () => setOffer({ member, estimate: await api.pinEstimate(pile, member?.author) })),
     confirm: () =>
