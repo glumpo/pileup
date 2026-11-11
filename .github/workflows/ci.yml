@@ -24,6 +24,33 @@ jobs:
       - if: always()
         run: scripts/ci-logs.sh check "${{ job.status }}"
 
+  android:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    env:
+      CI_LOGS: ${{ github.workspace }}/build/ci-logs
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: core/go.mod
+          cache-dependency-path: core/go.sum
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 26
+          cache: npm
+          cache-dependency-path: app/package-lock.json
+      - uses: actions/setup-java@v6
+        with:
+          distribution: temurin
+          java-version: 17
+      - run: scripts/ci-step.sh env sh -c 'echo "$ANDROID_HOME"; ls "$ANDROID_HOME/ndk"; java -version; go version; df -h .'
+      - run: scripts/ci-step.sh android-debug make android-debug
+      - run: scripts/ci-step.sh android-test make android-test
+      - if: always()
+        run: scripts/ci-logs.sh android "${{ job.status }}"
+
   ios-native:
     runs-on: macos-latest
     permissions:
