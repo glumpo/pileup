@@ -3,6 +3,7 @@ import { FlatList, Pressable, Text, View } from 'react-native';
 
 import { Api, Pile, Screen as Display, ShowState } from '../api';
 import { describe, ErrorText, Screen, styles } from '../ui';
+import { LocalNetworkBanner } from '../LocalNetwork';
 
 const kinds: Record<string, string> = { cast: 'Google Cast', airplay: 'AirPlay' };
 
@@ -53,6 +54,7 @@ export function ScreenPicker({
 
   return (
     <Screen title="Показать на экране" onBack={onBack}>
+      <LocalNetworkBanner api={api} />
       <ErrorText error={error} />
       <FlatList
         testID="screens"

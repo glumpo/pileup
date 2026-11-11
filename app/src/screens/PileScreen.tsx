@@ -6,6 +6,7 @@ import { PinsPanel, Source, usePins } from '../Pins';
 import { presenceOf } from '../presence';
 import { QR } from '../QR';
 import { Button, describe, ErrorText, Screen, styles } from '../ui';
+import { LocalNetworkBanner } from '../LocalNetwork';
 
 export function PileScreen({
   api,
@@ -77,6 +78,7 @@ export function PileScreen({
 
   return (
     <Screen title={pile.name || 'Pile'} onBack={onBack}>
+      <LocalNetworkBanner api={api} />
       <ScrollView
         contentContainerStyle={[styles.body, { alignItems: 'stretch' }]}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={refresh} />}

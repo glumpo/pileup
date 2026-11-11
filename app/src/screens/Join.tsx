@@ -4,6 +4,7 @@ import { ScrollView, StyleSheet, Text } from 'react-native';
 
 import { Api, Pile } from '../api';
 import { Button, describe, ErrorText, Field, Screen, styles } from '../ui';
+import { LocalNetworkBanner } from '../LocalNetwork';
 
 export function Join({ api, onBack, onJoined }: { api: Api; onBack: () => void; onJoined: (pile: Pile) => void }) {
   const [permission, requestPermission] = useCameraPermissions();
@@ -33,6 +34,7 @@ export function Join({ api, onBack, onJoined }: { api: Api; onBack: () => void; 
 
   return (
     <Screen title="Войти в pile" onBack={onBack}>
+      <LocalNetworkBanner api={api} />
       <ScrollView contentContainerStyle={styles.body} keyboardShouldPersistTaps="handled">
         {scanning ? (
           <CameraView
