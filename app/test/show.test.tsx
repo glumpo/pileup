@@ -2,7 +2,7 @@ import { act, render, screen, userEvent, within } from '@testing-library/react-n
 
 import App from '../App';
 import { Hint, PinEstimate, PinProgress, Screen, ShowState, TimelineItem } from '../src/api';
-import { asset, AUTH, BASE, fakeCore, georgia, INVITE } from './fakeCore';
+import { asset, AUTH, BASE, fakeCore, georgia, INVITE, sourceOf } from './fakeCore';
 
 jest.mock('expo-keep-awake', () => {
   const { useEffect } = require('react');
@@ -188,7 +188,7 @@ test('a show started from the pile runs on the chosen screen and the remote show
   expect(screen.getByText('1 / 3')).toBeOnTheScreen();
   expect(await screen.findByText('Аня')).toBeOnTheScreen();
   expect(screen.getByText('2026-07-01 10:00')).toBeOnTheScreen();
-  expect(screen.getByTestId('image').props.source).toEqual({ uri: `${BASE}/piles/aa01/blob/f3/rf3/2`, headers: AUTH });
+  expect(sourceOf(screen.getByTestId('image'))).toEqual({ uri: `${BASE}/piles/aa01/blob/f3/rf3/2`, headers: AUTH });
 });
 
 test('a show started from the full-screen viewer starts at the opened file', async () => {
@@ -215,7 +215,7 @@ test('next and previous move the show and the remote follows', async () => {
   expect(await screen.findByText('2 / 3')).toBeOnTheScreen();
   expect(await screen.findByText('Боря')).toBeOnTheScreen();
   expect(screen.getByText('2026-07-01 10:01 · видео')).toBeOnTheScreen();
-  expect(screen.getByTestId('image').props.source.uri).toBe(`${BASE}/piles/aa01/blob/a1/ra1/2`);
+  expect(sourceOf(screen.getByTestId('image')).uri).toBe(`${BASE}/piles/aa01/blob/a1/ra1/2`);
 
   await user.press(screen.getByRole('button', { name: 'Следующий' }));
   expect(await screen.findByText('3 / 3')).toBeOnTheScreen();
@@ -392,7 +392,7 @@ test('an unavailable video is explained over its poster and the show goes on', a
   await user.press(screen.getByRole('button', { name: 'Следующий' }));
   expect(await screen.findByText(/Видео недоступно/)).toBeOnTheScreen();
   expect(screen.getByText('2 / 3')).toBeOnTheScreen();
-  expect(screen.getByTestId('image').props.source.uri).toBe(`${BASE}/piles/aa01/blob/a1/ra1/2`);
+  expect(sourceOf(screen.getByTestId('image')).uri).toBe(`${BASE}/piles/aa01/blob/a1/ra1/2`);
 
   await user.press(screen.getByRole('button', { name: 'Следующий' }));
   expect(await screen.findByText('3 / 3')).toBeOnTheScreen();
@@ -470,7 +470,7 @@ test('a show left without files says so with only stop offered, and the remote r
   show.files = items;
   expect(await screen.findByText('1 / 3', {}, { timeout: 3000 })).toBeOnTheScreen();
   expect(screen.queryByText('В pile не осталось файлов')).toBeNull();
-  expect(screen.getByTestId('image').props.source.uri).toBe(`${BASE}/piles/aa01/blob/f3/rf3/2`);
+  expect(sourceOf(screen.getByTestId('image')).uri).toBe(`${BASE}/piles/aa01/blob/f3/rf3/2`);
   expect(screen.getByRole('button', { name: 'Следующий' })).toBeOnTheScreen();
 });
 

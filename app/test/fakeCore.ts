@@ -53,3 +53,6 @@ export function asset(id: string, author: string, takenAt: number, extra: Partia
     ...extra,
   };
 }
+
+export const sourceOf = (image: { props: { source?: unknown } }) =>
+  [image.props.source].flat()[0] as { uri: string; headers?: Record<string, string> };
