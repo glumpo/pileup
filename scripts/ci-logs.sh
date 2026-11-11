@@ -3,6 +3,7 @@ set -euo pipefail
 job=$1
 mkdir -p "$CI_LOGS"
 echo "$2" > "$CI_LOGS/status"
+echo "finished $(date -u +%H:%M:%S)" >> "$CI_LOGS/steps"
 echo "$GITHUB_REF_NAME $GITHUB_SHA run $GITHUB_RUN_ID attempt $GITHUB_RUN_ATTEMPT" > "$CI_LOGS/run"
 dest=$GITHUB_SHA/$GITHUB_RUN_NUMBER.$GITHUB_RUN_ATTEMPT/$job
 header=$(git config --get http.https://github.com/.extraheader)

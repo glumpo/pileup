@@ -5,6 +5,7 @@ SHELL := /bin/bash
 
 CORE_AAR := app/modules/core/android/libs/pileup-core.aar
 CORE_XCFRAMEWORK := app/modules/core/ios/Mobile.xcframework
+XCODEGEN := $(TOOLS_BIN)/xcodegen/bin/xcodegen
 IOS_APP := app/ios/build/Build/Products/Release-iphonesimulator/app.app
 IOS_SIMULATOR ?= $(shell xcrun simctl list devices available -j | jq -r '[.devices | to_entries | sort_by(.key)[] | select(.key | contains("iOS")) | .value[] | select(.name | startswith("iPhone"))] | last | .udid')
 TOOLS_BIN := $(CURDIR)/build/bin
@@ -48,8 +49,14 @@ mobile-ios:
 ios-boot:
 	xcrun simctl boot $(IOS_SIMULATOR) || true
 
-ios-test:
-	cd app/modules/core/ios/TestHost && xcodegen generate
+$(XCODEGEN):
+	mkdir -p $(TOOLS_BIN)
+	curl -sSL -o $(TOOLS_BIN)/xcodegen.zip https://github.com/yonaskolb/XcodeGen/releases/download/2.46.0/xcodegen.zip
+	echo "4d9e34b62172d645eed6457cac13fc222569974098ef4ee9c3368bedf0196806  $(TOOLS_BIN)/xcodegen.zip" | shasum -a 256 -c
+	cd $(TOOLS_BIN) && unzip -qo xcodegen.zip
+
+ios-test: $(XCODEGEN)
+	cd app/modules/core/ios/TestHost && $(XCODEGEN) generate
 	cd app/modules/core/ios/TestHost && xcodebuild test -project PileupNativeTests.xcodeproj -scheme PileupNativeTests -destination id=$(IOS_SIMULATOR) -derivedDataPath ../.build/xcode
 
 ios-prebuild:
