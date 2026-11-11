@@ -56,6 +56,7 @@ func (n *Node) Reconnect(reason string) {
 	}
 	var now, started int
 	for _, p := range n.piles {
+		clear(p.away)
 		for _, l := range p.loops {
 			if l.kick != nil {
 				l.kick()
