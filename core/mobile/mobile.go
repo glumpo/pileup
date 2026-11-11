@@ -5,11 +5,19 @@ import (
 	"crypto/rand"
 	"encoding/json"
 	"errors"
+	"fmt"
+	"io"
 	"net"
 	"net/http"
 	"net/netip"
+	"os"
+	"path/filepath"
+	"runtime/debug"
+	"strings"
 	"sync"
+	"time"
 
+	"github.com/glumpo/pileup/core/diag"
 	"github.com/glumpo/pileup/core/httpapi"
 	"github.com/glumpo/pileup/core/node"
 	"github.com/glumpo/pileup/core/show"
@@ -60,13 +68,45 @@ var (
 	drain    func()
 	port     int
 	token    string
+
+	reports sync.Mutex
+	journal *diag.Log
+	hidden  string
+	pending []diag.Event
 )
+
+const maxPending = 100
+
+func Report(kind, message string) {
+	reports.Lock()
+	defer reports.Unlock()
+	if hidden != "" {
+		message = strings.ReplaceAll(message, hidden, "…")
+	}
+	if journal != nil {
+		journal.Add(diag.Kind(kind), nil, "", message)
+	} else if len(pending) < maxPending {
+		pending = append(pending, diag.Event{Kind: diag.Kind(kind), Message: message})
+	}
+}
 
 func Start(dir, platform, appVersion string, keystore Keystore, media MediaProvider, renditions RenditionMaker, network NetworkInfo, discovery DiscoveryProvider) error {
 	mu.Lock()
 	defer mu.Unlock()
 	if server != nil {
 		return nil
+	}
+	os.MkdirAll(dir, 0o700)
+	crash, crashErr := os.OpenFile(filepath.Join(dir, "crash.txt"), os.O_RDWR|os.O_CREATE|os.O_APPEND, 0o600)
+	var crashed []byte
+	var crashedAt time.Time
+	if crashErr == nil {
+		defer crash.Close()
+		crashed, _ = io.ReadAll(io.LimitReader(crash, 4<<10))
+		if info, err := crash.Stat(); err == nil {
+			crashedAt = info.ModTime()
+		}
+		crashErr = debug.SetCrashOutput(crash, debug.CrashOptions{})
 	}
 	n, err := node.Open(node.Config{
 		Dir:        dir,
@@ -80,6 +120,13 @@ func Start(dir, platform, appVersion string, keystore Keystore, media MediaProvi
 	})
 	if err != nil {
 		return err
+	}
+	if crashErr != nil {
+		n.Diag().Error(diag.App, nil, "", fmt.Errorf("crash output: %w", crashErr))
+	}
+	if len(crashed) > 0 {
+		n.Diag().Add(diag.Crash, nil, "", fmt.Sprintf("previous run crashed at %s: %s", crashedAt.UTC().Format(time.RFC3339), crashed))
+		crash.Truncate(0)
 	}
 	ln, err := net.Listen("tcp", "127.0.0.1:0")
 	if err != nil {
@@ -110,6 +157,13 @@ func Start(dir, platform, appVersion string, keystore Keystore, media MediaProvi
 	port = ln.Addr().(*net.TCPAddr).Port
 	token = t
 	go server.Serve(ln)
+	reports.Lock()
+	journal, hidden = n.Diag(), t
+	for _, e := range pending {
+		journal.Add(e.Kind, nil, "", e.Message)
+	}
+	pending = nil
+	reports.Unlock()
 	return nil
 }
 
@@ -144,6 +198,9 @@ func Stop() error {
 		err = nil
 	}
 	drain()
+	reports.Lock()
+	journal = nil
+	reports.Unlock()
 	shows.Close()
 	err = errors.Join(err, core.Close())
 	core, shows, listener, server, drain, port, token = nil, nil, nil, nil, nil, 0, ""

@@ -1,6 +1,7 @@
 package node
 
 import (
+	"bufio"
 	"bytes"
 	"context"
 	"encoding/hex"
@@ -10,7 +11,9 @@ import (
 	"net"
 	"net/http"
 	"os"
+	"slices"
 	"strconv"
+	"strings"
 	"sync"
 	"time"
 
@@ -37,14 +40,20 @@ const (
 var (
 	ErrUnavailable = errors.New("node: asset owner is unavailable")
 	ErrRefused     = errors.New("node: owner refused")
+	ErrRender      = errors.New("node: rendition failed")
 	errNoOwner     = errors.New("node: owner address is unknown")
 	errNotOwner    = errors.New("node: another device answers at the owner address")
 	errSilent      = fmt.Errorf("node: owner went silent: %w", context.DeadlineExceeded)
+	errStuck       = errors.New("node: rendering of this file got stuck recently, not retried yet")
 )
 
 var headerTimeout, readIdle = timeout, 10 * time.Second
 
 var brokenPause = 5 * time.Minute
+
+var renderTimeout = 30 * time.Second
+
+var natives = make(chan struct{}, 3)
 
 type RenditionMaker interface {
 	Rendition(localID string, tier int) ([]byte, error)
@@ -172,20 +181,61 @@ func (n *Node) localID(p *pile, assetID []byte) (string, error) {
 }
 
 func (n *Node) render(p *pile, assetID []byte, tier int) blob.Load {
-	return func(_ context.Context, w io.Writer) error {
+	return func(ctx context.Context, w io.Writer) error {
 		local, err := n.localID(p, assetID)
 		if err != nil {
 			return err
 		}
-		n.rendering.wait(tier)
-		b, err := n.cfg.Renditions.Rendition(local, tier)
-		n.rendering.done()
+		b, err := n.rendition(ctx, local, tier)
 		n.report(diag.Media, p.ID, "", fmt.Sprintf("render %x T%d", assetID, tier), err)
 		if err != nil {
-			return err
+			return fmt.Errorf("%w: %w", ErrRender, err)
 		}
 		_, err = w.Write(b)
 		return err
+	}
+}
+
+type rendered struct {
+	b   []byte
+	err error
+}
+
+func (n *Node) rendition(ctx context.Context, local string, tier int) ([]byte, error) {
+	if err := n.rendering.wait(ctx, tier); err != nil {
+		return nil, err
+	}
+	if n.rendering.stuck(local) {
+		n.rendering.done()
+		return nil, errStuck
+	}
+	select {
+	case natives <- struct{}{}:
+	case <-ctx.Done():
+		n.rendering.done()
+		return nil, ctx.Err()
+	}
+	out := make(chan rendered, 1)
+	settled := false
+	go func() {
+		b, err := n.cfg.Renditions.Rendition(local, tier)
+		<-natives
+		if n.rendering.returned(local, &settled) {
+			out <- rendered{b, err}
+		}
+	}()
+	d := renderTimeout
+	watchdog := time.AfterFunc(d, func() {
+		if n.rendering.abandon(local, &settled) {
+			out <- rendered{err: fmt.Errorf("node: rendering took longer than %v, file skipped until the call returns: %w", d, context.DeadlineExceeded)}
+		}
+	})
+	select {
+	case r := <-out:
+		watchdog.Stop()
+		return r.b, r.err
+	case <-ctx.Done():
+		return nil, ctx.Err()
 	}
 }
 
@@ -193,28 +243,48 @@ type turns struct {
 	mu                   sync.Mutex
 	busy                 bool
 	displays, thumbnails []chan struct{}
+	hung                 map[string]time.Time
 }
 
-func (t *turns) wait(tier int) {
+func (t *turns) wait(ctx context.Context, tier int) error {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
 	t.mu.Lock()
 	if !t.busy {
 		t.busy = true
 		t.mu.Unlock()
-		return
+		return nil
+	}
+	queue := &t.thumbnails
+	if tier == T2 {
+		queue = &t.displays
 	}
 	turn := make(chan struct{})
-	if tier == T2 {
-		t.displays = append(t.displays, turn)
-	} else {
-		t.thumbnails = append(t.thumbnails, turn)
-	}
+	*queue = append(*queue, turn)
 	t.mu.Unlock()
-	<-turn
+	select {
+	case <-turn:
+		return nil
+	case <-ctx.Done():
+	}
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	if i := slices.Index(*queue, turn); i >= 0 {
+		*queue = slices.Delete(*queue, i, i+1)
+	} else {
+		t.next()
+	}
+	return ctx.Err()
 }
 
 func (t *turns) done() {
 	t.mu.Lock()
 	defer t.mu.Unlock()
+	t.next()
+}
+
+func (t *turns) next() {
 	switch {
 	case len(t.displays) > 0:
 		close(t.displays[0])
@@ -225,6 +295,44 @@ func (t *turns) done() {
 	default:
 		t.busy = false
 	}
+}
+
+func (t *turns) stuck(local string) bool {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	until, ok := t.hung[local]
+	if ok && !until.IsZero() && !time.Now().Before(until) {
+		delete(t.hung, local)
+		return false
+	}
+	return ok
+}
+
+func (t *turns) abandon(local string, settled *bool) bool {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	if *settled {
+		return false
+	}
+	*settled = true
+	if t.hung == nil {
+		t.hung = map[string]time.Time{}
+	}
+	t.hung[local] = time.Time{}
+	t.next()
+	return true
+}
+
+func (t *turns) returned(local string, settled *bool) bool {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	if *settled {
+		t.hung[local] = time.Now().Add(brokenPause)
+		return false
+	}
+	*settled = true
+	t.next()
+	return true
 }
 
 func (n *Node) fetch(p *pile, owner op.Author, assetID, revision []byte, tier int) blob.Load {
@@ -257,7 +365,8 @@ func (n *Node) download(ctx context.Context, p *pile, owner op.Author, assetID, 
 	case http.StatusNotFound:
 		return ErrUnknownAsset
 	}
-	return fmt.Errorf("%w: %w: %s", ErrUnavailable, ErrRefused, resp.Status)
+	reason, _ := bufio.NewReader(io.LimitReader(resp.Body, 512)).ReadString('\n')
+	return fmt.Errorf("%w: %w: %s: %s", ErrUnavailable, ErrRefused, resp.Status, strings.TrimSpace(reason))
 }
 
 func silent(ctx context.Context, err error) error {

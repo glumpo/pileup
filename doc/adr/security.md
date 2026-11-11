@@ -78,7 +78,9 @@ Cleartext на Android: `network_security_config` запрещает HTTP все
 
 ### 4.1 UI API (за UI-токеном)
 
-`GET /health`; `GET|POST /piles`; `GET /piles/{id}/invite` (**возвращает S**); `POST /piles/join`; `GET|PUT /piles/{id}/selection`, `PUT /piles/{id}/selection/{asset}`; `GET /piles/{id}/timeline`; `GET /piles/{id}/blob/{asset}/{rev}/{tier}` (только T1/T2); `GET|POST|DELETE /piles/{id}/pins`, `GET /piles/{id}/pins/estimate`; `GET /screens`; `GET /diag`, `/diag/export`; `POST /reconnect`; `POST|GET|DELETE /show`, `POST /show/{next,prev,play,pause,goto}`. Заголовков CORS нет. Браузер на телефоне не может прислать `Authorization` без preflight, а preflight получает 401 (`TestHealthRejectsMissingOrWrongToken`, `TestNodeAPIRequiresToken`).
+`GET /health`; `GET|POST /piles`; `GET /piles/{id}/invite` (**возвращает S**); `POST /piles/join`; `GET|PUT /piles/{id}/selection`, `PUT /piles/{id}/selection/{asset}`; `GET /piles/{id}/timeline`; `GET /piles/{id}/blob/{asset}/{rev}/{tier}` (только T1/T2); `GET|POST|DELETE /piles/{id}/pins`, `GET /piles/{id}/pins/estimate`; `GET /screens`; `GET /diag`, `/diag/export`, `POST /diag` (A60); `POST /reconnect`; `POST|GET|DELETE /show`, `POST /show/{next,prev,play,pause,goto}`. Заголовков CORS нет. Браузер на телефоне не может прислать `Authorization` без preflight, а preflight получает 401 (`TestHealthRejectsMissingOrWrongToken`, `TestNodeAPIRequiresToken`).
+
+Журнал диагностики и его экспорт секретов не содержат (A60): строки приглашения вырезаются из всех сообщений (`PILEUP:…`), UI-токен — из сообщений `POST /diag` и `mobile.Report`; секрет pile и токен ядро в журнал не пишет (`TestDiagHidesSecrets`, `TestInvitesAreNotLogged`, `TestReportHidesToken`). Файлы `diag.log`, `diag.log.1`, `crash.txt` лежат в каталоге данных ядра (`noBackupFilesDir/core` на Android).
 
 ### 4.2 Порт pile (после рукопожатия §5)
 
@@ -206,6 +208,12 @@ T1, T3 фото, другие ревизии, маршруты UI и порта 
 - **Журнал** (`connection`, без pile):
   - `reconnect, <причина>: <n> waiting loops retried now, <m> loops started`;
   - `network addresses changed from [...] to [...]`.
+
+Слушатель порта pile (A55, [node.go](../../core/node/node.go) `serve`, `check`). Порт известен пирам и хранится в `piles.json`, поэтому слушатель восстанавливается только на том же порту:
+
+- **`Serve` вернулся** (ошибка `Accept`, не «временная» для `http.Server`): узел пишет `port <n> stopped accepting connections: <ошибка>`, снова слушает `:<n>` (без запасного `:0`) и пишет `listening on port <n>`. Если порт занят, попытка повторяется раз в секунду, ошибка — в журнал (`TestPilePortAcceptsAgainAfterAcceptFails`).
+- **`Serve` крутится на «временных» ошибках** (`EMFILE` и т. п. от мёртвого сокета): сам он не выходит. Каждый `Node.Reconnect` проверяет каждый порт pile самоподключением — полное рукопожатие §5 своим ключом к `127.0.0.1:<n>` с таймаутом 5 с. Удалось — слушатель жив и не трогается (`TestReconnectKeepsWorkingPilePort`). Не удалось — `port <n> does not accept connections (<ошибка>), reopening`, слушатель закрывается, `Serve` возвращается и порт открывается заново, как выше (`TestReconnectReopensPilePortStuckOnAcceptErrors`).
+- На iOS сокеты приостановленного приложения может забрать система (TN2277); после возврата на передний план приложение вызывает `POST /reconnect`, который и проверяет слушатели. Какую ошибку тогда даёт `accept` на iOS, не проверено на устройстве. Если это `ECONNABORTED`, Go повторяет `accept` внутри `poll.FD.Accept` без выхода и без реакции на `Close`: проверка увидит мёртвый порт, но повторное открытие, вероятно, упрётся в занятый порт.
 
 Состояние участника (TASK-39, `Presence` в [`presence.go`](../../core/node/presence.go)). Узел помнит класс последней неудачи цикла для каждого адреса из `peers`, а для участника — когда закончилось его последнее соединение. Оба значения хранятся только в памяти. `Node.Presence` отдаёт их приложению через `GET /piles` (поля `online`, `last_seen`, `last_error`) и в подсказках показа (`last_error`):
 

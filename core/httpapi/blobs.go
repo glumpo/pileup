@@ -14,7 +14,7 @@ func blobs(mux *http.ServeMux, n *node.Node) {
 	mux.HandleFunc("GET /piles/{id}/blob/{asset}/{revision}/{tier}", func(w http.ResponseWriter, r *http.Request) {
 		id, err := hex.DecodeString(r.PathValue("id"))
 		if err != nil {
-			fail(w, node.ErrUnknownPile)
+			fail(w, r, node.ErrUnknownPile)
 			return
 		}
 		asset, aerr := hex.DecodeString(r.PathValue("asset"))
@@ -28,10 +28,12 @@ func blobs(mux *http.ServeMux, n *node.Node) {
 		switch {
 		case errors.Is(err, node.ErrUnknownAsset):
 			reply(w, http.StatusNotFound, problem("unknown_asset"))
+		case errors.Is(err, node.ErrRefused):
+			reply(w, http.StatusBadGateway, problem("source_failed"))
 		case errors.Is(err, node.ErrUnavailable):
 			reply(w, http.StatusBadGateway, problem("source_unavailable"))
 		case err != nil:
-			fail(w, err)
+			fail(w, r, err)
 		default:
 			defer f.Close()
 			w.Header().Set("ETag", node.ETag(h))

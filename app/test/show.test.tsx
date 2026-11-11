@@ -331,6 +331,22 @@ test('a file the screen could not open while its owner does not answer is explai
   expect(await screen.findByText(/Экран не смог открыть этот файл/, {}, { timeout: 3000 })).toBeOnTheScreen();
 });
 
+test('a full disk on the host is named instead of the members', async () => {
+  const { show } = core();
+  await startShow();
+
+  show.hints = [{ author: '02', name: 'Боря', platform: 'android', reason: 'disk_full' }];
+  expect(
+    await screen.findByText(
+      'На этом телефоне закончилось место — загрузка остановлена. Освободите место или снимите закрепления.',
+      {},
+      { timeout: 3000 },
+    ),
+  ).toBeOnTheScreen();
+  expect(screen.queryByText(/Боря\. /)).toBeNull();
+  expect(screen.queryByRole('button', { name: 'Загрузить всё с участника: Боря' })).toBeNull();
+});
+
 test('all files of a member who does not answer are loaded from the remote after the estimate is confirmed', async () => {
   const { requests, show } = core();
   const user = await startShow();

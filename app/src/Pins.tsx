@@ -6,6 +6,9 @@ import { Button, describe, ErrorText, styles } from './ui';
 
 export type Source = { author: string; name: string };
 
+export const diskFull =
+  'На этом телефоне закончилось место — загрузка остановлена. Освободите место или снимите закрепления.';
+
 export function size(bytes: number): string {
   const units = ['Б', 'КБ', 'МБ', 'ГБ', 'ТБ'];
   let n = bytes;
@@ -88,6 +91,7 @@ export function PinsPanel({ pins }: { pins: ReturnType<typeof usePins> }) {
         </View>
       )}
       <ErrorText error={pins.error} />
+      {progress.some((p) => p.reason === 'disk_full') && <ErrorText error={diskFull} />}
       {progress.map((p) => (
         <View key={p.author} style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
           <Text style={{ flex: 1 }}>
