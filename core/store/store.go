@@ -241,23 +241,13 @@ func (s *Store) View() (state.View, error) {
 	}
 	defer tx.Rollback()
 	v := state.View{
-		Members: map[op.Author]state.Member{},
-		Assets:  map[string]state.Asset{},
-		VV:      vv.VV{},
+		Assets: map[string]state.Asset{},
+		VV:     vv.VV{},
 	}
 	if err := tx.QueryRow(`SELECT l, name FROM pile`).Scan(&v.Lamport, &v.PileName); err != nil {
 		return state.View{}, err
 	}
-	err = each(tx, `SELECT author, name, platform, app_version FROM members`, func(scan func(...any) error) error {
-		var a []byte
-		var m state.Member
-		if err := scan(&a, &m.Name, &m.Platform, &m.AppVersion); err != nil {
-			return err
-		}
-		v.Members[op.Author(a)] = m
-		return nil
-	})
-	if err != nil {
+	if v.Members, err = members(tx); err != nil {
 		return state.View{}, err
 	}
 	err = each(tx, `SELECT author, max(seq) FROM ops GROUP BY author`, func(scan func(...any) error) error {
@@ -292,6 +282,34 @@ func (s *Store) View() (state.View, error) {
 		return state.View{}, err
 	}
 	return v, nil
+}
+
+func (s *Store) Info() (string, map[op.Author]state.Member, error) {
+	tx, err := s.db.Begin()
+	if err != nil {
+		return "", nil, err
+	}
+	defer tx.Rollback()
+	var name string
+	if err := tx.QueryRow(`SELECT name FROM pile`).Scan(&name); err != nil {
+		return "", nil, err
+	}
+	m, err := members(tx)
+	return name, m, err
+}
+
+func members(tx *sql.Tx) (map[op.Author]state.Member, error) {
+	out := map[op.Author]state.Member{}
+	err := each(tx, `SELECT author, name, platform, app_version FROM members`, func(scan func(...any) error) error {
+		var a []byte
+		var m state.Member
+		if err := scan(&a, &m.Name, &m.Platform, &m.AppVersion); err != nil {
+			return err
+		}
+		out[op.Author(a)] = m
+		return nil
+	})
+	return out, err
 }
 
 func each(tx *sql.Tx, query string, f func(scan func(...any) error) error) error {

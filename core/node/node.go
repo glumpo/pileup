@@ -88,6 +88,7 @@ type pile struct {
 	peers   map[string]op.Author
 	faults  map[string]string
 	loops   map[string]*loop
+	cached  timeline
 }
 
 type loop struct {
@@ -650,11 +651,11 @@ func (n *Node) join(secret []byte, member string) op.Join {
 }
 
 func (p *pile) info() (Pile, error) {
-	v, err := p.store.View()
+	name, members, err := p.store.Info()
 	if err != nil {
 		return Pile{}, err
 	}
-	return Pile{ID: p.ID, Name: v.PileName, Members: v.Members}, nil
+	return Pile{ID: p.ID, Name: name, Members: members}, nil
 }
 
 func random(size int) []byte {
