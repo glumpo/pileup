@@ -7,7 +7,7 @@ status: In Progress
 assignee:
   - '@claude'
 created_date: '2026-11-11T01:54:00Z'
-updated_date: '2026-11-11T11:45:00Z'
+updated_date: '2026-11-11T11:50:00Z'
 labels:
   - core
   - app
@@ -51,6 +51,8 @@ ordinal: 54000
 
 <!-- SECTION:NOTES:BEGIN -->
 Сделано по варианту 1 из D3. Склейка: в памяти как раньше; в файл — первое событие серии, затем не чаще раза в минуту, остаток счётчика при Close. Повторные запуски одной версии склеиваются в одно событие app (время — последнего запуска). Формат файла — строки JSON. Медиатека: ошибки, которые проходят через Go (Media, Rendition), уже попадают в журнал через HTTP API (TASK-47) и report рендера; в Kotlin молча терялся только пустой курсор MediaStore — он теперь идёт в Mobile.report. Отказ разрешений в журнал не пишется (D7, вне объёма). Kotlin (NsdDiscovery.kt, MediaStoreProvider.kt) не скомпилирован локально — AC#3 в части натива проверяется сборкой; Go-сторона mobile.Report покрыта тестами. Влит origin/master (TASK-48, TASK-49), конфликт в node.Open разрешён.
+
+Лид: слито в master. Критерий 3 не отмечен: Kotlin-правки (NsdDiscovery.kt, MediaStoreProvider.kt, вызовы Mobile.report) не скомпилированы — проверить сборкой Android (make android-debug и unit-тесты модуля) перед закрытием задачи.
 <!-- SECTION:NOTES:END -->
 
 ## Final Summary
