@@ -3,11 +3,11 @@ id: TASK-47
 title: >-
   Ошибки ядра: код причины вместо internal, запись в журнал, отказ владельца
   отличается от «спит»
-status: In Progress
+status: Done
 assignee:
   - '@claude'
 created_date: '2026-11-11T01:41:00Z'
-updated_date: '2026-11-11T02:07:00Z'
+updated_date: '2026-11-11T11:41:00Z'
 labels:
   - core
   - app
