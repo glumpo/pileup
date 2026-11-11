@@ -127,7 +127,7 @@ func TestReconnectReopensPilePortStuckOnAcceptErrors(t *testing.T) {
 	p := create(t, a, "Грузия", "Аня")
 	ok := accepts(t, a, p)
 	s, _ := ss.last()
-	s.die(acceptError(syscall.ECONNABORTED))
+	s.die(acceptError(syscall.EMFILE))
 	time.Sleep(500 * time.Millisecond)
 	if ok() {
 		t.Fatal("dead socket still accepts")
