@@ -111,6 +111,17 @@ test('loading over the cache budget is warned about before it starts and can be 
   expect(posts(requests)).toEqual([]);
 });
 
+test('loading stopped by a full disk on this phone is explained with what to do', async () => {
+  core({}, [{ ...anya, done: 1240, failed: 560, reason: 'disk_full' }]);
+  await openPile();
+
+  expect(
+    await screen.findByText(
+      'На этом телефоне закончилось место — загрузка остановлена. Освободите место или снимите закрепления.',
+    ),
+  ).toBeOnTheScreen();
+});
+
 test('loading progress is polled while the pile screen is open', async () => {
   const { requests, pins } = core();
   const user = await openPile();

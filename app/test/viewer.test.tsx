@@ -89,9 +89,37 @@ test('a page of a member who does not answer says so and loads by itself once th
 
 const failures: [string, Reply, string][] = [
   ['the file was removed', [404, { error: 'unknown_asset' }], 'Файл удалён или изменён: обновите хронологию'],
-  ['the core failed', [500, { error: 'internal' }], 'Не удалось загрузить файл. Ошибка ядра: internal'],
+  [
+    'the core failed',
+    [500, { error: 'internal' }],
+    'Не удалось загрузить файл. Что-то пошло не так в Pileup. Подробности записаны в «Журнал» на главном экране — отправьте его разработчику.',
+  ],
+  [
+    'the disk is full',
+    [507, { error: 'disk_full' }],
+    'Не удалось загрузить файл. На телефоне закончилось место. Освободите место и повторите.',
+  ],
+  [
+    'an own file cannot be rendered',
+    [500, { error: 'render_failed' }],
+    'Не удалось открыть файл на этом телефоне. Возможно, он удалён из галереи или в неподдерживаемом формате.',
+  ],
   ['the file cannot be shown', [200, 'HTML'], 'Не удалось показать файл'],
 ];
+
+test('a file the member phone could not prepare is explained and not asked for again', async () => {
+  const requests = await openViewer('07', [502, { error: 'source_failed' }]);
+  const asked = () => requests.filter((r) => r.path === blob('07', 2)).length;
+
+  expect(
+    await screen.findByText(
+      'Телефон участника не смог подготовить файл: Боря. Возможно, файл удалён из галереи или в неподдерживаемом формате.',
+    ),
+  ).toBeOnTheScreen();
+  const before = asked();
+  await act(() => new Promise((r) => setTimeout(r, 2500)));
+  expect(asked()).toBe(before);
+});
 
 test.each(failures)('a page says so when %s', async (_, display, text) => {
   await openViewer('07', display);
