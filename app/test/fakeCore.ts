@@ -6,7 +6,7 @@ export const AUTH = { Authorization: 'Bearer test-token' };
 
 export type Reply = [number, unknown?];
 
-export type Request = { method: string; path: string; body: unknown; headers: Record<string, string> };
+export type Request = { url: string; method: string; path: string; body: unknown; headers: Record<string, string> };
 
 export function fakeCore(routes: Record<string, Reply | ((body: any) => Reply | Promise<Reply>)>): Request[] {
   const requests: Request[] = [];
@@ -14,7 +14,7 @@ export function fakeCore(routes: Record<string, Reply | ((body: any) => Reply | 
     const method = init.method ?? 'GET';
     const path = url.slice(BASE.length);
     const body = typeof init.body === 'string' ? JSON.parse(init.body) : undefined;
-    requests.push({ method, path, body, headers: init.headers as Record<string, string> });
+    requests.push({ url, method, path, body, headers: init.headers as Record<string, string> });
     const route = routes[`${method} ${path}`];
     const [status, reply] =
       route === undefined ? [404, { error: 'unknown_pile' }] : typeof route === 'function' ? await route(body) : route;

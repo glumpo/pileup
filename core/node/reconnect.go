@@ -68,6 +68,8 @@ func (n *Node) Reconnect(reason string) {
 				started++
 			}
 		}
+		n.wg.Add(1)
+		go n.check(p, p.ln)
 	}
 	n.mu.Unlock()
 	n.diag.Add(diag.Connection, nil, "", fmt.Sprintf("reconnect, %s: %d waiting loops retried now, %d loops started", reason, now, started))

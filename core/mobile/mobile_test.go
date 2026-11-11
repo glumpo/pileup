@@ -467,3 +467,35 @@ func TestStopLetsInFlightRequestFinishBeforeClosingData(t *testing.T) {
 		t.Fatalf("selection after restart = %s, want the range set by the request in flight during Stop", body)
 	}
 }
+
+type flakyKeystore struct {
+	keystore
+	fail bool
+}
+
+func (k *flakyKeystore) Load() ([]byte, error) {
+	if k.fail {
+		return nil, errors.New("keystore is locked")
+	}
+	return k.keystore.Load()
+}
+
+func TestStartAgainAfterFailedStart(t *testing.T) {
+	d := newDevice(t)
+	keys := &flakyKeystore{fail: true}
+	if err := mobile.Start(d.dir, "android", "1.4.0", keys, d.media, d.media, d.network, d.lan); err == nil {
+		mobile.Stop()
+		t.Fatal("Start with a locked keystore succeeded")
+	}
+	if mobile.Port() != 0 || mobile.Token() != "" {
+		t.Fatalf("after failed Start: Port() = %d, Token() = %q, want 0 and empty", mobile.Port(), mobile.Token())
+	}
+	keys.fail = false
+	if err := mobile.Start(d.dir, "android", "1.4.0", keys, d.media, d.media, d.network, d.lan); err != nil {
+		t.Fatalf("Start after a failed one: %v", err)
+	}
+	t.Cleanup(func() { mobile.Stop() })
+	if code := health(t, mobile.Port(), mobile.Token()); code != http.StatusOK {
+		t.Fatalf("status = %d, want 200", code)
+	}
+}
