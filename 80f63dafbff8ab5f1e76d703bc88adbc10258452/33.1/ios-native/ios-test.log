@@ -1,0 +1,8 @@
+mkdir -p /Users/runner/work/pileup/pileup/build/bin
+curl -sSL -o /Users/runner/work/pileup/pileup/build/bin/xcodegen.zip https://github.com/yonaskolb/XcodeGen/releases/download/2.46.0/xcodegen.zip
+echo "4d9e34b62172d645eed6457cac13fc222569974098ef4ee9c3368bedf0196806  /Users/runner/work/pileup/pileup/build/bin/xcodegen.zip" | shasum -a 256 -c
+/Users/runner/work/pileup/pileup/build/bin/xcodegen.zip: OK
+cd /Users/runner/work/pileup/pileup/build/bin && unzip -qo xcodegen.zip
+cd app/modules/core/ios/TestHost && /xcodegen/bin/xcodegen generate
+/bin/bash: /xcodegen/bin/xcodegen: No such file or directory
+make: *** [ios-test] Error 127
