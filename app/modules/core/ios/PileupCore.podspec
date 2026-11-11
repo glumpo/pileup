@@ -19,5 +19,7 @@ Pod::Spec.new do |s|
     'DEFINES_MODULE' => 'YES',
   }
 
-  s.source_files = "**/*.{h,m,mm,swift,hpp,cpp}"
+  s.source_files = ["PileupCoreModule.swift", "Native/**/*.swift"]
+  s.vendored_frameworks = "Mobile.xcframework"
+  s.libraries = "resolv"
 end
