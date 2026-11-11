@@ -45,11 +45,11 @@ func eventually(_ seconds: TimeInterval = 20, _ condition: () -> Bool) -> Bool {
 final class DiscoveryTests: XCTestCase {
   private let type = "_pileuptest._tcp"
   private let txt = Data([13]) + Data("pile=0123abcd".utf8) + Data([4]) + Data("flag".utf8)
-  private var name = ""
+  private var instance = ""
   private var providers: [Discovery] = []
 
   override func setUp() {
-    name = "pileup-\(UUID().uuidString.prefix(8).lowercased())"
+    instance = "pileup-\(UUID().uuidString.prefix(8).lowercased())"
   }
 
   override func tearDownWithError() throws {
@@ -70,51 +70,51 @@ final class DiscoveryTests: XCTestCase {
 
   func testAdvertisedServiceIsFoundWithAddressPortAndTXTAndLostAfterStop() throws {
     let a = provider()
-    try a.advertise(type, name: name, port: 45678, txt: txt)
+    try a.advertise(type, name: instance, port: 45678, txt: txt)
     let seen = try browse()
-    XCTAssertTrue(eventually { !seen.found(name).isEmpty }, "service not found")
-    let found = try XCTUnwrap(seen.found(name).first)
+    XCTAssertTrue(eventually { !seen.found(instance).isEmpty }, "service not found")
+    let found = try XCTUnwrap(seen.found(instance).first)
     XCTAssertNotNil(IPv4Address(found.host), found.host)
     XCTAssertEqual(found.port, 45678)
     XCTAssertEqual(found.txt, txt)
     XCTAssertEqual(seen.denials.last, false)
 
     try a.stop()
-    XCTAssertTrue(eventually { seen.lost(name) }, "service not lost after stop")
+    XCTAssertTrue(eventually { seen.lost(instance) }, "service not lost after stop")
   }
 
   func testRestartedBrowserFindsTheServiceAgainWithoutLosingIt() throws {
-    try provider().advertise(type, name: name, port: 45679, txt: txt)
+    try provider().advertise(type, name: instance, port: 45679, txt: txt)
     let seen = Recorder()
     let b = provider()
     try b.browse(type, handler: seen)
-    XCTAssertTrue(eventually { seen.found(name).count == 1 })
+    XCTAssertTrue(eventually { seen.found(instance).count == 1 })
     b.restart()
-    XCTAssertTrue(eventually { seen.found(name).count == 2 }, "not found again after restart")
-    XCTAssertFalse(seen.lost(name))
+    XCTAssertTrue(eventually { seen.found(instance).count == 2 }, "not found again after restart")
+    XCTAssertFalse(seen.lost(instance))
   }
 
   func testRestartedAdvertiserIsStillFound() throws {
     let a = provider()
-    try a.advertise(type, name: name, port: 45680, txt: txt)
+    try a.advertise(type, name: instance, port: 45680, txt: txt)
     let first = try browse()
-    XCTAssertTrue(eventually { !first.found(name).isEmpty })
+    XCTAssertTrue(eventually { !first.found(instance).isEmpty })
     a.restart()
     let later = try browse()
-    XCTAssertTrue(eventually { !later.found(name).isEmpty }, "not advertised after restart")
-    XCTAssertEqual(later.found(name).first?.port, 45680)
+    XCTAssertTrue(eventually { !later.found(instance).isEmpty }, "not advertised after restart")
+    XCTAssertEqual(later.found(instance).first?.port, 45680)
   }
 
   func testStoppedProviderDoesNotComeBackOnRestart() throws {
     let a = provider()
-    try a.advertise(type, name: name, port: 45681, txt: txt)
+    try a.advertise(type, name: instance, port: 45681, txt: txt)
     let seen = Recorder()
     try a.browse(type, handler: seen)
-    XCTAssertTrue(eventually { !seen.found(name).isEmpty })
+    XCTAssertTrue(eventually { !seen.found(instance).isEmpty })
     try a.stop()
     a.restart()
     let later = try browse()
-    XCTAssertFalse(eventually(3) { !later.found(name).isEmpty }, "stopped service advertised again")
-    XCTAssertEqual(seen.found(name).count, 1)
+    XCTAssertFalse(eventually(3) { !later.found(instance).isEmpty }, "stopped service advertised again")
+    XCTAssertEqual(seen.found(instance).count, 1)
   }
 }

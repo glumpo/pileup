@@ -15,7 +15,7 @@ final class Lifecycle {
   }
 
   func unobserve() {
-    observers.forEach(NotificationCenter.default.removeObserver)
+    observers.forEach { NotificationCenter.default.removeObserver($0) }
     observers = []
   }
 

@@ -8,13 +8,14 @@
 
 | Файл | Что |
 |---|---|
-| `PileupCoreModule.swift` | тонкий Expo-адаптер: JS API и жизненный цикл, единственный файл, который импортирует `ExpoModulesCore` |
+| `PileupCoreModule.swift` | тонкий Expo-адаптер: JS API, подписка `Lifecycle` в `OnCreate`/`OnDestroy`; единственный файл, который импортирует `ExpoModulesCore` |
 | `Native/Core.swift` | старт и стоп фасада `mobile.Start`/`Stop`, `port`, `token`; подготовка каталога данных |
 | `Native/KeychainKeystore.swift` | `Keystore`: seed ключа устройства в Keychain |
 | `Native/NetworkAddresses.swift` | `NetworkInfo`: адреса интерфейсов через `getifaddrs` |
 | `Native/MediaLibrary.swift` | `MediaProvider` и `requestPermissions` — заготовка, наполняет TASK-43 |
 | `Native/Renditions.swift` | `RenditionMaker` — заготовка, наполняет TASK-43 |
-| `Native/Discovery.swift` | `DiscoveryProvider` — заготовка, наполняет TASK-44 |
+| `Native/Discovery.swift` | `DiscoveryProvider`: Bonjour (раздел 11) |
+| `Native/Lifecycle.swift` | уведомления жизненного цикла: фоновая задача, перезапуск Bonjour, остановка ядра (раздел 11) |
 | `PileupCore.podspec` | pod модуля: `PileupCoreModule.swift` + `Native/**`, `vendored_frameworks = Mobile.xcframework`, `libresolv` |
 | `Package.swift` | SwiftPM-пакет `PileupNative` из `Native/` и binaryTarget `Mobile.xcframework` — только для тестов |
 | `TestHost/` | `project.yml` для XcodeGen: приложение-хост и hosted unit-тесты из `Tests/` |
@@ -31,7 +32,7 @@
 - `stop(): Promise<void>`, `port(): number`, `token(): string` — прямо из фасада.
 - `requestMediaPermissions(): Promise<boolean>` — пока всегда `false` без запроса к системе (ключа `NSPhotoLibraryUsageDescription` в Info.plist ещё нет, а вызов PhotoKit без него роняет приложение). Полноценная реализация — TASK-43.
 
-Жизненный цикл: ядро останавливается в `OnDestroy` модуля (перезагрузка JS, уничтожение модуля) и по `UIApplication.willTerminateNotification`. Уход в фон ядро не останавливает: приостановленное приложение система может убить без уведомления, данные ядра это переживают (SQLite WAL). Перезапуск слушающих сокетов после фона — TASK-44.
+Жизненный цикл: ядро останавливается в `OnDestroy` модуля (перезагрузка JS, уничтожение модуля), по `UIApplication.willTerminateNotification` и по истечении фонового времени; при возврате на передний план пересоздаются объявления и поиск Bonjour (раздел 11).
 
 ## 3. Ключ устройства и каталог данных (A21, A48)
 
@@ -114,5 +115,57 @@ git show origin/ci-logs:$sha/<run>.<attempt>/ios-app/launch-1.png > /tmp/launch-
 
 - В podspec остался `tvos` из шаблона, а у xcframework нет среза tvOS — сборка модуля под tvOS не пойдёт.
 - Нет сборки под устройство и подписи: нужен Apple-аккаунт (TASK-1).
-- `requestMediaPermissions` всегда `false`, медиатеки и превью нет (TASK-43); обнаружения нет (TASK-44).
+- `requestMediaPermissions` всегда `false`, медиатеки и превью нет (TASK-43).
 - Ветка `ci-logs` растёт на 1–3 МБ за прогон iOS-заданий; чистить её можно в любой момент, код от неё не зависит.
+
+## 11. Обнаружение и жизненный цикл (TASK-44, A22, A50)
+
+### Discovery
+
+Один экземпляр на процесс (`Core.discovery`), его получает каждый `MobileStart`; `Stop` ядра очищает его полностью. Всё состояние — на последовательной очереди `com.glumpo.pileup.discovery`; `advertise`/`browse` ставят работу в очередь, `stop` ждёт её (после возврата `stop` обратных вызовов в Go нет).
+
+- **Объявление:** `DNSServiceRegister(name, "_pileup._tcp", port, txt)` с `DNSServiceSetDispatchQueue`. Порт слушает Go, dns-sd свой сокет не открывает. TXT из Go уже в формате DNS-SD и уходит байтами как есть. Ошибка регистрации (сразу или в обратном вызове) — в журнал.
+- **Поиск:** `NWBrowser(.bonjourWithTXTRecord)` на каждый из трёх типов. Набор результатов сводится по имени экземпляра (`Results`): новое имя — разрешить; имя пропало из всех результатов (все интерфейсы) — `Lost`; изменился TXT — разрешить заново.
+- **Разрешение:** `DNSServiceResolve` (хост, порт из SRV, TXT байтами) → `DNSServiceGetAddrInfo` только IPv4 → `Found(name, "a.b.c.d", port, txt)`. Таймаут 10 с, ошибки и таймаут — в журнал (`discovery`, `dns-sd: …`). IPv6 не берётся: Android тоже даёт IPv4, а link-local IPv6 без зоны бесполезен.
+- **Запрет «Локальной сети»:** `NWBrowser.State` `.waiting`/`.failed` с `NWError.dns(kDNSServiceErr_PolicyDenied)` → `handler.denied(true)`, `.ready` → `denied(false)` (`localNetworkDenied`). Прочие `waiting`/`failed` — в журнал. В ядре признак общий для узла, последнее сообщение любого из трёх поисков выигрывает (A50).
+- **`restart()`:** снять все регистрации, поиски и незавершённые разрешения и создать их заново из запомненных. Найденные до перезапуска имена помечаются устаревшими: первый же набор результатов после перезапуска разрешает всё присутствующее заново (адрес мог смениться) и даёт `Lost` для пропавших.
+
+### Lifecycle и граница с JS
+
+| Событие | Натив (`Lifecycle`) | JS (`App.tsx`, A54) |
+|---|---|---|
+| `didEnterBackground` | `beginBackgroundTask` | — |
+| истекло фоновое время | `Core.stop()` синхронно на главном потоке, `endBackgroundTask` | — |
+| `willEnterForeground` | `endBackgroundTask`; `Core.discovery.restart()` (если ядро остановлено — ничего не делает) | — |
+| `AppState active` | — | `GET /health` (2 с): ответило → `POST /reconnect` (порты pile самоподключением, паузы подключений, A55, A36); нет → `stop` + `start` |
+| `willTerminate` | `Core.stop()` | — |
+
+Ядро запускает только JS, натив его лишь останавливает, поэтому двух перезапусков нет. Уведомления и `AppState` приходят на главном потоке, истечение фоновой задачи — тоже, а фоновая задача завершается в `willEnterForeground`: остановка по истечению не может начаться после возврата на передний план. Фоновая задача берётся на любой уход в фон, без признака «идёт раздача» (TASK-58): обычные фоновые режимы (audio, location) не используются.
+
+Почему ядро останавливается по истечении (V5 п. 2, вопрос TASK-49): участники и экран получают FIN сразу, а не ждут 10 с простоя и 5 с подключения; к моменту приостановки слушающих сокетов уже нет, так что `accept` на мёртвом сокете (`ECONNABORTED`) не может зациклиться. Если `beginBackgroundTask` не дал времени (`.invalid`), приложение приостанавливается с работающим ядром — тогда при возврате остаётся путь A54/A55.
+
+От TASK-58 натив ничего не требует. Признак «сейчас отдаю оригинал» нужен UI (не гасить экран и баннер «Не блокируйте экран, идёт раздача», V5 п. 1); если продукт решит не перезапускать ядро после фона без раздачи, условие `Core.stop()` в `Lifecycle.expired` можно будет взять оттуда.
+
+### Признак запрета в приложении
+
+`GET /local-network` → `{"denied": bool}`; компонент `src/LocalNetwork.tsx` (`LocalNetworkBanner`) опрашивает его при монтировании и раз в 3 с и показывает баннер с кнопкой «Открыть Настройки» (`Linking.openSettings()`, страница Pileup в Настройках). Подключён в `PileScreen.tsx`, `Join.tsx`, `ScreenPicker.tsx` первой строкой внутри `Screen`. Ошибка входа при запрете — `local_network_denied` (текст в `ui.tsx`). На Android признак всегда `false`.
+
+### ATS
+
+`make ios-prebuild` после `expo prebuild` проверяет `NSAppTransportSecurity` в `app/ios/app/Info.plist`: ровно `NSAllowsArbitraryLoads = false` и `NSAllowsLocalNetworking = true`, без исключений доменов; словарь печатается в `ios-prebuild.log`. `NSAllowsLocalNetworking` разрешает `http://127.0.0.1` (UI API и картинки через `expo-image`), остальной cleartext запрещён.
+
+### Тесты на симуляторе
+
+- `DiscoveryLogicTests`: сведение результатов по имени, `Lost` по последнему результату, повторное разрешение при смене TXT и после перезапуска, `PolicyDenied`/`ready` → признак.
+- `DiscoveryTests` (тип `_pileuptest._tcp`, два экземпляра в одном процессе, mDNSResponder хоста): найдено с IPv4, портом и TXT байт в байт, `denied(false)`; `Lost` после `stop`; перезапущенный поиск находит снова без `Lost`; перезапущенное объявление находит новый поиск; после `stop` `restart` ничего не возвращает.
+- `LifecycleTests`: короткий фон не трогает ядро (тот же порт, `/health` 200); истечение фона останавливает ядро (порт не отвечает), возврат на передний план ядро не запускает.
+- `TestHost` объявляет `NSLocalNetworkUsageDescription` и `NSBonjourServices` (XcodeGen `info`, файл `TestHost/Info.plist` генерируется).
+
+### Не проверено без iPhone и как проверить
+
+На симуляторе нет запроса «Локальная сеть» и приостановки как на устройстве. На устройстве (сборка с подписью, TASK-1), журнал — «Журнал» → «Поделиться»:
+
+1. **Запрет:** при первом запуске отклонить запрос (или Настройки → Pileup → «Локальная сеть» выкл.). Ожидается событие `discovery` «local network access denied: true», баннер на экране pile, входа и выбора экрана, вход по приглашению — «Нет доступа к локальной сети…». Включить в Настройках и вернуться: баннер пропадает за ≤3 с (если iOS перезапускает приложение при смене разрешения — после запуска). Если признак не появляется — смотреть в журнале `dns-sd: browse …` с кодом ошибки.
+2. **Возврат из фона < 30 с:** заблокировать iPhone на 10 с, разблокировать. Второй телефон в pile: участник «на связи» без перезапуска; экран Cast в списке; в журнале iPhone «reconnect, requested by the app».
+3. **Фон > 30 с во время раздачи видео:** показ видео с iPhone на Cast, у iPhone — домашний экран. Через ~30 с на ТВ постер почти сразу после остановки (без паузы ~15 с), у участников iPhone «нет связи». Возврат: ядро перезапускается приложением (A54), pile и участники на месте, в журнале событие запуска «Pileup … ios started».
+4. **ECONNABORTED (TASK-49):** если фоновая задача не дала времени (мало заряда/режим энергосбережения), заблокировать на минуту и вернуться: `POST /reconnect` должен ответить, в журнале «port … does not accept connections, reopening» и затем входящие подключения проходят; если `/health` не отвечает — приложение само перезапускает ядро (A54). Признак зацикливания — 100% CPU у приложения в фоне в Xcode Instruments и пустой журнал после возврата.
