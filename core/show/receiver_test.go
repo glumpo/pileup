@@ -51,6 +51,7 @@ type receiver struct {
 	state    string
 	time     float64
 	loads    []load
+	answered int
 	commands []string
 }
 
@@ -120,6 +121,9 @@ func (r *receiver) serve(c net.Conn) {
 		if reply != nil {
 			r.mu.Lock()
 			writeMessage(c, message{m.destination, m.source, m.namespace, reply})
+			if typ == "LOAD" {
+				r.answered++
+			}
 			r.mu.Unlock()
 		}
 	}
@@ -213,10 +217,14 @@ func (r *receiver) push(state, idleReason string) {
 	}
 }
 
-func (r *receiver) progress(at float64) {
+func (r *receiver) seek(at float64) {
 	r.mu.Lock()
 	r.time = at
 	r.mu.Unlock()
+}
+
+func (r *receiver) progress(at float64) {
+	r.seek(at)
 	r.push("PLAYING", "")
 }
 
@@ -285,7 +293,11 @@ func (r *receiver) commanded() []string {
 
 func (r *receiver) waitLoad(t *testing.T, n int) load {
 	t.Helper()
-	eventually(t, "LOAD", func() bool { return len(r.loaded()) >= n })
+	eventually(t, "LOAD", func() bool {
+		r.mu.Lock()
+		defer r.mu.Unlock()
+		return r.answered >= n
+	})
 	l := r.loaded()
 	if len(l) != n {
 		t.Fatalf("receiver got %d LOADs, want %d: %v", len(l), n, l)

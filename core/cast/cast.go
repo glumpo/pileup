@@ -39,9 +39,10 @@ func (e *Error) Error() string {
 }
 
 type Media struct {
-	SessionID  int
-	State      string
-	IdleReason string
+	SessionID   int
+	State       string
+	IdleReason  string
+	CurrentTime float64
 }
 
 type reply struct {
@@ -53,9 +54,10 @@ type reply struct {
 }
 
 type mediaStatus struct {
-	SessionID  int    `json:"mediaSessionId"`
-	State      string `json:"playerState"`
-	IdleReason string `json:"idleReason"`
+	SessionID   int     `json:"mediaSessionId"`
+	State       string  `json:"playerState"`
+	IdleReason  string  `json:"idleReason"`
+	CurrentTime float64 `json:"currentTime"`
 }
 
 type receiverStatus struct {
@@ -124,8 +126,8 @@ func (s *Session) launch(ctx context.Context) error {
 	return ErrNotLaunched
 }
 
-func (s *Session) Load(ctx context.Context, url, contentType string) (Media, error) {
-	return s.control(ctx, map[string]any{
+func (s *Session) Load(ctx context.Context, url, contentType string, currentTime float64) (Media, error) {
+	body := map[string]any{
 		"type":     "LOAD",
 		"autoplay": true,
 		"media": map[string]any{
@@ -133,7 +135,11 @@ func (s *Session) Load(ctx context.Context, url, contentType string) (Media, err
 			"contentType": contentType,
 			"streamType":  "BUFFERED",
 		},
-	})
+	}
+	if currentTime > 0 {
+		body["currentTime"] = currentTime
+	}
+	return s.control(ctx, body)
 }
 
 func (s *Session) Play(ctx context.Context) (Media, error) { return s.command(ctx, "PLAY") }
@@ -318,5 +324,5 @@ func firstMedia(status json.RawMessage) Media {
 	if len(st) == 0 {
 		return Media{}
 	}
-	return Media{SessionID: st[0].SessionID, State: st[0].State, IdleReason: st[0].IdleReason}
+	return Media{SessionID: st[0].SessionID, State: st[0].State, IdleReason: st[0].IdleReason, CurrentTime: st[0].CurrentTime}
 }

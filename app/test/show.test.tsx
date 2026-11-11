@@ -409,6 +409,7 @@ test('a video the screen or its owner cannot give is explained by its reason', a
   await user.press(screen.getByRole('button', { name: 'Следующий' }));
   await screen.findByText('2 / 3');
 
+  show.playing = false;
   show.videoUnavailable = true;
   show.videoReason = 'unsupported';
   show.codec = 'hvc1';

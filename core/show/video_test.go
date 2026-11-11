@@ -156,9 +156,10 @@ func TestVideoResumesAfterReconnectAndRetry(t *testing.T) {
 	rx.progress(95)
 	rx.drop()
 	resumedAt(t, rx.waitLoad(t, 2), 95, at)
+	eventually(t, "reconnected", func() bool { return rendererError(t, a.show) == "" })
 
 	at = time.Now()
-	rx.progress(40)
+	rx.seek(40)
 	rx.push("IDLE", "ERROR")
 	resumedAt(t, rx.waitLoad(t, 3), 40, at)
 	eventually(t, "error cleared", func() bool { return rendererError(t, a.show) == "" })
@@ -174,7 +175,9 @@ func TestVideoResumesAfterManualPlay(t *testing.T) {
 	video := rx.waitLoad(t, 1)
 
 	at := time.Now()
-	rx.progress(30)
+	rx.seek(30)
+	rx.push("PAUSED", "")
+	eventually(t, "paused", func() bool { return !must(t)(a.show.State()).Playing })
 	a.lib.lose("V", "not_local: the original is in iCloud")
 	if resp, _ := get(t, video.url); resp.StatusCode != http.StatusBadGateway {
 		t.Fatalf("video the owner cannot read: status %d", resp.StatusCode)
