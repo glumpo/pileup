@@ -97,4 +97,28 @@ final class CoreTests: XCTestCase {
     XCTAssertEqual(piles.map(\.id), [created.id])
     XCTAssertEqual(piles[0].members.map(\.key), created.members.map(\.key))
   }
+
+  func testImmediateRestartsServeWithFreshToken() async throws {
+    try start()
+    var tokens = [Core.token]
+    for _ in 0..<3 {
+      try Core.stop()
+      try start()
+      let (status, _) = try await request("/health")
+      XCTAssertEqual(status, 200)
+      tokens.append(Core.token)
+    }
+    XCTAssertEqual(Set(tokens).count, tokens.count)
+  }
+
+  func testStopWhenStoppedAndStartWhenRunningChangeNothing() async throws {
+    try Core.stop()
+    try start()
+    let token = Core.token
+    try start()
+    XCTAssertEqual(Core.token, token)
+    try Core.stop()
+    try Core.stop()
+    XCTAssertEqual(Core.port, 0)
+  }
 }
