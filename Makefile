@@ -57,6 +57,8 @@ $(XCODEGEN):
 
 ios-test: $(XCODEGEN)
 	cd app/modules/core/ios/TestHost && $(XCODEGEN) generate
+	xcrun simctl bootstatus $(IOS_SIMULATOR) -b
+	xcrun simctl privacy $(IOS_SIMULATOR) grant photos com.glumpo.pileup.testhost
 	cd app/modules/core/ios/TestHost && xcodebuild test -project PileupNativeTests.xcodeproj -scheme PileupNativeTests -destination id=$(IOS_SIMULATOR) -derivedDataPath ../.build/xcode
 
 ios-prebuild:
