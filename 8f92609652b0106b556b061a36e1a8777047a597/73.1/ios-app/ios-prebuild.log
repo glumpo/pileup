@@ -1,0 +1,144 @@
+cd app && npm ci --no-audit --no-fund
+npm warn deprecated inflight@1.0.6: This module is not supported, and leaks memory. Do not use it. Check out lru-cache if you want a good and tested way to coalesce async requests by a key value, which is much more comprehensive and powerful.
+npm warn deprecated whatwg-encoding@3.1.1: Use @exodus/bytes instead for a more spec-conformant and faster implementation
+npm warn deprecated glob@7.2.3: Old versions of glob are not supported, and contain widely publicized security vulnerabilities, which have been fixed in the current version. Please update. Support for old versions may be purchased (at exorbitant rates) by contacting i@izs.me
+npm warn deprecated glob@10.5.0: Old versions of glob are not supported, and contain widely publicized security vulnerabilities, which have been fixed in the current version. Please update. Support for old versions may be purchased (at exorbitant rates) by contacting i@izs.me
+npm warn deprecated glob@10.5.0: Old versions of glob are not supported, and contain widely publicized security vulnerabilities, which have been fixed in the current version. Please update. Support for old versions may be purchased (at exorbitant rates) by contacting i@izs.me
+npm warn deprecated glob@10.5.0: Old versions of glob are not supported, and contain widely publicized security vulnerabilities, which have been fixed in the current version. Please update. Support for old versions may be purchased (at exorbitant rates) by contacting i@izs.me
+npm warn deprecated glob@10.5.0: Old versions of glob are not supported, and contain widely publicized security vulnerabilities, which have been fixed in the current version. Please update. Support for old versions may be purchased (at exorbitant rates) by contacting i@izs.me
+npm warn deprecated glob@10.5.0: Old versions of glob are not supported, and contain widely publicized security vulnerabilities, which have been fixed in the current version. Please update. Support for old versions may be purchased (at exorbitant rates) by contacting i@izs.me
+npm warn deprecated glob@10.5.0: Old versions of glob are not supported, and contain widely publicized security vulnerabilities, which have been fixed in the current version. Please update. Support for old versions may be purchased (at exorbitant rates) by contacting i@izs.me
+npm warn deprecated glob@10.5.0: Old versions of glob are not supported, and contain widely publicized security vulnerabilities, which have been fixed in the current version. Please update. Support for old versions may be purchased (at exorbitant rates) by contacting i@izs.me
+
+added 1009 packages in 23s
+npm warn install-scripts 2 packages have install scripts not yet covered by allowScripts:
+npm warn install-scripts   @parcel/watcher@2.6.0 (install: node scripts/build-from-source.js)
+npm warn install-scripts   fsevents@2.3.3 (install: (install scripts present))
+npm warn install-scripts
+npm warn install-scripts Run `npm install-scripts ls` to review, or `npm install-scripts approve <pkg>` to allow.
+cd app && CI=1 npx expo prebuild --platform ios --clean --no-install
+› Apple bundle identifier: com.anonymous.app
+- Creating native directory (./ios)
+✔ Created native directory
+- Updating package.json
+✔ Updated package.json | no changes
+- Running prebuild
+✔ Finished prebuild
+cd app/ios && pod install
+Using Expo modules
+[Expo] Enabling modular headers for pod ExpoModulesCore
+[Expo] Enabling modular headers for pod React-Core
+[Expo] Enabling modular headers for pod ExpoModulesJSI
+[Expo] Enabling modular headers for pod React-RCTAppDelegate
+[Expo] Enabling modular headers for pod React-RCTFabric
+[Expo] Enabling modular headers for pod ReactAppDependencyProvider
+[Expo] Enabling modular headers for pod ReactCodegen
+[Expo] Enabling modular headers for pod RCTRequired
+[Expo] Enabling modular headers for pod RCTTypeSafety
+[Expo] Enabling modular headers for pod React-bridging
+[Expo] Enabling modular headers for pod ReactCommon
+[Expo] Enabling modular headers for pod React-NativeModulesApple
+[Expo] Enabling modular headers for pod Yoga
+[Expo] Enabling modular headers for pod React-Fabric
+[Expo] Enabling modular headers for pod React-graphics
+[Expo] Enabling modular headers for pod React-utils
+[Expo] Enabling modular headers for pod React-featureflags
+[Expo] Enabling modular headers for pod React-debug
+[Expo] Enabling modular headers for pod React-ImageManager
+[Expo] Enabling modular headers for pod React-rendererdebug
+[Expo] Enabling modular headers for pod React-jsi
+[Expo] Enabling modular headers for pod React-renderercss
+[Expo] Enabling modular headers for pod React-cxxstableapi
+[Expo] Enabling modular headers for pod hermes-engine
+[Expo] Enabling modular headers for pod glog
+[Expo] Enabling modular headers for pod boost
+[Expo] Enabling modular headers for pod DoubleConversion
+[Expo] Enabling modular headers for pod fast_float
+[Expo] Enabling modular headers for pod fmt
+[Expo] Enabling modular headers for pod RCT-Folly
+[Expo] Enabling modular headers for pod SocketRocket
+[Expo] Enabling modular headers for pod SDWebImage
+[Expo] Enabling modular headers for pod SDWebImageAVIFCoder
+[Expo] Enabling modular headers for pod SDWebImageSVGCoder
+[Expo] Enabling modular headers for pod SDWebImageWebPCoder
+[Expo] Enabling modular headers for pod libavif
+[Expo] Enabling modular headers for pod React-jsinspector
+Found 1 module for target `app`
+link_native_modules! {ios_packages: [{configurations: [], name: "expo", root: "/Users/runner/work/pileup/pileup/app/node_modules/expo", path: "../node_modules/expo", podspec_path: "/Users/runner/work/pileup/pileup/app/node_modules/expo/Expo.podspec", script_phases: []}], ios_project_root_path: "/Users/runner/work/pileup/pileup/app/ios", react_native_path: "../node_modules/react-native"}
+Framework build type is static library
+[ReactNativeDependencies] Setting up ReactNativeDependencies...
+[ReactNativeDependencies] Building from source: false
+[ReactNativeDependencies] Using tarball from URL: https://repo.reactnative.dev/maven2/com/facebook/react/react-native-artifacts/0.88.1/react-native-artifacts-0.88.1-reactnative-dependencies-debug.tar.gz
+[ReactNativeDependencies] Cache miss: downloading reactnative-dependencies-0.88.1-debug.tar.gz from https://repo.reactnative.dev/maven2/com/facebook/react/react-native-artifacts/0.88.1/react-native-artifacts-0.88.1-reactnative-dependencies-debug.tar.gz
+  % Total    % Received % Xferd  Average Speed   Time    Time     Time  Current
+                                 Dload  Upload   Total   Spent    Left  Speed
+  0     0    0     0    0     0      0      0 --:--:-- --:--:-- --:--:--     0  0 37.6M    0 16401    0     0  31803      0  0:20:40 --:--:--  0:20:40 31784 10 37.6M   10 4099k    0     0  2712k      0  0:00:14  0:00:01  0:00:13 2711k 75 37.6M   75 28.3M    0     0  11.2M      0  0:00:03  0:00:02  0:00:01 11.2M100 37.6M  100 37.6M    0     0  12.9M      0  0:00:02  0:00:02 --:--:-- 12.9M
+[ReactNativeDependencies] Verifying checksum for downloaded reactnative-dependencies-0.88.1-debug.tar.gz...
+[Cache] SHA1 verified for reactnative-dependencies-0.88.1-debug.tar.gz
+[ReactNativeDependencies] Saved reactnative-dependencies-0.88.1-debug.tar.gz to shared cache (/Users/runner/Library/Caches/ReactNative)
+[ReactNativeDependencies] Cache miss: downloading reactnative-dependencies-0.88.1-release.tar.gz from https://repo.reactnative.dev/maven2/com/facebook/react/react-native-artifacts/0.88.1/react-native-artifacts-0.88.1-reactnative-dependencies-release.tar.gz
+  % Total    % Received % Xferd  Average Speed   Time    Time     Time  Current
+                                 Dload  Upload   Total   Spent    Left  Speed
+  0     0    0     0    0     0      0      0 --:--:-- --:--:-- --:--:--     0  0     0    0     0    0     0      0      0 --:--:-- --:--:-- --:--:--     0 33 30.5M   33 10.2M    0     0  8154k      0  0:00:03  0:00:01  0:00:02 8151k100 30.5M  100 30.5M    0     0  16.2M      0  0:00:01  0:00:01 --:--:-- 16.2M
+[ReactNativeDependencies] Verifying checksum for downloaded reactnative-dependencies-0.88.1-release.tar.gz...
+[Cache] SHA1 verified for reactnative-dependencies-0.88.1-release.tar.gz
+[ReactNativeDependencies] Saved reactnative-dependencies-0.88.1-release.tar.gz to shared cache (/Users/runner/Library/Caches/ReactNative)
+[ReactNativeDependencies] Source: {http: "https://repo.reactnative.dev/maven2/com/facebook/react/react-native-artifacts/0.88.1/react-native-artifacts-0.88.1-reactnative-dependencies-debug.tar.gz"}
+[ReactNativeCore] Setting up ReactNativeCore...
+[ReactNativeCore] Building from source: false
+Configuring the target with the New Architecture
+[ReactNativeCore] Using React Native Core and React Native Dependencies prebuilt versions.
+[36m[1m[Codegen][0m Analyzing /Users/runner/work/pileup/pileup/app/package.json[0m
+[36m[1m[Codegen][0m [33mSearching for codegen-enabled libraries in the app.[0m
+[36m[1m[Codegen][0m [33mThe "codegenConfig" field is not defined in package.json. Assuming there is nothing to generate at the app level.[0m
+[36m[1m[Codegen][0m [33mSearching for codegen-enabled libraries in react-native.config.js[0m
+[36m[1m[Codegen][0m [33mNo codegen-enabled libraries found.[0m
+[36m[1m[Codegen][0m Generating RCTThirdPartyComponentsProvider.h[0m
+[36m[1m[Codegen][0m Generated artifact: /Users/runner/work/pileup/pileup/app/ios/build/generated/ios/ReactCodegen/RCTThirdPartyComponentsProvider.h[0m
+[36m[1m[Codegen][0m Generating RCTThirdPartyComponentsProvider.mm[0m
+[36m[1m[Codegen][0m Generated artifact: /Users/runner/work/pileup/pileup/app/ios/build/generated/ios/ReactCodegen/RCTThirdPartyComponentsProvider.mm[0m
+[36m[1m[Codegen][0m Generating RCTModulesProvider.h[0m
+[36m[1m[Codegen][0m Generated artifact: /Users/runner/work/pileup/pileup/app/ios/build/generated/ios/ReactCodegen/RCTModuleProviders.h[0m
+[36m[1m[Codegen][0m Generating RCTModuleProviders.mm[0m
+[36m[1m[Codegen][0m Generated artifact: /Users/runner/work/pileup/pileup/app/ios/build/generated/ios/ReactCodegen/RCTModuleProviders.mm[0m
+[36m[1m[Codegen][0m Generating RCTAppDependencyProvider[0m
+[36m[1m[Codegen][0m Generated artifact: /Users/runner/work/pileup/pileup/app/ios/build/generated/ios/ReactAppDependencyProvider/RCTAppDependencyProvider.h[0m
+[36m[1m[Codegen][0m Generated artifact: /Users/runner/work/pileup/pileup/app/ios/build/generated/ios/ReactAppDependencyProvider/RCTAppDependencyProvider.mm[0m
+[36m[1m[Codegen][0m Generated podspec: /Users/runner/work/pileup/pileup/app/ios/build/generated/ios/ReactAppDependencyProvider/ReactAppDependencyProvider.podspec[0m
+[36m[1m[Codegen][0m Generated podspec: /Users/runner/work/pileup/pileup/app/ios/build/generated/ios/ReactCodegen/ReactCodegen.podspec[0m
+[36m[1m[Codegen][0m Generating Package.swift[0m
+[36m[1m[Codegen][0m Generated artifact: /Users/runner/work/pileup/pileup/app/ios/build/generated/ios/Package.swift[0m
+[36m[1m[Codegen][0m [33mDone.[0m
+Analyzing dependencies
+[Expo-precompiled] Bundled SPM frameworks: ZXingObjC, SDWebImage, SDWebImageAVIFCoder, SDWebImageSVGCoder, SDWebImageWebPCoder, libavif
+Fetching podspec for `ExpoCamera` from `../node_modules/expo-camera/ios/ExpoCamera.podspec`
+Fetching podspec for `ExpoCameraBarcodeScanning` from `../node_modules/expo-camera/ios/ExpoCameraBarcodeScanning.podspec`
+[Expo-precompiled] Stripping bundled dependency 'ZXingObjC/PDF417' from ExpoCameraBarcodeScanning
+[Expo-precompiled] Stripping bundled dependency 'ZXingObjC/OneD' from ExpoCameraBarcodeScanning
+Fetching podspec for `ExpoFileSystem` from `../node_modules/expo/node_modules/expo-file-system/ios/ExpoFileSystem.podspec`
+Fetching podspec for `ExpoFont` from `../node_modules/expo-font/ios/ExpoFont.podspec`
+Fetching podspec for `ExpoImage` from `../node_modules/expo-image/ios/ExpoImage.podspec`
+[Expo-precompiled] Stripping bundled dependency 'SDWebImage' from ExpoImage
+[Expo-precompiled] Stripping bundled dependency 'SDWebImageAVIFCoder' from ExpoImage
+[Expo-precompiled] Stripping bundled dependency 'SDWebImageSVGCoder' from ExpoImage
+[Expo-precompiled] Stripping bundled dependency 'SDWebImageWebPCoder' from ExpoImage
+[Expo-precompiled] Stripping bundled dependency 'libavif/libdav1d' from ExpoImage
+Fetching podspec for `ExpoModulesCore` from `../node_modules/expo-modules-core/ExpoModulesCore.podspec`
+Fetching podspec for `ExpoModulesWorklets` from `../node_modules/expo-modules-core/ExpoModulesWorklets.podspec`
+Fetching podspec for `React-Core-prebuilt` from `../node_modules/react-native/React-Core-prebuilt.podspec`
+[ReactNativeCore] Cache miss: downloading reactnative-core-0.88.1-debug.tar.gz from https://repo.reactnative.dev/maven2/com/facebook/react/react-native-artifacts/0.88.1/react-native-artifacts-0.88.1-reactnative-core-debug.tar.gz
+  % Total    % Received % Xferd  Average Speed   Time    Time     Time  Current
+                                 Dload  Upload   Total   Spent    Left  Speed
+  0     0    0     0    0     0      0      0 --:--:-- --:--:-- --:--:--     0  0 96.2M    0 71573    0     0   105k      0  0:15:35 --:--:--  0:15:35  105k  8 96.2M    8 8621k    0     0  5202k      0  0:00:18  0:00:01  0:00:17 5199k 34 96.2M   34 33.5M    0     0  12.6M      0  0:00:07  0:00:02  0:00:05 12.6M 38 96.2M   38 36.6M    0     0  13.1M      0  0:00:07  0:00:02  0:00:05 13.1M
+curl: (56) Recv failure: Connection reset by peer
+[ReactNativeCore] Failed to download reactnative-core-0.88.1-debug.tar.gz from https://repo.reactnative.dev/maven2/com/facebook/react/react-native-artifacts/0.88.1/react-native-artifacts-0.88.1-reactnative-core-debug.tar.gz. Aborting.
+[!] Failed to load 'React-Core-prebuilt' podspec: 
+[!] Invalid `React-Core-prebuilt.podspec` file: [ReactNativeCore] Failed to download reactnative-core-0.88.1-debug.tar.gz from https://repo.reactnative.dev/maven2/com/facebook/react/react-native-artifacts/0.88.1/react-native-artifacts-0.88.1-reactnative-core-debug.tar.gz. Aborting..
+
+ #  from /Users/runner/work/pileup/pileup/app/node_modules/react-native/React-Core-prebuilt.podspec:10
+ #  -------------------------------------------
+ #  
+ >  source = ReactNativeCoreUtils.resolve_podspec_source()
+ #  Pod::Spec.new do |s|
+ #  -------------------------------------------
+make: *** [ios-prebuild] Error 1
