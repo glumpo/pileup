@@ -117,6 +117,10 @@ func TestShowStartsFromChosenFile(t *testing.T) {
 	if _, err := a.show.Start(empty.ID, a.tv(rx), nil); !errors.Is(err, show.ErrEmpty) {
 		t.Fatalf("start in empty pile: %v", err)
 	}
+	if st := must(t)(a.show.State()); current(st) != "A2" {
+		t.Fatalf("show after failed starts: %s", current(st))
+	}
+	a.show.Stop()
 	if _, err := a.show.Goto(a.asset(p, "A1").Meta.AssetID); !errors.Is(err, show.ErrNoShow) {
 		t.Fatalf("goto without show: %v", err)
 	}

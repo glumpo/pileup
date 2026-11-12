@@ -18,6 +18,9 @@ import (
 
 func WithNode(token string, n *node.Node, h *show.Host) http.Handler {
 	mux := base()
+	mux.HandleFunc("GET /serving", func(w http.ResponseWriter, r *http.Request) {
+		reply(w, http.StatusOK, map[string]bool{"serving": n.Serving()})
+	})
 	mux.HandleFunc("GET /piles", func(w http.ResponseWriter, r *http.Request) {
 		ps, err := n.Piles()
 		if err != nil {

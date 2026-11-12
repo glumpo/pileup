@@ -6,13 +6,16 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"reflect"
+	"slices"
 	"strings"
 	"sync"
 	"testing"
+	"time"
 
 	"github.com/glumpo/pileup/core/diag"
 	"github.com/glumpo/pileup/core/httpapi"
 	"github.com/glumpo/pileup/core/node"
+	"github.com/glumpo/pileup/core/prefetch"
 	"github.com/glumpo/pileup/core/show"
 )
 
@@ -331,4 +334,46 @@ func TestVideoOfUnavailableSourceShowsPosterAndShowGoesOn(t *testing.T) {
 func member(ph *phone) []byte {
 	a := ph.Author()
 	return a[:]
+}
+
+func TestPinsOutsideTheWindowWaitWhileVideoPlays(t *testing.T) {
+	a, b := newPhone(t, "android", node.DefaultBudget), newPhone(t, "ios", node.DefaultBudget)
+	p := pileOf(t, a, b)
+	b.lib.add("V", "video", "video/mp4", 0, randomBytes(100_000, 5))
+	var photos []string
+	for i := range 30 {
+		photos = append(photos, fmt.Sprintf("B%02d", i))
+		b.lib.photo(photos[i], 1+i)
+	}
+	b.share(p)
+	waitTimeline(t, p, 31, a)
+	eventually(t, "a connects to b", func() bool { return a.Online(p.ID)[b.Author()] })
+	rx := newReceiver(t)
+	must(t)(a.show.Start(p.ID, a.tv(rx), nil))
+	rx.waitLoad(t, 1)
+	eventually(t, "video plays", func() bool { return must(t)(a.show.State()).Playing })
+	if _, err := a.show.Pin(p.ID, nil); err != nil {
+		t.Fatal(err)
+	}
+	window, outside := photos[:prefetch.WindowSize], photos[prefetch.WindowSize:]
+	eventually(t, "window loaded", func() bool {
+		return !slices.ContainsFunc(window, func(l string) bool { return !a.cached(p, l) })
+	})
+	time.Sleep(1500 * time.Millisecond)
+	for _, l := range outside {
+		if a.cached(p, l) {
+			t.Fatalf("pinned %s outside the window loaded while the video plays", l)
+		}
+	}
+	if got := progressOf(t, a, p.ID)["участник 0"]; got.Reason != show.Video || got.Done == got.Total {
+		t.Fatalf("progress while the video plays: %+v", got)
+	}
+
+	rx.push("PAUSED", "")
+	eventually(t, "pins loaded after the video", func() bool {
+		return !slices.ContainsFunc(outside, func(l string) bool { return !a.cached(p, l) })
+	})
+	if got := progressOf(t, a, p.ID)["участник 0"]; got.Reason != "" || got.Done != got.Total {
+		t.Fatalf("progress after the video: %+v", got)
+	}
 }

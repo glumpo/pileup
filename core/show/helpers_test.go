@@ -66,6 +66,16 @@ func (l *library) codec(local, codec string) {
 	}
 }
 
+func (l *library) duration(local string, ms uint64) {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	for i := range l.items {
+		if l.items[i].LocalID == local {
+			l.items[i].DurationMs = &ms
+		}
+	}
+}
+
 func (l *library) lose(local, reason string) {
 	l.mu.Lock()
 	defer l.mu.Unlock()

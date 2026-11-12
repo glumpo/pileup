@@ -23,6 +23,7 @@ const (
 	Unreachable = "unreachable"
 	Timeout     = "timeout"
 	DiskFull    = "disk_full"
+	Video       = "video"
 	typicalT2   = 400 << 10
 )
 
@@ -66,7 +67,9 @@ type loader struct {
 	online  map[op.Author]bool
 	stalled map[string]bool
 	full    time.Time
+	video   bool
 	cache   *prefetch.Cache
+	version <-chan struct{}
 }
 
 func source(a op.Author) string { return hex.EncodeToString(a[:]) }
@@ -95,6 +98,14 @@ func (l *loader) setItems(p node.Pile, items []state.Asset) {
 	l.plan()
 }
 
+func (l *loader) since(changed <-chan struct{}) bool {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	old := l.version
+	l.version = changed
+	return old != changed
+}
+
 func (l *loader) setOnline(online map[op.Author]bool) {
 	l.online = online
 	for _, a := range l.items {
@@ -109,6 +120,19 @@ func (l *loader) setCursor(k string) {
 	defer l.mu.Unlock()
 	l.cache.SetCursor(k)
 	l.plan()
+}
+
+func (l *loader) setVideo(on bool) {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	if on == l.video {
+		return
+	}
+	l.video = on
+	l.cache.HoldPins(on)
+	if !on {
+		l.plan()
+	}
 }
 
 func (l *loader) syncPins() {
@@ -164,8 +188,13 @@ func (l *loader) progress() []Progress {
 		switch {
 		case p.Done < p.Total && l.diskFull():
 			h.Reason = DiskFull
-		case p.Done+p.Failed == p.Total || !l.cache.Unavailable(src):
+		case p.Done+p.Failed == p.Total:
 			h.Reason = ""
+		case !l.cache.Unavailable(src):
+			h.Reason = ""
+			if l.video {
+				h.Reason = Video
+			}
 		}
 		out = append(out, Progress{Hint: h, Total: p.Total, Done: p.Done, Failed: p.Failed})
 	}

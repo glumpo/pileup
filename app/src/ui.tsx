@@ -71,7 +71,7 @@ export function Button({
       accessibilityState={{ disabled }}
       disabled={disabled}
       onPress={onPress}
-      style={[styles.button, disabled && styles.disabled]}
+      style={({ pressed }) => [styles.button, disabled && styles.disabled, pressed && styles.pressed]}
     >
       <Text style={styles.buttonText}>{title}</Text>
     </Pressable>
@@ -126,6 +126,7 @@ export const styles = StyleSheet.create({
   body: { padding: 16, gap: 12 },
   button: { backgroundColor: '#0a64d8', borderRadius: 8, padding: 12, alignItems: 'center' },
   disabled: { opacity: 0.4 },
+  pressed: { opacity: 0.6 },
   buttonText: { color: '#fff', fontSize: 16 },
   field: { borderWidth: 1, borderColor: '#ccc', borderRadius: 8, padding: 10, fontSize: 16 },
   error: { color: '#c62828' },

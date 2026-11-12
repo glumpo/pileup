@@ -93,6 +93,7 @@ const waiting: Record<string, string> = {
 function line(p: PinProgress): string {
   const count = `${p.name}: ${p.done}/${p.total}`;
   if (p.reason && waiting[p.reason]) return `${count} — ждём: ${waiting[p.reason]}. ${adviceFor()}`;
+  if (p.reason === 'video') return `${count} — пауза, пока на экране идёт видео`;
   if (p.failed > 0)
     return `${count}, не загрузилось: ${p.failed}. Возможно, файлы удалены из галереи или в неподдерживаемом формате — Pileup попробует ещё раз через 5 минут.`;
   return count;

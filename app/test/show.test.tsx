@@ -1,8 +1,9 @@
 import { act, render, screen, userEvent, within } from '@testing-library/react-native';
+import { StyleSheet } from 'react-native';
 
 import App from '../App';
 import { Hint, PinEstimate, PinProgress, Screen, ShowState, TimelineItem } from '../src/api';
-import { asset, AUTH, BASE, fakeCore, georgia, INVITE, sourceOf } from './fakeCore';
+import { asset, AUTH, BASE, fakeCore, georgia, INVITE, Reply, sourceOf } from './fakeCore';
 
 jest.mock('expo-keep-awake', () => {
   const { useEffect } = require('react');
@@ -81,6 +82,8 @@ function core(screens: Screen[] = [livingRoom, bedroom], start?: [number, unknow
     videoUnavailable: false,
     videoReason: 'unreachable',
     codec: undefined as string | undefined,
+    extra: {} as Partial<ShowState>,
+    poll: undefined as undefined | ((state: ShowState) => Reply | Promise<Reply>),
   };
   const state = (): ShowState => ({
     pile: 'aa01',
@@ -94,6 +97,7 @@ function core(screens: Screen[] = [livingRoom, bedroom], start?: [number, unknow
     renderer_error: show.renderer_error,
     waiting: show.waiting.map(showItem),
     hints: show.hints,
+    ...show.extra,
   });
   const requests = fakeCore({
     'GET /piles': [200, [georgia]],
@@ -110,7 +114,7 @@ function core(screens: Screen[] = [livingRoom, bedroom], start?: [number, unknow
       show.renderer_error = undefined;
       return [201, state()];
     },
-    'GET /show': () => [200, state()],
+    'GET /show': () => (show.poll ? show.poll(state()) : [200, state()]),
     'POST /show/next': () => {
       show.index = Math.min(show.index + 1, items.length - 1);
       show.playing = items[show.index].kind === 'video';
@@ -307,9 +311,9 @@ test('members the show waits for are advised by why they do not answer', async (
   const banner = await screen.findByTestId('waiting', {}, { timeout: 3000 });
   for (const text of [
     'Нет ответа от iPhone: Аня. Pileup закрыт — попросите открыть Pileup.',
-    'Нет ответа от телефон: Боря. Телефон не в этой сети — попросите подключиться к той же сети Wi-Fi.',
+    'Нет ответа от телефона: Боря. Телефон не в этой сети — попросите подключиться к той же сети Wi-Fi.',
     'Нет ответа от iPhone: Вера. По известному адресу отвечает другое устройство — попросите открыть Pileup в той же сети Wi-Fi.',
-    'Нет ответа от телефон: Гоша. Адрес неизвестен — попросите открыть Pileup в той же сети Wi-Fi.',
+    'Нет ответа от телефона: Гоша. Адрес неизвестен — попросите открыть Pileup в той же сети Wi-Fi.',
     `Нет ответа от iPhone: Даша. ${advice}`,
   ]) {
     expect(within(banner).getByText(text)).toBeOnTheScreen();
@@ -535,4 +539,150 @@ test('a show left without files can be stopped', async () => {
 
   expect(await screen.findByRole('button', { name: 'Хронология' })).toBeOnTheScreen();
   expect(commands(requests)).toEqual(['POST /show', 'DELETE /show']);
+});
+
+test('a failed poll is cleared by the next successful one', async () => {
+  const { show } = core();
+  await startShow();
+
+  show.poll = () => [500, { error: 'internal' }];
+  expect(await screen.findByText(/Что-то пошло не так/, {}, { timeout: 3000 })).toBeOnTheScreen();
+  show.poll = undefined;
+  await act(() => new Promise((r) => setTimeout(r, 1500)));
+  expect(screen.queryByText(/Что-то пошло не так/)).toBeNull();
+});
+
+test('polls do not overlap and an answer started before a command does not undo it', async () => {
+  const { requests, show } = core();
+  const user = await startShow();
+
+  let answer: (reply: Reply) => void = () => {};
+  let stale: ShowState | undefined;
+  show.poll = (state) =>
+    new Promise<Reply>((resolve) => {
+      stale = state;
+      answer = resolve;
+    });
+  const polls = () => requests.filter((r) => r.method === 'GET' && r.path === '/show').length;
+  const before = polls();
+  await act(() => new Promise((r) => setTimeout(r, 3500)));
+  expect(polls() - before).toBe(1);
+
+  await user.press(screen.getByRole('button', { name: 'Следующий' }));
+  expect(await screen.findByText('2 / 3')).toBeOnTheScreen();
+  show.poll = undefined;
+  await act(async () => answer([200, stale]));
+  expect(screen.getByText('2 / 3')).toBeOnTheScreen();
+  await act(() => new Promise((r) => setTimeout(r, 1500)));
+  expect(polls() - before).toBeGreaterThan(1);
+  expect(screen.getByText('2 / 3')).toBeOnTheScreen();
+});
+
+test('a show that ended on its own is explained and the remote closes', async () => {
+  const { show } = core();
+  const user = await startShow();
+
+  show.poll = () => [404, { error: 'no_show' }];
+  expect(
+    await screen.findByText('Показ завершён. Чтобы продолжить, начните показ снова.', {}, { timeout: 3000 }),
+  ).toBeOnTheScreen();
+  expect(screen.queryByText('Показ уже остановлен')).toBeNull();
+  for (const name of ['Предыдущий', 'Следующий', 'Перезапустить показ']) {
+    expect(screen.queryByRole('button', { name })).toBeNull();
+  }
+  await user.press(screen.getByRole('button', { name: 'Закрыть' }));
+  expect(await screen.findByRole('button', { name: 'Хронология' })).toBeOnTheScreen();
+});
+
+test('buttons of the remote respond to a touch before the core answers', async () => {
+  core();
+  const user = await startShow();
+  const opacity = () => StyleSheet.flatten(screen.getByRole('button', { name: 'Следующий' }).props.style).opacity ?? 1;
+  const idle = opacity();
+  const press = user.longPress(screen.getByRole('button', { name: 'Следующий' }), { duration: 500 });
+  await act(() => new Promise((r) => setTimeout(r, 200)));
+  expect(opacity()).toBeLessThan(idle);
+  await press;
+  expect(opacity()).toBe(idle);
+});
+
+test('reconnecting to the screen for long is explained with what to check', async () => {
+  const { show } = core();
+  await startShow();
+  show.renderer_error = {
+    code: 'reconnecting',
+    message: 'cast: connection closed',
+  };
+  expect(await screen.findByText('Переподключаемся к экрану…', {}, { timeout: 3000 })).toBeOnTheScreen();
+
+  const now = Date.now();
+  const clock = jest.spyOn(Date, 'now').mockReturnValue(now + 31_000);
+  try {
+    expect(
+      await screen.findByText(
+        'Не удаётся подключиться к экрану «Гостиная». Проверьте, что телевизор включён и в той же сети Wi-Fi, затем нажмите «Перезапустить показ».',
+        {},
+        { timeout: 3000 },
+      ),
+    ).toBeOnTheScreen();
+    expect(screen.getByRole('button', { name: 'Перезапустить показ' })).toBeOnTheScreen();
+  } finally {
+    clock.mockRestore();
+  }
+});
+
+test('a file the screen failed to play is named a photo or a video', async () => {
+  const { show } = core();
+  const user = await startShow();
+
+  show.renderer_error = {
+    code: 'playback_failed',
+    message: 'media receiver failed to play the file',
+  };
+  expect(
+    await screen.findByText('Экран не смог показать этот файл. Перейдите к следующему.', {}, { timeout: 3000 }),
+  ).toBeOnTheScreen();
+
+  await user.press(screen.getByRole('button', { name: 'Следующий' }));
+  expect(
+    await screen.findByText(
+      'Экран не смог воспроизвести видео — возможно, телевизор не поддерживает его формат. Перейдите к следующему файлу.',
+      {},
+      { timeout: 3000 },
+    ),
+  ).toBeOnTheScreen();
+});
+
+test('a buffering video is shown, and a long buffering is explained by the speed of the network', async () => {
+  const { show } = core();
+  const user = await startShow();
+  await user.press(screen.getByRole('button', { name: 'Следующий' }));
+  await screen.findByText('2 / 3');
+
+  show.extra = { buffering: true, stalled: false };
+  expect(await screen.findByText('Видео подгружается…', {}, { timeout: 3000 })).toBeOnTheScreen();
+  expect(screen.getByRole('button', { name: 'Пауза' })).toBeOnTheScreen();
+
+  show.extra = {
+    buffering: true,
+    stalled: true,
+    need_bps: 70_000_000,
+    rate_bps: 24_600_000,
+  };
+  expect(
+    await screen.findByText(
+      'Wi-Fi не успевает за видео: нужно ≈ 70 Мбит/с, идёт ≈ 25. Поднесите телефон ближе к роутеру или переходите к следующему файлу.',
+      {},
+      { timeout: 3000 },
+    ),
+  ).toBeOnTheScreen();
+  expect(screen.queryByText('Видео подгружается…')).toBeNull();
+
+  show.extra = { buffering: true, stalled: true };
+  expect(await screen.findByText('Видео долго подгружается.', {}, { timeout: 3000 })).toBeOnTheScreen();
+  expect(screen.queryByText(/роутеру/)).toBeNull();
+
+  show.extra = { buffering: false, stalled: false };
+  await act(() => new Promise((r) => setTimeout(r, 1500)));
+  expect(screen.queryByText(/подгружается/)).toBeNull();
 });
