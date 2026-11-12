@@ -38,8 +38,7 @@ func (w counted) Write(b []byte) (int, error) {
 	return k, err
 }
 
-func (n *Node) Streamed() (total int64, rate float64) {
-	m := &n.streamed
+func (m *meter) rate() (total int64, rate float64) {
 	now := time.Now().Unix()
 	m.mu.Lock()
 	defer m.mu.Unlock()
@@ -52,4 +51,9 @@ func (n *Node) Streamed() (total int64, rate float64) {
 	return m.total, float64(sum) / window
 }
 
-func (n *Node) Serving() bool { return false }
+func (n *Node) Streamed() (total int64, rate float64) { return n.streamed.rate() }
+
+func (n *Node) Serving() bool {
+	_, rate := n.serving.rate()
+	return rate > 0
+}

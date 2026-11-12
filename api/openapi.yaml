@@ -32,6 +32,29 @@ paths:
                     const: ok
         "401":
           description: Missing or invalid token.
+  /serving:
+    get:
+      operationId: getServing
+      summary: Whether an original is being read from this device
+      description: >-
+        True while this device has sent bytes of one of its own originals in
+        the last 5 seconds: to a member over the pile port (T3), or to a
+        screen by its own show. Relaying another member's original does not
+        count. The app keeps the screen on and shows a banner meanwhile.
+      responses:
+        "200":
+          description: Serving state.
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - serving
+                properties:
+                  serving:
+                    type: boolean
+        "401":
+          description: Missing or invalid token.
   /piles:
     get:
       operationId: listPiles
@@ -1136,7 +1159,9 @@ components:
           description: >-
             Present while files remain and the member is not answering:
             unreachable or timeout, as in Hint; disk_full while files remain
-            and this device's disk is full.
+            and this device's disk is full; video while files remain, the
+            member is answering and a video plays on the screen of the show
+            (pinned files outside the show window wait until it stops).
   responses:
     PinProgress:
       description: Members with pinned files, by name.

@@ -13,6 +13,7 @@ import { ScreenPicker } from './src/screens/ScreenPicker';
 import { SelectionScreen } from './src/screens/SelectionScreen';
 import { Timeline } from './src/screens/Timeline';
 import { Viewer } from './src/screens/Viewer';
+import { ServingBanner } from './src/Serving';
 import { Boundary, Button, styles } from './src/ui';
 
 type Route =
@@ -225,6 +226,7 @@ export default function App() {
         </View>
         ))}
       </Boundary>
+      <ServingBanner api={api} />
       <StatusBar style={top.name === 'viewer' ? 'light' : 'auto'} />
     </>
   );

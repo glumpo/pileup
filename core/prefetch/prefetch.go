@@ -57,6 +57,7 @@ type Cache struct {
 	broken  map[string]time.Time
 	loading map[string]string
 	sources map[string]*source
+	held    bool
 }
 
 func New() *Cache {
@@ -83,6 +84,8 @@ func (c *Cache) SetCursor(id string) { c.cursor = id }
 func (c *Cache) Pin(id string) { c.pinned[id] = true }
 
 func (c *Cache) Unpin(id string) { delete(c.pinned, id) }
+
+func (c *Cache) HoldPins(hold bool) { c.held = hold }
 
 func (c *Cache) SetOnline(src string, online bool) {
 	s := c.source(src)
@@ -185,7 +188,7 @@ func (c *Cache) Size(id string) (int64, bool) {
 func (c *Cache) Unavailable(src string) bool { return c.source(src).unavailable() }
 
 func (c *Cache) wanted() []Item {
-	if len(c.pinned) == 0 {
+	if len(c.pinned) == 0 || c.held {
 		return nil
 	}
 	start := c.index[c.cursor]

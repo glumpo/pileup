@@ -155,6 +155,7 @@ export function connect(port: number, token: string, lost?: () => void) {
 
   return {
     health: () => call<{ status: string }>('GET', '/health'),
+    serving: async () => (await call<{ serving: boolean }>('GET', '/serving')).serving,
     piles: () => call<Pile[]>('GET', '/piles'),
     createPile: (name: string, member: string) => call<Pile>('POST', '/piles', { name, member }),
     invite: async (pile: string) => (await call<{ invite: string }>('GET', `/piles/${pile}/invite`)).invite,
