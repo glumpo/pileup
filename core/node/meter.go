@@ -51,3 +51,5 @@ func (n *Node) Streamed() (total int64, rate float64) {
 	}
 	return m.total, float64(sum) / window
 }
+
+func (n *Node) Serving() bool { return false }

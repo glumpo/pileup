@@ -23,6 +23,7 @@ const (
 	Unreachable = "unreachable"
 	Timeout     = "timeout"
 	DiskFull    = "disk_full"
+	Video       = "video"
 	typicalT2   = 400 << 10
 )
 
