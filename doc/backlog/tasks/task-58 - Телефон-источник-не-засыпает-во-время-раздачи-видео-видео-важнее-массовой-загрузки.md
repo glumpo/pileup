@@ -3,11 +3,11 @@ id: TASK-58
 title: >-
   Телефон-источник не засыпает во время раздачи видео; видео важнее массовой
   загрузки
-status: In Progress
+status: Done
 assignee:
   - '@claude'
 created_date: '2026-11-11T01:54:00Z'
-updated_date: '2026-11-12T17:59:00Z'
+updated_date: '2026-11-12T18:04:00Z'
 labels:
   - core
   - app
