@@ -61,6 +61,10 @@ ios-test: $(XCODEGEN)
 	xcrun simctl bootstatus $(IOS_SIMULATOR) -b
 	xcrun simctl install $(IOS_SIMULATOR) app/modules/core/ios/.build/xcode/Build/Products/Debug-iphonesimulator/TestHost.app
 	xcrun simctl privacy $(IOS_SIMULATOR) grant photos com.glumpo.pileup.testhost
+	-sqlite3 ~/Library/Developer/CoreSimulator/Devices/$(IOS_SIMULATOR)/data/Library/TCC/TCC.db 'select service, client, auth_value, auth_reason from access'
+	-find ~/Library/Developer/CoreSimulator/Devices/$(IOS_SIMULATOR)/data -name 'TCC.db*' -maxdepth 6
+	cd app/modules/core/ios/TestHost && xcodebuild test-without-building -project PileupNativeTests.xcodeproj -scheme PileupNativeTests -destination id=$(IOS_SIMULATOR) -derivedDataPath ../.build/xcode -only-testing:PileupNativeTests/MediaLibraryTests/testPermissionIsGrantedWithoutPrompt || true
+	-sqlite3 ~/Library/Developer/CoreSimulator/Devices/$(IOS_SIMULATOR)/data/Library/TCC/TCC.db 'select service, client, auth_value, auth_reason from access'
 	cd app/modules/core/ios/TestHost && xcodebuild test-without-building -project PileupNativeTests.xcodeproj -scheme PileupNativeTests -destination id=$(IOS_SIMULATOR) -derivedDataPath ../.build/xcode
 
 ios-prebuild:
