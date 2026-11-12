@@ -537,7 +537,10 @@ paths:
       operationId: startShow
       summary: Start a show of a pile on a screen, with this device as the host
       description: >-
-        One show per host: a running show is stopped first. The session lives
+        One show per host: a running show is stopped once the new screen is
+        connected; if the new screen cannot be found or connected, the running
+        show goes on. The same pile and screen while reconnecting only ends
+        the reconnect pause (see renderer_error). The session lives
         only on this device. On a Cast screen the host connects to the Default
         Media Receiver, serves media to it over plain HTTP in the local network
         under a token valid until the show stops, and loads the current file
@@ -1011,6 +1014,22 @@ components:
             not on the owner's device (only in iCloud). unreadable: the owner
             cannot read the original (deleted from the gallery, no access).
             Newer versions may add others.
+        buffering:
+          type: boolean
+          description: The current video is buffering on the screen (playing stays true).
+        stalled:
+          type: boolean
+          description: >-
+            Buffering lasts over 2 s or repeats for this file. need_bps and
+            rate_bps are set when known.
+        need_bps:
+          type: integer
+          description: Bitrate of the video, size × 8 / duration, bit/s. With stalled; absent if the duration is unknown.
+        rate_bps:
+          type: integer
+          description: >-
+            Bytes of originals the host gave the screen over the last 5 s,
+            bit/s. With stalled; absent if nothing was streamed for this file.
         renderer_error:
           type: object
           description: >-
@@ -1018,8 +1037,10 @@ components:
             command. reconnecting: the connection to the Cast screen is lost
             and the host connects to the same screen again with pauses of 1,
             2, 4 … 30 s until the show stops; then the screen loads the
-            current file and the error clears. Restarting the show (POST
-            /show with the current file) stays a fallback.
+            current file and the error clears. POST /show for the same pile
+            and screen while reconnecting does not restart the show: it
+            ends the pause and connects now (at the screen's current address
+            if it is discovered).
           required:
             - code
             - message
