@@ -13,6 +13,12 @@ func Settle(t testing.TB, d time.Duration) {
 	t.Cleanup(func() { settle = old })
 }
 
+func Stalls(t testing.TB, d time.Duration) {
+	old := stall
+	stall = d
+	t.Cleanup(func() { stall = old })
+}
+
 func Pauses(t testing.TB, first, max time.Duration) {
 	oldFirst, oldMax := firstPause, maxPause
 	firstPause, maxPause = first, max

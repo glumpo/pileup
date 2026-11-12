@@ -24,16 +24,22 @@ const (
 	requestTimeout = 30 * time.Second
 	stopTimeout    = 2 * time.Second
 	reload         = time.Second
+	burst          = 300 * time.Millisecond
 	again          = 2 * time.Second
 	misses         = 2
 )
 
 var firstPause, maxPause = time.Second, 30 * time.Second
 
+var stall = 2 * time.Second
+
 func (s *session) connect() error {
 	ctx, cancel := context.WithTimeout(s.ctx, connectTimeout)
 	defer cancel()
-	cs, err := cast.Connect(ctx, s.screen.Addr.String(), heartbeat)
+	s.mu.Lock()
+	addr := s.screen.Addr.String()
+	s.mu.Unlock()
+	cs, err := cast.Connect(ctx, addr, heartbeat)
 	if err != nil {
 		s.n.Diag().Error(diag.Renderer, s.pile, s.screen.Name, fmt.Errorf("connect: %w", err))
 		return fmt.Errorf("%w: %w", ErrUnreachable, err)
@@ -131,10 +137,33 @@ func (s *session) media(a state.Asset) (string, string) {
 	return u + "2", "image/jpeg"
 }
 
+type answer struct {
+	n     int
+	what  string
+	media cast.Media
+	err   error
+}
+
+func (s *session) load(n int, what, url, contentType string, at float64) {
+	c := s.cast
+	s.wg.Add(1)
+	go func() {
+		defer s.wg.Done()
+		ctx, cancel := context.WithTimeout(s.ctx, requestTimeout)
+		m, err := c.Load(ctx, url, contentType, at)
+		cancel()
+		select {
+		case s.answers <- answer{n, what, m, err}:
+		case <-s.ctx.Done():
+		}
+	}()
+}
+
 func (s *session) drive() {
 	defer s.wg.Done()
-	loaded, missed := "", false
-	var retry, revive <-chan time.Time
+	loaded, missed, want := "", false, ""
+	sent, media, loading, due := 0, 0, false, false
+	var retry, revive, gap, stalled <-chan time.Time
 	for {
 		s.mu.Lock()
 		var cur state.Asset
@@ -144,7 +173,7 @@ func (s *session) drive() {
 			url, contentType = s.media(cur)
 		}
 		command := ""
-		if url == loaded {
+		if url == loaded && !loading {
 			command, s.command = s.command, ""
 		}
 		switch {
@@ -153,19 +182,25 @@ func (s *session) drive() {
 		case revive == nil:
 			revive = time.After(again)
 		}
+		switch wait := s.stallIn(); {
+		case wait < 0:
+			stalled = nil
+		case stalled == nil:
+			stalled = time.After(wait)
+		}
 		s.mu.Unlock()
 		switch {
 		case url != loaded && url == "":
-			loaded, retry = "", nil
+			loaded, retry, loading = "", nil, false
 			s.request("command_failed", "stop", s.cast.Stop)
-		case url != loaded:
-			loaded, retry, missed = url, nil, false
-			at := s.position(url)
-			if !s.request("load_failed", fmt.Sprintf("load %x", cur.Meta.AssetID), func(ctx context.Context) (cast.Media, error) {
-				return s.cast.Load(ctx, url, contentType, at)
-			}) {
-				retry, missed = s.miss(url, missed), true
+		case url != loaded && loading && !due:
+			if url != want {
+				want, gap = url, time.After(burst)
 			}
+		case url != loaded:
+			loaded, retry, missed, loading, due, want, gap = url, nil, false, true, false, "", nil
+			sent++
+			s.load(sent, fmt.Sprintf("load %x", cur.Meta.AssetID), url, contentType, s.position(url))
 		case command == playing:
 			s.request("command_failed", "play", s.cast.Play)
 		case command == paused:
@@ -180,19 +215,51 @@ func (s *session) drive() {
 			s.srv.Close()
 			return
 		case <-s.wake:
+		case <-gap:
+			gap, due = nil, true
 		case <-retry:
 			loaded, retry = "", nil
 		case <-revive:
 			revive = nil
 			s.revive()
+		case <-stalled:
+			stalled = nil
+			s.note()
+		case a := <-s.answers:
+			if a.n != sent || !loading {
+				break
+			}
+			loading = false
+			if a.err != nil {
+				s.failed("load_failed", a.what, a.err)
+				retry, missed = s.miss(loaded, missed), true
+				break
+			}
+			select {
+			case <-s.cast.Changed():
+			default:
+			}
+			media = a.media.SessionID
+			m := s.cast.Media()
+			if m.SessionID != media {
+				m = a.media
+			}
+			s.mu.Lock()
+			s.fault = nil
+			s.mu.Unlock()
+			if !s.status(m, loaded) {
+				retry, missed = s.miss(loaded, missed), true
+			}
 		case <-s.cast.Changed():
-			if !s.status(s.cast.Media(), loaded) {
+			if m := s.cast.Media(); !loading && m.SessionID == media && !s.status(m, loaded) {
 				retry, missed = s.miss(loaded, missed), true
 			}
 		case <-s.cast.Done():
 			select {
 			case <-s.cast.Changed():
-				s.status(s.cast.Media(), loaded)
+				if m := s.cast.Media(); !loading && m.SessionID == media {
+					s.status(m, loaded)
+				}
 			default:
 			}
 			s.position("")
@@ -201,7 +268,7 @@ func (s *session) drive() {
 			if !s.reconnect() {
 				return
 			}
-			loaded, retry = "", nil
+			loaded, retry, loading, media = "", nil, false, 0
 		}
 	}
 }
@@ -212,6 +279,7 @@ func (s *session) reconnect() bool {
 		case <-s.ctx.Done():
 			return false
 		case <-time.After(pause):
+		case <-s.kick:
 		}
 		if s.connect() == nil {
 			s.n.Diag().Add(diag.Renderer, s.pile, s.screen.Name, "reconnected to the screen")
@@ -237,8 +305,13 @@ func (s *session) request(code, what string, f func(context.Context) (cast.Media
 
 func (s *session) status(m cast.Media, loaded string) bool {
 	s.mu.Lock()
+	was := s.player
 	s.player = m.State
 	if s.playingVideo(loaded) {
+		if m.State == buffering && was != buffering {
+			s.episodes++
+			s.buffered = time.Now()
+		}
 		switch {
 		case m.State == "IDLE" && m.IdleReason == "FINISHED":
 			s.ended, s.offset, s.since = true, 0, time.Time{}
@@ -252,9 +325,13 @@ func (s *session) status(m cast.Media, loaded string) bool {
 			}
 		}
 	}
+	var cur op.AssetMeta
+	if s.cursor >= 0 {
+		cur = s.items[s.cursor].Meta
+	}
 	s.mu.Unlock()
 	if m.State == "IDLE" && m.IdleReason == "ERROR" {
-		s.failed("playback_failed", "playback", errors.New("media receiver failed to play the file"))
+		s.failed("playback_failed", fmt.Sprintf("playback %x (%s, codec %q)", cur.AssetID, cur.MIME, cur.Codec), errors.New("media receiver failed to play the file"))
 		return false
 	}
 	return true

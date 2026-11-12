@@ -67,6 +67,7 @@ type loader struct {
 	stalled map[string]bool
 	full    time.Time
 	cache   *prefetch.Cache
+	version <-chan struct{}
 }
 
 func source(a op.Author) string { return hex.EncodeToString(a[:]) }
@@ -93,6 +94,14 @@ func (l *loader) setItems(p node.Pile, items []state.Asset) {
 	l.setOnline(l.n.Online(l.pile))
 	l.syncPins()
 	l.plan()
+}
+
+func (l *loader) since(changed <-chan struct{}) bool {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	old := l.version
+	l.version = changed
+	return old != changed
 }
 
 func (l *loader) setOnline(online map[op.Author]bool) {
