@@ -1,9 +1,9 @@
 #!/bin/bash
 set -uo pipefail
 du -sk app/modules/core/ios/Mobile.xcframework/*/Mobile.framework/Mobile
-app=app/ios/build/Build/Products/Release-iphonesimulator/app.app
-du -sk "$app" "$app/app"
-find app/ios/build -name 'app-LinkMap-*.txt' -exec python3 -c '
+app=app/ios/build/Build/Products/Release-iphonesimulator/Pileup.app
+du -sk "$app" "$app/Pileup"
+find app/ios/build -name 'Pileup-LinkMap-*.txt' -exec python3 -c '
 import re, sys
 core, zerofill, symbols = set(), [], []
 section = ""
