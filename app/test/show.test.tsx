@@ -1,4 +1,4 @@
-import { act, fireEvent, render, screen, userEvent, within } from '@testing-library/react-native';
+import { act, render, screen, userEvent, within } from '@testing-library/react-native';
 import { StyleSheet } from 'react-native';
 
 import App from '../App';
@@ -596,11 +596,14 @@ test('a show that ended on its own is explained and the remote closes', async ()
 
 test('buttons of the remote respond to a touch before the core answers', async () => {
   core();
-  await startShow();
-  const next = screen.getByRole('button', { name: 'Следующий' });
-  const idle = StyleSheet.flatten(next.props.style).opacity ?? 1;
-  await act(async () => fireEvent(next, 'pressIn'));
-  expect(StyleSheet.flatten(screen.getByRole('button', { name: 'Следующий' }).props.style).opacity).toBeLessThan(idle);
+  const user = await startShow();
+  const opacity = () => StyleSheet.flatten(screen.getByRole('button', { name: 'Следующий' }).props.style).opacity ?? 1;
+  const idle = opacity();
+  const press = user.longPress(screen.getByRole('button', { name: 'Следующий' }), { duration: 500 });
+  await act(() => new Promise((r) => setTimeout(r, 200)));
+  expect(opacity()).toBeLessThan(idle);
+  await press;
+  expect(opacity()).toBe(idle);
 });
 
 test('reconnecting to the screen for long is explained with what to check', async () => {
