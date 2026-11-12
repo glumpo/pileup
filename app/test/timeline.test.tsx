@@ -87,7 +87,7 @@ test('a file opens full screen and is swiped forward and back', async () => {
   expect(screen.getByText('1 / 5')).toBeOnTheScreen();
   expect(screen.getByText('2026-07-01 10:00')).toBeOnTheScreen();
 
-  await user.press(screen.getByRole('button', { name: '✕' }));
+  await user.press(screen.getByRole('button', { name: 'Закрыть' }));
   expect(screen.queryByText('1 / 5')).toBeNull();
   expect(cellIds()).toEqual(['f3', 'a1', 'c9', '07', 'b2']);
 });
@@ -137,7 +137,7 @@ test('a file with an impossible date is shown under «Дата неизвест�
   await user.press(screen.getByTestId('asset-07'));
   expect(screen.getByText('4 / 6')).toBeOnTheScreen();
   expect(screen.getByText('2026-07-02 04:00')).toBeOnTheScreen();
-  await user.press(screen.getByRole('button', { name: '✕' }));
+  await user.press(screen.getByRole('button', { name: 'Закрыть' }));
 
   await user.press(screen.getByTestId('asset-ee'));
   expect(screen.getByText('6 / 6')).toBeOnTheScreen();
@@ -246,7 +246,7 @@ test('in full screen a broken file can be swiped past and closed', async () => {
 
   await swipeTo(2);
   expect(screen.getByText('3 / 6')).toBeOnTheScreen();
-  await user.press(screen.getByRole('button', { name: '✕' }));
+  await user.press(screen.getByRole('button', { name: 'Закрыть' }));
   expect(screen.queryByText('3 / 6')).toBeNull();
   expect(cellIds()).toEqual(['f3', 'a1', '07', 'b2', 'ee']);
   warn.mockRestore();

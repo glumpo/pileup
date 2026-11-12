@@ -107,12 +107,13 @@ export function SelectionScreen({ api, pile, onBack }: { api: Api; pile: Pile; o
     <Screen title="Мои файлы" onBack={onBack}>
       <FlatList
         data={selection?.assets ?? []}
+        automaticallyAdjustKeyboardInsets
         keyExtractor={(a) => a.id}
         ListHeaderComponent={
           <View style={styles.body}>
             <Text style={styles.muted}>Другие участники увидят только выбранные файлы.</Text>
-            <Field label="С (ГГГГ-ММ-ДД)" value={from} onChangeText={setFrom} />
-            <Field label="По (ГГГГ-ММ-ДД)" value={to} onChangeText={setTo} />
+            <Field label="С (ГГГГ-ММ-ДД)" value={from} onChangeText={setFrom} keyboardType="numbers-and-punctuation" />
+            <Field label="По (ГГГГ-ММ-ДД)" value={to} onChangeText={setTo} keyboardType="numbers-and-punctuation" />
             <Text style={styles.muted}>{hint}</Text>
             <Button title="Выбрать период" onPress={apply} disabled={busy || first === undefined || end === undefined || end <= first} />
             {busy && (

@@ -1,5 +1,6 @@
 import { Component, ErrorInfo, ReactNode } from 'react';
-import { Pressable, StyleSheet, Text, TextInput, TextInputProps, View } from 'react-native';
+import { Pressable, StyleProp, StyleSheet, Text, TextInput, TextInputProps, View, ViewStyle } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { ApiError } from './api';
 import { report } from './report';
@@ -34,9 +35,16 @@ export function describe(error: unknown): string {
   return String(error);
 }
 
+export function Safe({ style, children }: { style?: StyleProp<ViewStyle>; children: ReactNode }) {
+  const insets = useSafeAreaInsets();
+  return (
+    <View style={[styles.screen, { paddingTop: insets.top + 12, paddingBottom: insets.bottom }, style]}>{children}</View>
+  );
+}
+
 export function Screen({ title, onBack, children }: { title: string; onBack?: () => void; children: ReactNode }) {
   return (
-    <View style={styles.screen}>
+    <Safe>
       <View style={styles.header}>
         {onBack && (
           <Pressable accessibilityRole="button" onPress={onBack} hitSlop={12}>
@@ -48,7 +56,7 @@ export function Screen({ title, onBack, children }: { title: string; onBack?: ()
         </Text>
       </View>
       {children}
-    </View>
+    </Safe>
   );
 }
 
@@ -118,7 +126,7 @@ export function ErrorText({ error }: { error?: string }) {
 }
 
 export const styles = StyleSheet.create({
-  screen: { flex: 1, backgroundColor: '#fff', paddingTop: 48 },
+  screen: { flex: 1, backgroundColor: '#fff' },
   header: { flexDirection: 'row', alignItems: 'center', gap: 16, paddingHorizontal: 16, paddingBottom: 12 },
   back: { fontSize: 17, color: '#0a64d8' },
   title: { flex: 1, fontSize: 20, fontWeight: '600' },

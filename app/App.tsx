@@ -1,6 +1,7 @@
 import { StatusBar } from 'expo-status-bar';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { AppState, BackHandler, Share, StyleSheet, Text, View } from 'react-native';
+import { initialWindowMetrics, SafeAreaProvider } from 'react-native-safe-area-context';
 
 import { Api, Pile, ShowState, TimelineItem } from './src/api';
 import { restartCore, startCore } from './src/core';
@@ -13,7 +14,7 @@ import { ScreenPicker } from './src/screens/ScreenPicker';
 import { SelectionScreen } from './src/screens/SelectionScreen';
 import { Timeline } from './src/screens/Timeline';
 import { Viewer } from './src/screens/Viewer';
-import { Boundary, Button, styles } from './src/ui';
+import { Boundary, Button, Safe, styles } from './src/ui';
 
 type Route =
   | { name: 'piles' }
@@ -36,14 +37,16 @@ function startFailure(error: string) {
 
 function StartFailure({ error, onRetry }: { error: string; onRetry: () => void }) {
   return (
-    <View style={[styles.screen, styles.body, { justifyContent: 'center' }]}>
-      <Text style={{ fontSize: 17 }}>{startFailure(error)}</Text>
-      <Button title="Повторить" onPress={onRetry} />
-      <Button
-        title="Поделиться подробностями"
-        onPress={() => Share.share({ title: 'Ошибка запуска Pileup', message: error }).catch(() => {})}
-      />
-    </View>
+    <Safe style={{ justifyContent: 'center' }}>
+      <View style={styles.body}>
+        <Text style={{ fontSize: 17 }}>{startFailure(error)}</Text>
+        <Button title="Повторить" onPress={onRetry} />
+        <Button
+          title="Поделиться подробностями"
+          onPress={() => Share.share({ title: 'Ошибка запуска Pileup', message: error }).catch(() => {})}
+        />
+      </View>
+    </Safe>
   );
 }
 
@@ -61,6 +64,14 @@ function alive(api: Api) {
 }
 
 export default function App() {
+  return (
+    <SafeAreaProvider initialMetrics={initialWindowMetrics}>
+      <Main />
+    </SafeAreaProvider>
+  );
+}
+
+function Main() {
   const [api, setApi] = useState<Api>();
   const [error, setError] = useState<string>();
   const [stack, setStack] = useState<Route[]>([{ name: 'piles' }]);
@@ -127,9 +138,9 @@ export default function App() {
   if (!api) {
     if (error) return <StartFailure error={error} onRetry={start} />;
     return (
-      <View style={[styles.screen, { alignItems: 'center', justifyContent: 'center' }]}>
+      <Safe style={{ alignItems: 'center', justifyContent: 'center' }}>
         <Text>Запуск ядра…</Text>
-      </View>
+      </Safe>
     );
   }
 
@@ -208,10 +219,12 @@ export default function App() {
       <Boundary
         item={stack}
         fallback={
-          <View style={[styles.screen, styles.body]}>
-            <Text style={{ fontSize: 17 }}>Этот экран не удалось показать из-за ошибки в приложении.</Text>
-            <Button title="К списку pile" onPress={() => setStack([{ name: 'piles' }])} />
-          </View>
+          <Safe>
+            <View style={styles.body}>
+              <Text style={{ fontSize: 17 }}>Этот экран не удалось показать из-за ошибки в приложении.</Text>
+              <Button title="К списку pile" onPress={() => setStack([{ name: 'piles' }])} />
+            </View>
+          </Safe>
         }
       >
         {visible.map((route, i) => (
