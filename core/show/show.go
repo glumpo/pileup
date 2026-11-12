@@ -5,6 +5,7 @@ import (
 	"context"
 	"crypto/rand"
 	"errors"
+	"os"
 	"slices"
 	"sync"
 
@@ -184,6 +185,9 @@ func (h *Host) Start(pileID []byte, screenID string, assetID []byte) (State, err
 		}
 	}
 	screen, err := h.screen(screenID)
+	if r, ok := h.saved(); ok && errors.Is(err, ErrUnknownScreen) && r.Screen == screenID && r.Kind == "cast" {
+		screen, err = r.screen(), nil
+	}
 	if err != nil {
 		return State{}, err
 	}
@@ -220,6 +224,7 @@ func (h *Host) Start(pileID []byte, screenID string, assetID []byte) (State, err
 		cancel:  cancel,
 		wake:    make(chan struct{}, 1),
 		kick:    make(chan struct{}, 1),
+		moved:   make(chan struct{}, 1),
 		answers: make(chan answer),
 		l:       l,
 	}
@@ -295,6 +300,7 @@ func (h *Host) Stop() {
 	h.mu.Lock()
 	defer h.mu.Unlock()
 	h.stop()
+	os.Remove(recordPath(h.n))
 }
 
 func (h *Host) stop() {

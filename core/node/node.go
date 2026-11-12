@@ -242,6 +242,10 @@ func (n *Node) Close() error {
 	return errors.Join(errs...)
 }
 
+func (n *Node) Dir() string {
+	return n.cfg.Dir
+}
+
 func (n *Node) Author() op.Author {
 	return op.Author(n.key.Public().(ed25519.PublicKey))
 }

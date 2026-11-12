@@ -9,9 +9,19 @@ import { asset, fakeCore, georgia, Reply } from './fakeCore';
 jest.mock('expo-keep-awake', () => ({ useKeepAwake: () => {} }));
 
 const july1 = Date.UTC(2026, 6, 1, 6, 0);
-const items: TimelineItem[] = [asset('f3', 'Аня', july1), asset('a1', 'Боря', july1 + 60_000), asset('c9', 'Аня', july1 + 120_000)];
+const items: TimelineItem[] = [
+  asset('f3', 'Аня', july1),
+  asset('a1', 'Боря', july1 + 60_000),
+  asset('c9', 'Аня', july1 + 120_000),
+];
 
-const livingRoom: Screen = { id: 'cast-1', name: 'Гостиная', kind: 'cast', address: '192.168.1.20:8009', available: true };
+const livingRoom: Screen = {
+  id: 'cast-1',
+  name: 'Гостиная',
+  kind: 'cast',
+  address: '192.168.1.20:8009',
+  available: true,
+};
 
 const interrupted = { pile: 'aa01', screen: livingRoom, asset: 'c9' };
 
@@ -33,7 +43,15 @@ function stateAt(index: number): ShowState {
 function core({
   running,
   record = interrupted,
-  start = (body: { asset?: string }) => [201, stateAt(Math.max(0, items.findIndex((i) => i.id === body.asset)))],
+  start = (body: { asset?: string }) => [
+    201,
+    stateAt(
+      Math.max(
+        0,
+        items.findIndex((i) => i.id === body.asset),
+      ),
+    ),
+  ],
 }: {
   running?: ShowState;
   record?: typeof interrupted | null;
@@ -45,8 +63,7 @@ function core({
     'GET /piles/aa01/timeline': [200, items],
     'GET /piles/aa01/pins': [200, []],
     'GET /screens': [200, [livingRoom]],
-    'GET /show': () =>
-      core.poll ? core.poll() : core.running ? [200, core.running] : [404, { error: 'no_show' }],
+    'GET /show': () => (core.poll ? core.poll() : core.running ? [200, core.running] : [404, { error: 'no_show' }]),
     'GET /show/interrupted': () => (core.record && !core.running ? [200, core.record] : [404, { error: 'no_show' }]),
     'DELETE /show/interrupted': () => {
       core.record = null;
@@ -199,7 +216,11 @@ test('after the core is restarted under the open remote the show continues with 
   await waitFor(
     () =>
       expect(requests).toContainEqual(
-        expect.objectContaining({ url: 'http://127.0.0.1:4322/show', method: 'POST', body: { pile: 'aa01', screen: 'cast-1', asset: 'c9' } }),
+        expect.objectContaining({
+          url: 'http://127.0.0.1:4322/show',
+          method: 'POST',
+          body: { pile: 'aa01', screen: 'cast-1', asset: 'c9' },
+        }),
       ),
     { timeout: 5000 },
   );
