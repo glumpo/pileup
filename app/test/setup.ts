@@ -8,3 +8,5 @@ jest.mock('../modules/core/src/PileupCoreModule', () => ({
     requestMediaPermissions: jest.fn(() => Promise.resolve(true)),
   },
 }));
+
+jest.mock('react-native-safe-area-context', () => require('react-native-safe-area-context/jest/mock').default);
