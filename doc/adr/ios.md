@@ -62,7 +62,7 @@
 |---|---|
 | `make mobile-ios` | `gomobile bind -target=ios -iosversion 16.4` → `app/modules/core/ios/Mobile.xcframework` (ios-arm64, ios-arm64_x86_64-simulator); gomobile закреплён директивой `tool` в `core/go.mod` |
 | `make ios-boot` | загрузить симулятор (не ждёт; первая загрузка на раннере — до 1,5 мин миграции данных) |
-| `make ios-test` | скачать XcodeGen 2.46.0 в `build/bin` (sha256 проверяется), сгенерировать `TestHost/PileupNativeTests.xcodeproj`, дождаться загрузки симулятора, выдать `TestHost` доступ к фото (`simctl privacy … grant photos`), `xcodebuild test` на симуляторе |
+| `make ios-test` | скачать XcodeGen 2.46.0 в `build/bin` (sha256 проверяется), сгенерировать `TestHost/PileupNativeTests.xcodeproj`, `xcodebuild build-for-testing`, установить `TestHost` в симулятор и выдать ему доступ к фото (`simctl privacy … grant photos`; до установки приложения команда молча ничего не делает), `xcodebuild test-without-building` |
 | `make ios-prebuild` | `npm ci`, `expo prebuild --platform ios --clean --no-install`, `pod install` |
 | `make ios-build` | `xcodebuild` Release под симулятор (JS-бандл внутри, Metro не нужен), только активная архитектура, link map для замеров |
 | `make ios-smoke` | `scripts/ios-smoke.sh`: установка и запуск на симуляторе, проверка ядра (раздел 7) |
