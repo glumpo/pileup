@@ -771,3 +771,53 @@ func TestOriginalIsStreamedFromOwnerWithRanges(t *testing.T) {
 		t.Fatalf("owner offline: status %d", resp.StatusCode)
 	}
 }
+
+func TestServingWhileOriginalIsReadFromThisPhone(t *testing.T) {
+	ma := newMedia()
+	a, b := openSource(t, t.TempDir(), "ios", ma), open(t, t.TempDir(), "android")
+	p := create(t, a, "Грузия", "Аня")
+	ma.add(video("VID_1", day, 15_000), make([]byte, 1<<20))
+	movie := share(t, a, p)["VID_1"]
+	join(t, b, inviteTo(t, a, p), "Боря")
+	waitAssets(t, p.ID, idSet(movie.AssetID), b)
+	read := func(n *node.Node) {
+		t.Helper()
+		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			n.ServeOriginal(w, r, p.ID, movie.AssetID, movie.Revision)
+		}))
+		defer srv.Close()
+		resp, err := http.Get(srv.URL)
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer resp.Body.Close()
+		if body, _ := io.ReadAll(resp.Body); resp.StatusCode != http.StatusOK || len(body) != 1<<20 {
+			t.Fatalf("original: status %d, %d bytes", resp.StatusCode, len(body))
+		}
+	}
+	if a.Serving() || b.Serving() {
+		t.Fatal("serving before anyone reads the original")
+	}
+	streamed, _ := a.Streamed()
+
+	read(b)
+	if !a.Serving() {
+		t.Fatal("owner is not serving while a member reads its original")
+	}
+	if b.Serving() {
+		t.Fatal("member that relays the original is serving")
+	}
+	if total, _ := a.Streamed(); total != streamed {
+		t.Fatalf("original read by a member counted as streamed to the screen: %d bytes", total-streamed)
+	}
+	start := time.Now()
+	eventually(t, "owner stops serving", func() bool { return !a.Serving() })
+	if d := time.Since(start); d > 7*time.Second {
+		t.Fatalf("owner kept serving %v after the end", d)
+	}
+
+	read(a)
+	if !a.Serving() {
+		t.Fatal("owner is not serving while its own video goes to the screen")
+	}
+}

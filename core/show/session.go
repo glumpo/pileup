@@ -186,6 +186,7 @@ func (s *session) move(i int) {
 		s.signal()
 	}
 	s.l.setCursor(key(s.items[i]))
+	s.l.setVideo(s.video())
 }
 
 func (s *session) control(command string) error {
@@ -215,6 +216,7 @@ func (s *session) control(command string) error {
 	}
 	if s.cast == nil {
 		s.player = command
+		s.l.setVideo(s.video())
 		return nil
 	}
 	s.command = command
@@ -234,6 +236,7 @@ func (s *session) unavailable(a state.Asset, why string) {
 	down := s.cursor >= 0 && key(s.items[s.cursor]) == key(a) && !s.videoDown
 	if down {
 		s.videoDown, s.why = true, why
+		s.l.setVideo(s.video())
 		s.signal()
 	}
 	s.mu.Unlock()
@@ -262,7 +265,7 @@ func (s *session) state() State {
 		cur := s.items[s.cursor]
 		st.Index = s.cursor
 		st.Current = cur
-		st.Playing = cur.Meta.Kind == op.KindVideo && !s.videoDown && !s.ended && (s.player == playing || s.player == buffering)
+		st.Playing = s.video()
 		st.Buffering = s.buffers()
 		if s.stalled() {
 			st.Stalled = true
@@ -280,6 +283,10 @@ func (s *session) state() State {
 	}
 	st.Waiting, st.Hints = s.l.status(down...)
 	return st
+}
+
+func (s *session) video() bool {
+	return s.cursor >= 0 && s.items[s.cursor].Meta.Kind == op.KindVideo && !s.videoDown && !s.ended && (s.player == playing || s.player == buffering)
 }
 
 func (s *session) buffers() bool {
@@ -351,5 +358,6 @@ func (s *session) stop() {
 	s.cancel()
 	s.wg.Wait()
 	s.l.setCursor("")
+	s.l.setVideo(false)
 	s.n.Diag().Add(diag.Renderer, s.pile, s.screen.Name, "show stopped")
 }
