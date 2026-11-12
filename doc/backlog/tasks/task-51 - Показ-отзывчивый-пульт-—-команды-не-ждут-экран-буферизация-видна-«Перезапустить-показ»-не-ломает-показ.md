@@ -3,11 +3,11 @@ id: TASK-51
 title: >-
   Показ: отзывчивый пульт — команды не ждут экран, буферизация видна,
   «Перезапустить показ» не ломает показ
-status: In Progress
+status: Done
 assignee:
   - '@claude'
 created_date: '2026-11-11T01:54:00Z'
-updated_date: '2026-11-12T17:35:00Z'
+updated_date: '2026-11-12T17:41:00Z'
 labels:
   - core
   - app
