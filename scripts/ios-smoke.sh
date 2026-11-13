@@ -6,6 +6,10 @@ out=$3
 mkdir -p "$out"
 id=$(/usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' "$app/Info.plist")
 echo "bundle $id, display name $(/usr/libexec/PlistBuddy -c 'Print :CFBundleDisplayName' "$app/Info.plist")"
+exe=$(/usr/libexec/PlistBuddy -c 'Print :CFBundleExecutable' "$app/Info.plist")
+echo "scenes $(plutil -extract UIApplicationSceneManifest json -o - "$app/Info.plist")"
+nm "$app/$exe" | grep 'OBJC_CLASS_$_PileupPresentationSceneDelegate'
+echo "external display scene delegate is linked"
 xcrun simctl boot "$sim" || true
 xcrun simctl bootstatus "$sim" -b
 xcrun simctl install "$sim" "$app"

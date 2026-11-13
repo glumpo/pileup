@@ -6,8 +6,18 @@ public class PileupCoreModule: Module {
   public func definition() -> ModuleDefinition {
     Name("PileupCore")
 
+    Events("onExternalDisplay", "onPlayer")
+
     OnCreate {
       self.lifecycle.observe()
+      DispatchQueue.main.async {
+        Presentation.shared.onDisplay = { [weak self] connected in
+          self?.sendEvent("onExternalDisplay", ["connected": connected])
+        }
+        Presentation.shared.onPlayer = { [weak self] asset, state, message in
+          self?.sendEvent("onPlayer", ["asset": asset, "state": state, "message": message])
+        }
+      }
     }
 
     AsyncFunction("start") {
@@ -35,8 +45,17 @@ public class PileupCoreModule: Module {
       await MediaLibrary.requestPermissions()
     }
 
+    AsyncFunction("present") { (slide: [String: Any]?) in
+      Presentation.shared.show(Slide(slide))
+    }.runOnQueue(.main)
+
+    AsyncFunction("externalDisplay") {
+      Presentation.shared.connected
+    }.runOnQueue(.main)
+
     OnDestroy {
       self.lifecycle.unobserve()
+      DispatchQueue.main.async { Presentation.shared.show(nil) }
       try? Core.stop()
     }
   }

@@ -34,6 +34,13 @@ module.exports = (config) => {
     config.modResults.NSLocalNetworkUsageDescription =
       'Pileup ищет телефоны участников и телевизоры в этой Wi-Fi-сети, чтобы объединять фото и показывать их на экране.';
     config.modResults.NSBonjourServices = ['_pileup._tcp', '_googlecast._tcp', '_airplay._tcp'];
+    const scenes = (config.modResults.UIApplicationSceneManifest ??= {});
+    scenes.UISceneConfigurations = {
+      ...scenes.UISceneConfigurations,
+      UIWindowSceneSessionRoleExternalDisplayNonInteractive: [
+        { UISceneConfigurationName: 'Presentation', UISceneDelegateClassName: 'PileupPresentationSceneDelegate' },
+      ],
+    };
     return config;
   });
   return withAndroidManifest(config, (config) => {

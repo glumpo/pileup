@@ -20,6 +20,9 @@ targets:
       properties:
         NSLocalNetworkUsageDescription: Discovery tests
         NSBonjourServices: [_pileup._tcp, _googlecast._tcp, _airplay._tcp, _pileuptest._tcp]
+        NSAppTransportSecurity:
+          NSAllowsArbitraryLoads: false
+          NSAllowsLocalNetworking: true
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.glumpo.pileup.testhost
