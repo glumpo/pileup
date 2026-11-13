@@ -5,7 +5,7 @@ status: In Progress
 assignee:
   - '@claude'
 created_date: '2026-11-11T01:20:00Z'
-updated_date: '2026-11-13T08:07:00Z'
+updated_date: '2026-11-13T12:35:00Z'
 labels:
   - ios
   - app
@@ -54,6 +54,8 @@ iPhone должен быть полноценным источником, как
 Реализация: Native/Media.swift (чистая логика), MediaLibrary.swift, Renditions.swift (Originals — кеш 2 открытых файлов, 60 с простоя, memory warning), NSPhotoLibraryUsageDescription в app.plugin.js, проверка ключа в ios-smoke. local_id = PHAsset.localIdentifier (A49).
 CI: MediaTests (19) и OriginalsTests (7) зелёные на симуляторе. MediaLibraryTests (интеграция PhotoKit, 8) на раннере пропускаются XCTSkip: simctl privacy grant photos пишет kTCCServicePhotos|com.glumpo.pileup.testhost|2 в TCC.db (проверено sqlite3 до и после установки хоста), но authorizationStatus(.readWrite) = .notDetermined, requestAuthorization ждёт системного диалога (Xcode 26.6, iOS 26). Тесты написаны, компилируются, но не выполнены.
 Риски: modificationDate меняется не только при правке (избранное и т. п.) — ревизия и T1 перерисовываются; fileSize ресурса — через KVC (непубличный ключ, с проверкой responds); codec — requestAVAsset на каждое видео при первом списке, кеш в памяти.
+
+Лид: слито в master, задача остаётся In Progress. Код PhotoKit собран и покрыт unit-тестами чистой логики, но 7 интеграционных тестов MediaLibraryTests на раннере пропускаются (нет доступа к медиатеке у хоста тестов) — то есть сам код работы с PhotoKit ни разу не выполнялся. Следующий шаг: выдать доступ на симуляторе через UI-тест, нажимающий «Разрешить» в системном диалоге, чтобы эти тесты реально шли в CI.
 <!-- SECTION:NOTES:END -->
 
 ## Final Summary
