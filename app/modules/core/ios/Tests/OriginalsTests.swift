@@ -124,8 +124,8 @@ final class OriginalsTests: XCTestCase {
       opened.fulfill()
     }
     Thread.sleep(forTimeInterval: 0.3)
-    XCTAssertLessThan(elapsed { XCTAssertEqual(try files.read("b", offset: 0, length: 100), contents["b"]) }, 0.5)
-    XCTAssertLessThan(elapsed { XCTAssertEqual(try files.size("c"), 4096) }, 0.5)
+    XCTAssertLessThan(elapsed { XCTAssertEqual(try? files.read("b", offset: 0, length: 100), contents["b"]) }, 0.5)
+    XCTAssertLessThan(elapsed { XCTAssertEqual(try? files.size("c"), 4096) }, 0.5)
     XCTAssertLessThan(elapsed { files.closeIdle() }, 0.5)
     XCTAssertLessThan(elapsed {
       NotificationCenter.default.post(name: UIApplication.didReceiveMemoryWarningNotification, object: nil)
