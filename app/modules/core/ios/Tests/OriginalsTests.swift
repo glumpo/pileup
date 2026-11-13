@@ -22,13 +22,20 @@ final class OriginalsTests: XCTestCase {
     try? FileManager.default.removeItem(at: dir)
   }
 
-  private func originals(idle: TimeInterval = 60) -> Originals {
-    Originals(idle: idle) { [unowned self] id in
+  private func originals(idle: TimeInterval = 60, retry: TimeInterval = 10) -> Originals {
+    Originals(idle: idle, retry: retry) { [unowned self] id in
       self.lock.lock()
       self.opened.append(id)
       self.lock.unlock()
-      return try openFile(self.dir.appendingPathComponent(id))
+      if id.hasPrefix("slow") { Thread.sleep(forTimeInterval: 2) }
+      return try openFile(self.dir.appendingPathComponent(String(id.dropFirst(id.hasPrefix("slow") ? 4 : 0))))
     }
+  }
+
+  private func elapsed(_ body: () -> Void) -> TimeInterval {
+    let started = Date()
+    body()
+    return Date().timeIntervalSince(started)
   }
 
   func testRangesReturnFileBytes() throws {
@@ -105,14 +112,43 @@ final class OriginalsTests: XCTestCase {
     _ = try files.size("a")
     _ = try files.size("b")
     NotificationCenter.default.post(name: UIApplication.didReceiveMemoryWarningNotification, object: nil)
-    XCTAssertEqual(files.openCount, 0)
+    XCTAssertTrue(eventually(2) { files.openCount == 0 })
   }
 
-  func testOpenErrorIsReturnedAndNotRemembered() throws {
+  func testSlowOpenDoesNotDelayOtherFilesOrTheMainThread() throws {
     let files = originals()
+    XCTAssertEqual(try files.read("b", offset: 0, length: 100), contents["b"])
+    let opened = expectation(description: "slow file opened")
+    DispatchQueue.global().async {
+      XCTAssertEqual(try? files.size("slowa"), Int64(self.contents["a"]!.count))
+      opened.fulfill()
+    }
+    Thread.sleep(forTimeInterval: 0.3)
+    XCTAssertLessThan(elapsed { XCTAssertEqual(try files.read("b", offset: 0, length: 100), contents["b"]) }, 0.5)
+    XCTAssertLessThan(elapsed { XCTAssertEqual(try files.size("c"), 4096) }, 0.5)
+    XCTAssertLessThan(elapsed { files.closeIdle() }, 0.5)
+    XCTAssertLessThan(elapsed {
+      NotificationCenter.default.post(name: UIApplication.didReceiveMemoryWarningNotification, object: nil)
+    }, 0.5)
+    wait(for: [opened], timeout: 5)
+  }
+
+  func testParallelRequestsForASlowFileOpenItOnce() throws {
+    let files = originals()
+    DispatchQueue.concurrentPerform(iterations: 4) { _ in
+      XCTAssertEqual(try? files.read("slowb", offset: 0, length: 100), self.contents["b"])
+    }
+    XCTAssertEqual(opened, ["slowb"])
+  }
+
+  func testFailedOpenIsReturnedAndNotRetriedAtOnce() throws {
+    let files = originals(retry: 0.5)
     XCTAssertThrowsError(try files.size("missing"))
     XCTAssertThrowsError(try files.read("missing", offset: 0, length: 1))
-    XCTAssertEqual(opened, ["missing", "missing"])
+    XCTAssertEqual(opened, ["missing"])
     XCTAssertEqual(files.openCount, 0)
+    Thread.sleep(forTimeInterval: 0.6)
+    XCTAssertThrowsError(try files.size("missing"))
+    XCTAssertEqual(opened, ["missing", "missing"])
   }
 }

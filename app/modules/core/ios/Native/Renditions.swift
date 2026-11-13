@@ -62,17 +62,21 @@ struct OpenFile {
 }
 
 final class Originals {
-  private let lock = NSLock()
+  private let lock = NSCondition()
   private let open: (String) throws -> OpenFile
   private let capacity: Int
   private let idle: TimeInterval
+  private let retry: TimeInterval
   private var files: [(id: String, file: OpenFile, used: Date)] = []
+  private var opening: Set<String> = []
+  private var failures: [String: (error: Error, at: Date)] = [:]
   private var timer: DispatchSourceTimer?
   private var warning: NSObjectProtocol?
 
-  init(capacity: Int = 2, idle: TimeInterval = 60, open: @escaping (String) throws -> OpenFile) {
+  init(capacity: Int = 2, idle: TimeInterval = 60, retry: TimeInterval = 10, open: @escaping (String) throws -> OpenFile) {
     self.capacity = capacity
     self.idle = idle
+    self.retry = retry
     self.open = open
     let timer = DispatchSource.makeTimerSource(queue: .global(qos: .utility))
     timer.schedule(deadline: .now() + idle / 2, repeating: idle / 2)
@@ -81,7 +85,9 @@ final class Originals {
     self.timer = timer
     warning = NotificationCenter.default.addObserver(
       forName: UIApplication.didReceiveMemoryWarningNotification, object: nil, queue: nil
-    ) { [weak self] _ in self?.closeAll() }
+    ) { [weak self] _ in
+      DispatchQueue.global(qos: .utility).async { self?.closeAll() }
+    }
   }
 
   deinit {
@@ -139,11 +145,27 @@ final class Originals {
   private func withFile<T>(_ id: String, _ body: (OpenFile) throws -> T) throws -> T {
     lock.lock()
     defer { lock.unlock() }
+    while opening.contains(id) { lock.wait() }
     let file: OpenFile
     if let i = files.firstIndex(where: { $0.id == id }) {
       file = files.remove(at: i).file
     } else {
-      file = try open(id)
+      if let failure = failures[id], Date().timeIntervalSince(failure.at) < retry { throw failure.error }
+      opening.insert(id)
+      lock.unlock()
+      let result = Result { try open(id) }
+      lock.lock()
+      opening.remove(id)
+      lock.broadcast()
+      switch result {
+      case .success(let opened):
+        failures[id] = nil
+        file = opened
+      case .failure(let error):
+        failures = failures.filter { Date().timeIntervalSince($0.value.at) < retry }
+        failures[id] = (error, Date())
+        throw error
+      }
     }
     files.append((id, file, Date()))
     while files.count > capacity {
@@ -175,19 +197,32 @@ private func openOriginal(_ localID: String) throws -> OpenFile {
   guard let index = servedResource(resources.map(\.type), video: video) else {
     throw mediaError("\(localID) has no original resource")
   }
+  return try exportResource(resources[index], localID: localID)
+}
+
+func exportResource(_ resource: PHAssetResource, localID: String, timeout: TimeInterval = photoKitTimeout) throws -> OpenFile {
   let url = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
   let options = PHAssetResourceRequestOptions()
   options.isNetworkAccessAllowed = false
+  let lock = NSLock()
   var failure: Error?
+  var abandoned = false
   let done = DispatchSemaphore(value: 0)
-  PHAssetResourceManager.default().writeData(for: resources[index], toFile: url, options: options) { error in
+  PHAssetResourceManager.default().writeData(for: resource, toFile: url, options: options) { error in
+    lock.lock()
     failure = error
+    let late = abandoned
+    lock.unlock()
+    if late { try? FileManager.default.removeItem(at: url) }
     done.signal()
   }
-  guard done.wait(timeout: .now() + photoKitTimeout) == .success else {
-    throw mediaError("photo library did not export \(localID) in \(Int(photoKitTimeout)) s")
-  }
   defer { try? FileManager.default.removeItem(at: url) }
+  guard done.wait(timeout: .now() + timeout) == .success else {
+    lock.lock()
+    abandoned = true
+    lock.unlock()
+    throw mediaError("photo library did not export \(localID) in \(Int(timeout)) s")
+  }
   if inCloud(failure) { throw notLocal(localID) }
   if let failure { throw failure }
   return try openFile(url)

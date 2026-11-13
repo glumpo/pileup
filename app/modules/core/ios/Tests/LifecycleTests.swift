@@ -49,4 +49,16 @@ final class LifecycleTests: XCTestCase {
     await MainActor.run { lifecycle.foreground() }
     XCTAssertEqual(Core.port, 0)
   }
+
+  func testExpiredBackgroundTimeIsInTheJournalWithTheStopDuration() async throws {
+    await MainActor.run {
+      lifecycle.background()
+      lifecycle.expired()
+    }
+    let journal = dir.appendingPathComponent("diag.log")
+    XCTAssertTrue(try String(contentsOf: journal, encoding: .utf8).contains("background time expired, stopping the core"))
+    try Core.start(dir: dir, keystore: keystore, appVersion: "1.2.3")
+    let stopped = try String(contentsOf: journal, encoding: .utf8).components(separatedBy: "\n").first { $0.contains("core stopped after background expiration in ") }
+    XCTAssertNotNil(stopped?.range(of: #"in \d+ ms"#, options: .regularExpression), "\(String(describing: stopped))")
+  }
 }

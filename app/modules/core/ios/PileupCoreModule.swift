@@ -14,8 +14,8 @@ public class PileupCoreModule: Module {
         Presentation.shared.onDisplay = { [weak self] connected in
           self?.sendEvent("onExternalDisplay", ["connected": connected])
         }
-        Presentation.shared.onPlayer = { [weak self] asset, state, message in
-          self?.sendEvent("onPlayer", ["asset": asset, "state": state, "message": message])
+        Presentation.shared.onPlayer = { [weak self] event in
+          self?.sendEvent("onPlayer", event.mapValues { $0 as Any? })
         }
       }
     }

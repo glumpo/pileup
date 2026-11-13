@@ -292,6 +292,19 @@ final class MediaLibraryTests: XCTestCase {
     }
   }
 
+  func testExportThatTimesOutLeavesNoFile() async throws {
+    let samples = try await prepareLibrary()
+    let sample = try XCTUnwrap(samples.first { $0.name == "big.heic" })
+    let resource = try XCTUnwrap(PHAssetResource.assetResources(for: try fetchAsset(sample.localID)).first { $0.type == .photo })
+    let tmp = FileManager.default.temporaryDirectory.path
+    let before = Set(try FileManager.default.contentsOfDirectory(atPath: tmp))
+    for _ in 0..<3 {
+      if let file = try? exportResource(resource, localID: sample.localID, timeout: 0.001) { close(file.fd) }
+    }
+    try await Task.sleep(nanoseconds: 3_000_000_000)
+    XCTAssertEqual(Set(try FileManager.default.contentsOfDirectory(atPath: tmp)).subtracting(before), [])
+  }
+
   func testUnknownFileFailsFastAndIsNotCalledCloudOnly() throws {
     let started = Date()
     var size: Int64 = 0

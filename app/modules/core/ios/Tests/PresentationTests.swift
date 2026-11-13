@@ -34,6 +34,78 @@ final class SlideTests: XCTestCase {
     XCTAssertEqual(playerState(.waitingToPlayAtSpecifiedRate), "buffering")
     XCTAssertNil(playerState(.paused))
   }
+
+  func testPlayerErrorsTellNetworkFromFormat() {
+    func reason(_ domain: String, _ code: Int, under: NSError? = nil) -> String? {
+      playbackFailure(NSError(domain: domain, code: code, userInfo: under.map { [NSUnderlyingErrorKey: $0] } ?? [:])).reason
+    }
+    XCTAssertEqual(reason(NSURLErrorDomain, NSURLErrorCannotConnectToHost), "network")
+    XCTAssertEqual(reason(NSURLErrorDomain, NSURLErrorTimedOut), "network")
+    XCTAssertEqual(reason(AVFoundationErrorDomain, AVError.Code.unknown.rawValue, under: NSError(domain: NSURLErrorDomain, code: NSURLErrorNetworkConnectionLost)), "network")
+    XCTAssertEqual(reason(AVFoundationErrorDomain, AVError.Code.serverIncorrectlyConfigured.rawValue), "network")
+    XCTAssertEqual(reason(AVFoundationErrorDomain, AVError.Code.decodeFailed.rawValue), "unsupported")
+    XCTAssertEqual(reason(AVFoundationErrorDomain, AVError.Code.fileFormatNotRecognized.rawValue), "unsupported")
+    XCTAssertEqual(reason(AVFoundationErrorDomain, AVError.Code.decoderNotFound.rawValue), "unsupported")
+    XCTAssertNil(reason(AVFoundationErrorDomain, AVError.Code.unknown.rawValue))
+    XCTAssertNil(reason(NSOSStatusErrorDomain, -12938))
+    XCTAssertNil(playbackFailure(nil).reason)
+
+    let failure = playbackFailure(NSError(domain: AVFoundationErrorDomain, code: -11800, userInfo: [
+      NSUnderlyingErrorKey: NSError(domain: NSOSStatusErrorDomain, code: -12938),
+      NSLocalizedDescriptionKey: "The operation could not be completed",
+    ]))
+    XCTAssertEqual(failure.message, "AVFoundationErrorDomain -11800 / NSOSStatusErrorDomain -12938: The operation could not be completed")
+  }
+}
+
+private func silentServer() -> (fd: Int32, port: Int) {
+  let fd = socket(AF_INET, SOCK_STREAM, 0)
+  var address = sockaddr_in()
+  address.sin_family = sa_family_t(AF_INET)
+  address.sin_addr.s_addr = inet_addr("127.0.0.1")
+  var length = socklen_t(MemoryLayout<sockaddr_in>.size)
+  withUnsafeMutablePointer(to: &address) {
+    $0.withMemoryRebound(to: sockaddr.self, capacity: 1) {
+      _ = bind(fd, $0, length)
+      _ = getsockname(fd, $0, &length)
+    }
+  }
+  listen(fd, 8)
+  return (fd, Int(UInt16(bigEndian: address.sin_port)))
+}
+
+final class PlayerTests: XCTestCase {
+  func testVideoFollowsTheCoreAfterReturnAndInterruption() throws {
+    let server = silentServer()
+    defer { close(server.fd) }
+    let base = "http://127.0.0.1:\(server.port)"
+    let presentation = Presentation()
+    let screen = PresentationController()
+    screen.loadViewIfNeeded()
+    presentation.attach(screen)
+    let playing: [String: Any] = ["asset": "v1", "image": "\(base)/v1/2", "video": "\(base)/v1/3", "around": [], "playing": true]
+    presentation.show(Slide(playing))
+    XCTAssertTrue(eventually(2) { presentation.player.timeControlStatus != .paused })
+
+    presentation.player.pause()
+    NotificationCenter.default.post(name: UIApplication.didBecomeActiveNotification, object: nil)
+    XCTAssertTrue(eventually(2) { presentation.player.timeControlStatus != .paused }, "video paused by the system stays paused after return")
+
+    presentation.player.pause()
+    NotificationCenter.default.post(name: AVAudioSession.interruptionNotification, object: AVAudioSession.sharedInstance(), userInfo: [
+      AVAudioSessionInterruptionTypeKey: AVAudioSession.InterruptionType.ended.rawValue,
+    ])
+    XCTAssertTrue(eventually(2) { presentation.player.timeControlStatus != .paused }, "video paused by an interruption stays paused after it ended")
+
+    presentation.show(Slide(playing.merging(["playing": false]) { _, b in b }))
+    XCTAssertEqual(presentation.player.timeControlStatus, .paused)
+    NotificationCenter.default.post(name: UIApplication.didBecomeActiveNotification, object: nil)
+    XCTAssertFalse(eventually(1) { presentation.player.timeControlStatus != .paused }, "video paused on the remote started after return")
+
+    presentation.show(nil)
+    XCTAssertNil(presentation.player.currentItem)
+    presentation.detach(screen)
+  }
 }
 
 private final class Album: NSObject, MobileMediaProviderProtocol, MobileRenditionMakerProtocol {

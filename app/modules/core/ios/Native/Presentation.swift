@@ -31,27 +31,54 @@ func playerState(_ status: AVPlayer.TimeControlStatus) -> String? {
   }
 }
 
+func playbackFailure(_ error: Error?) -> (reason: String?, message: String) {
+  guard let error = error as NSError? else { return (nil, "") }
+  let errors = [error] + [error.userInfo[NSUnderlyingErrorKey] as? NSError].compactMap { $0 }
+  let message = errors.map { "\($0.domain) \($0.code)" }.joined(separator: " / ") + ": " + error.localizedDescription
+  let source = [AVError.Code.serverIncorrectlyConfigured, .contentIsUnavailable, .noLongerPlayable].map(\.rawValue)
+  let format = [AVError.Code.decodeFailed, .fileFormatNotRecognized, .failedToParse, .decoderNotFound, .decoderTemporarilyUnavailable, .operationNotSupportedForAsset].map(\.rawValue)
+  if errors.contains(where: { $0.domain == NSURLErrorDomain || ($0.domain == AVFoundationErrorDomain && source.contains($0.code)) }) {
+    return ("network", message)
+  }
+  if errors.contains(where: { $0.domain == AVFoundationErrorDomain && format.contains($0.code) }) {
+    return ("unsupported", message)
+  }
+  return (nil, message)
+}
+
 final class Presentation {
   static let shared = Presentation()
 
   var onDisplay: (Bool) -> Void = { _ in }
-  var onPlayer: (String, String, String?) -> Void = { _, _, _ in }
+  var onPlayer: ([String: String]) -> Void = { _ in }
 
   private(set) var slide: Slide?
+  let player = AVPlayer()
   private var screens: [PresentationController] = []
   private var images: [URL: UIImage] = [:]
   private var loading: Set<URL> = []
   private var failed: Set<URL> = []
   private let session = URLSession(configuration: .ephemeral)
-  private let player = AVPlayer()
   private var video: URL?
   private var reported: String?
   private var observers: [NSKeyValueObservation] = []
   private var end: NSObjectProtocol?
+  private var resumes: [NSObjectProtocol] = []
 
   init() {
     player.allowsExternalPlayback = true
     player.usesExternalPlaybackWhileExternalScreenIsActive = true
+    let center = NotificationCenter.default
+    resumes = [
+      center.addObserver(forName: UIApplication.didBecomeActiveNotification, object: nil, queue: .main) { [weak self] _ in self?.refresh() },
+      center.addObserver(forName: AVAudioSession.interruptionNotification, object: nil, queue: .main) { [weak self] note in
+        if note.userInfo?[AVAudioSessionInterruptionTypeKey] as? UInt == AVAudioSession.InterruptionType.ended.rawValue { self?.refresh() }
+      },
+    ]
+  }
+
+  deinit {
+    resumes.forEach { NotificationCenter.default.removeObserver($0) }
   }
 
   var connected: Bool { !screens.isEmpty }
@@ -143,26 +170,29 @@ final class Presentation {
     end = nil
     guard let url else {
       player.replaceCurrentItem(with: nil)
+      try? AVAudioSession.sharedInstance().setActive(false, options: .notifyOthersOnDeactivation)
       return
     }
     try? AVAudioSession.sharedInstance().setCategory(.playback, mode: .moviePlayback)
     let item = AVPlayerItem(url: url)
-    let report: (String, String?) -> Void = { [weak self] state, message in
+    let report: (String, [String: String]) -> Void = { [weak self] state, details in
       DispatchQueue.main.async {
         guard let self, self.video == url, self.reported != state else { return }
         self.reported = state
-        self.onPlayer(asset, state, message)
+        self.onPlayer(["asset": asset, "video": url.absoluteString, "state": state].merging(details) { a, _ in a })
       }
     }
     observers = [
       item.observe(\.status) { item, _ in
-        if item.status == .failed { report("failed", item.error?.localizedDescription) }
+        guard item.status == .failed else { return }
+        let (reason, message) = playbackFailure(item.error)
+        report("failed", ["message": message].merging(reason.map { ["reason": $0] } ?? [:]) { a, _ in a })
       },
       player.observe(\.timeControlStatus) { player, _ in
-        if let state = playerState(player.timeControlStatus) { report(state, nil) }
+        if let state = playerState(player.timeControlStatus) { report(state, [:]) }
       },
     ]
-    end = NotificationCenter.default.addObserver(forName: .AVPlayerItemDidPlayToEndTime, object: item, queue: .main) { _ in report("ended", nil) }
+    end = NotificationCenter.default.addObserver(forName: .AVPlayerItemDidPlayToEndTime, object: item, queue: .main) { _ in report("ended", [:]) }
     player.replaceCurrentItem(with: item)
   }
 }

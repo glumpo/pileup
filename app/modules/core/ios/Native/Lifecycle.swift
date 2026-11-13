@@ -25,11 +25,14 @@ final class Lifecycle {
   }
 
   func expired() {
+    MobileReport("app", "background time expired, stopping the core")
+    let started = Date()
     do {
       try Core.stop()
     } catch {
       MobileReport("app", "stop on background expiration: \(error)")
     }
+    MobileReport("app", "core stopped after background expiration in \(Int(Date().timeIntervalSince(started) * 1000)) ms")
     end()
   }
 
