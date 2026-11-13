@@ -2,6 +2,8 @@ import { useKeepAwake } from 'expo-keep-awake';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { ScrollView, Text, View } from 'react-native';
 
+import PileupCore from '../../modules/core/src/PileupCoreModule';
+import { keepOpen, MirroringHint, remoteHint, useExternalDisplay } from '../AirPlay';
 import { Api, ApiError, Hint, Pile, ShowState, TimelineItem } from '../api';
 import { diskFull, PinsPanel, usePins } from '../Pins';
 import { adviceFor } from '../presence';
@@ -83,6 +85,7 @@ export function Remote({
   const commands = useRef(0);
   const resumed = useRef<Api>(undefined);
   const pins = usePins(api, pile.id);
+  const display = useExternalDisplay();
   useKeepAwake();
 
   useEffect(() => {
@@ -127,6 +130,20 @@ export function Remote({
       clearTimeout(timer);
     };
   }, [api, pile.id]);
+
+  const airplay = state.screen.kind === 'airplay';
+  const presented = JSON.stringify(
+    airplay && !ended && state.slide ? { asset: state.current.id, ...state.slide, playing: state.playing } : null,
+  );
+  useEffect(() => {
+    if (airplay) PileupCore.present(JSON.parse(presented)).catch(() => {});
+  }, [airplay, presented]);
+  useEffect(() => (airplay ? () => void PileupCore.present(null).catch(() => {}) : undefined), [airplay]);
+  useEffect(() => {
+    if (!airplay) return;
+    const sub = PileupCore.addListener('onPlayer', (e) => void api.showPlayer(e.asset, e.state, e.message).catch(() => {}));
+    return () => sub.remove();
+  }, [api, airplay]);
 
   const code = state.renderer_error?.code;
   useEffect(() => setReconnecting((at) => (code === 'reconnecting' ? (at ?? Date.now()) : undefined)), [code]);
@@ -191,6 +208,7 @@ export function Remote({
   return (
     <Screen title={`На экране «${state.screen.name}»`}>
       <ScrollView contentContainerStyle={styles.body}>
+        {airplay && display === false && <MirroringHint text={remoteHint(state.screen.name)} />}
         <View>
           <Preview
             key={`${current.id}/${current.revision}`}
@@ -223,6 +241,7 @@ export function Remote({
           {dayOf(item ?? current)} {timeOf(item ?? current)}
           {current.kind === 'video' ? ' · видео' : ''}
         </Text>
+        {airplay && <Text style={styles.muted}>{keepOpen}</Text>}
         {bufferingText(state) && <Text>{bufferingText(state)}</Text>}
         {full && <ErrorText error={diskFull} />}
         {hints.length > 0 && (

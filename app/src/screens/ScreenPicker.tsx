@@ -4,6 +4,7 @@ import { FlatList, Pressable, Text, View } from 'react-native';
 import { Api, Pile, Screen as Display, ShowState } from '../api';
 import { describe, ErrorText, Screen, styles } from '../ui';
 import { LocalNetworkBanner } from '../LocalNetwork';
+import { MirroringHint, pickerHint, useExternalDisplay } from '../AirPlay';
 
 const kinds: Record<string, string> = { cast: 'Google Cast', airplay: 'AirPlay' };
 
@@ -24,6 +25,8 @@ export function ScreenPicker({
   const [refreshing, setRefreshing] = useState(false);
   const [starting, setStarting] = useState<string>();
   const [error, setError] = useState<string>();
+  const display = useExternalDisplay();
+  const appleTV = screens.some((s) => s.kind === 'airplay' && s.available);
 
   const load = useCallback(async () => {
     setRefreshing(true);
@@ -56,6 +59,10 @@ export function ScreenPicker({
     <Screen title="Показать на экране" onBack={onBack}>
       <LocalNetworkBanner api={api} />
       <ErrorText error={error} />
+      {appleTV && display === false && <MirroringHint text={pickerHint} />}
+      {appleTV && display && (
+        <Text style={styles.muted}>«Повтор экрана» включён. Выберите Apple TV, на который идёт повтор.</Text>
+      )}
       <FlatList
         testID="screens"
         data={screens}
