@@ -1,6 +1,7 @@
 import { useKeepAwake } from 'expo-keep-awake';
 import { useEffect, useState } from 'react';
 import { AppState, StyleSheet, Text, View } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { Api } from './api';
 
@@ -36,14 +37,15 @@ export function ServingBanner({ api }: { api: Api }) {
 
 function Banner() {
   useKeepAwake(tag);
+  const insets = useSafeAreaInsets();
   return (
-    <View pointerEvents="none" style={banner.box}>
+    <View testID="serving" pointerEvents="none" style={[banner.box, { bottom: insets.bottom + 12 }]}>
       <Text style={banner.text}>Не блокируйте телефон и не сворачивайте Pileup: с него идёт видео на экран.</Text>
     </View>
   );
 }
 
 const banner = StyleSheet.create({
-  box: { position: 'absolute', left: 12, right: 12, bottom: 32, backgroundColor: '#fff4d6', borderRadius: 8, padding: 12 },
+  box: { position: 'absolute', left: 12, right: 12, backgroundColor: '#fff4d6', borderRadius: 8, padding: 12 },
   text: { fontSize: 15, color: '#5c4400' },
 });

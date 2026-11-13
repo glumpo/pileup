@@ -76,8 +76,8 @@ test('the banner stays above the home indicator', async () => {
     insets: { top: 59, bottom: 34, left: 0, right: 0 },
   });
   fakeCore({ 'GET /piles': [200, [georgia]], 'GET /serving': [200, { serving: true }] });
-  render(<App />);
-
+  await render(<App />);
+  await screen.findByText('Грузия');
   await wait(100);
 
   expect(StyleSheet.flatten(screen.getByTestId('serving').props.style).bottom).toBeGreaterThanOrEqual(34 + 12);
