@@ -18,6 +18,9 @@ import (
 
 func WithNode(token string, n *node.Node, h *show.Host) http.Handler {
 	mux := base()
+	mux.HandleFunc("GET /serving", func(w http.ResponseWriter, r *http.Request) {
+		reply(w, http.StatusOK, map[string]bool{"serving": n.Serving()})
+	})
 	mux.HandleFunc("GET /piles", func(w http.ResponseWriter, r *http.Request) {
 		ps, err := n.Piles()
 		if err != nil {
@@ -73,6 +76,9 @@ func WithNode(token string, n *node.Node, h *show.Host) http.Handler {
 	screens(mux, n)
 	diagnostics(mux, n, token)
 	reconnect(mux, n)
+	mux.HandleFunc("GET /local-network", func(w http.ResponseWriter, r *http.Request) {
+		reply(w, http.StatusOK, map[string]bool{"denied": n.LocalNetworkDenied()})
+	})
 	shows(mux, h)
 	pins(mux, h)
 	return authorized(token, journaled(n.Diag(), mux))
@@ -134,8 +140,10 @@ func fail(w http.ResponseWriter, r *http.Request, err error) {
 		reply(w, http.StatusServiceUnavailable, problem("pile_unavailable"))
 	case errors.Is(err, node.ErrJoined):
 		reply(w, http.StatusConflict, problem("already_joined"))
+	case errors.Is(err, node.ErrLocalNetwork):
+		reply(w, http.StatusBadGateway, problem("local_network_denied"))
 	case errors.Is(err, node.ErrUnreachable):
-		reply(w, http.StatusBadGateway, problem("inviter_unreachable"))
+		reply(w, http.StatusBadGateway, map[string]string{"error": "inviter_unreachable", "reason": node.Class(err)})
 	case errors.Is(err, node.ErrOffline):
 		reply(w, http.StatusServiceUnavailable, problem("offline"))
 	case errors.Is(err, node.ErrUnknownAsset):

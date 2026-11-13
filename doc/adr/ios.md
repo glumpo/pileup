@@ -8,14 +8,15 @@
 
 | Файл | Что |
 |---|---|
-| `PileupCoreModule.swift` | тонкий Expo-адаптер: JS API и жизненный цикл, единственный файл, который импортирует `ExpoModulesCore` |
+| `PileupCoreModule.swift` | тонкий Expo-адаптер: JS API, подписка `Lifecycle` в `OnCreate`/`OnDestroy`; единственный файл, который импортирует `ExpoModulesCore` |
 | `Native/Core.swift` | старт и стоп фасада `mobile.Start`/`Stop`, `port`, `token`; подготовка каталога данных |
 | `Native/KeychainKeystore.swift` | `Keystore`: seed ключа устройства в Keychain |
 | `Native/NetworkAddresses.swift` | `NetworkInfo`: адреса интерфейсов через `getifaddrs` |
 | `Native/Media.swift` | чистая логика медиатеки: JSON `node.MediaItem`, интервал запроса, выбор ресурса оригинала, имя и MIME, размеры T1/T2, разрешения, ошибка `not_local:` |
 | `Native/MediaLibrary.swift` | `MediaProvider` (PhotoKit) и `requestPermissions`; общие `fetchAsset`, `videoAsset` |
 | `Native/Renditions.swift` | `RenditionMaker`: T1/T2 через `PHImageManager`, оригинал по диапазонам через кеш открытых файлов `Originals` |
-| `Native/Discovery.swift` | `DiscoveryProvider` — заготовка, наполняет TASK-44 |
+| `Native/Discovery.swift` | `DiscoveryProvider`: Bonjour (раздел 11) |
+| `Native/Lifecycle.swift` | уведомления жизненного цикла: фоновая задача, перезапуск Bonjour, остановка ядра (раздел 11) |
 | `PileupCore.podspec` | pod модуля: `PileupCoreModule.swift` + `Native/**`, `vendored_frameworks = Mobile.xcframework`, `libresolv` |
 | `Package.swift` | SwiftPM-пакет `PileupNative` из `Native/` и binaryTarget `Mobile.xcframework` — только для тестов |
 | `TestHost/` | `project.yml` для XcodeGen: приложение-хост и hosted unit-тесты из `Tests/` |
@@ -32,7 +33,7 @@
 - `stop(): Promise<void>`, `port(): number`, `token(): string` — прямо из фасада.
 - `requestMediaPermissions(): Promise<boolean>` — `PHPhotoLibrary.requestAuthorization(for: .readWrite)`; `true` при `.authorized` и `.limited`. Системный диалог показывается только при первом запросе, дальше ответ сразу. Текст диалога — `NSPhotoLibraryUsageDescription` из config plugin модуля (`app.plugin.js`). Объяснение отказа и переход в настройки — на экране (TASK-55).
 
-Жизненный цикл: ядро останавливается в `OnDestroy` модуля (перезагрузка JS, уничтожение модуля) и по `UIApplication.willTerminateNotification`. Уход в фон ядро не останавливает: приостановленное приложение система может убить без уведомления, данные ядра это переживают (SQLite WAL). Перезапуск слушающих сокетов после фона — TASK-44.
+Жизненный цикл: ядро останавливается в `OnDestroy` модуля (перезагрузка JS, уничтожение модуля), по `UIApplication.willTerminateNotification` и по истечении фонового времени; при возврате на передний план пересоздаются объявления и поиск Bonjour (раздел 11).
 
 ## 3. Ключ устройства и каталог данных (A21, A48)
 
@@ -64,8 +65,8 @@
 | `make ios-boot` | загрузить симулятор (не ждёт; первая загрузка на раннере — до 1,5 мин миграции данных) |
 | `make ios-test` | скачать XcodeGen 2.46.0 в `build/bin` (sha256 проверяется), сгенерировать `TestHost/PileupNativeTests.xcodeproj`, `xcodebuild build-for-testing`, установить `TestHost` в симулятор и выдать ему доступ к фото (`simctl privacy … grant photos`; до установки приложения команда молча ничего не делает), `xcodebuild test-without-building` |
 | `make ios-prebuild` | `npm ci`, `expo prebuild --platform ios --clean --no-install`, `pod install` |
-| `make ios-build` | `xcodebuild` Release под симулятор (JS-бандл внутри, Metro не нужен), только активная архитектура, link map для замеров |
-| `make ios-smoke` | `scripts/ios-smoke.sh`: установка и запуск на симуляторе, проверка ядра (раздел 7) |
+| `make ios-build` | `xcodebuild` Release под симулятор (`Pileup.xcworkspace`, схема `Pileup`, продукт `Pileup.app`) (JS-бандл внутри, Metro не нужен), только активная архитектура, link map для замеров |
+| `make ios-smoke` | `scripts/ios-smoke.sh`: установка и запуск на симуляторе, проверка ядра (раздел 7); печатает идентификатор и отображаемое имя из `Info.plist` |
 | `make ios-simulator` | всё подряд, кроме тестов |
 
 Симулятор: `IOS_SIMULATOR` (UDID) или по умолчанию последний iPhone самой новой среды iOS из `simctl list`. Подпись: симуляторные сборки подписываются ad-hoc (`-`), Apple-аккаунт не нужен; сборки под устройство нет (TASK-1).
@@ -74,7 +75,7 @@
 
 ## 7. Что доказывает проверка в CI
 
-- `ios-test` (hosted XCTest на симуляторе, 19 тестов): Swift-провайдеры совместимы с протоколами gomobile, xcframework линкуется и ядро работает в iOS-процессе; `Core.start` поднимает ядро, `/health` с токеном — 200, без токена и с чужим — 401; участник pile — `platform = ios` с переданной версией; приглашение создаётся (значит, `NetworkInfo` отдал адрес, который Go признал LAN-адресом); после `Stop` порт закрыт, после нового `Start` — новый токен, старый отвергается, pile и ключ устройства сохранились (seed прочитан из Keychain); `stop` и сразу `start` подряд несколько раз (так `restartCore()` в JS перезапускает ядро при потере связи) — каждый раз новый токен и `/health` 200; `stop` без ядра и повторный `start` ничего не меняют. Отдельно — правила адресов, атрибуты элемента Keychain (`AfterFirstUnlockThisDeviceOnly`, без синхронизации), исключение каталога из бэкапа и сброс seed без каталога.
+- `ios-test` (hosted XCTest на симуляторе, 30 тестов, из них 11 — обнаружение и жизненный цикл (раздел 11)): Swift-провайдеры совместимы с протоколами gomobile, xcframework линкуется и ядро работает в iOS-процессе; `Core.start` поднимает ядро, `/health` с токеном — 200, без токена и с чужим — 401; участник pile — `platform = ios` с переданной версией; приглашение создаётся (значит, `NetworkInfo` отдал адрес, который Go признал LAN-адресом); после `Stop` порт закрыт, после нового `Start` — новый токен, старый отвергается, pile и ключ устройства сохранились (seed прочитан из Keychain); `stop` и сразу `start` подряд несколько раз (так `restartCore()` в JS перезапускает ядро при потере связи) — каждый раз новый токен и `/health` 200; `stop` без ядра и повторный `start` ничего не меняют. Отдельно — правила адресов, атрибуты элемента Keychain (`AfterFirstUnlockThisDeviceOnly`, без синхронизации), исключение каталога из бэкапа и сброс seed без каталога.
 - Медиатека (`MediaTests`, `OriginalsTests`, `MediaLibraryTests`): тестовые файлы генерируются в самом тесте (JPEG с EXIF-ориентацией 6, PNG, HEIC 2400×1800, видео H.264 с поворотом 90° и HEVC, скрытое фото; двухцветные, чтобы проверить ориентацию по пикселям) и добавляются в медиатеку симулятора через `PHAssetCreationRequest` с заданной `creationDate` — в репозитории медиафайлов нет. Проверяется: поля списка (время, размеры с ориентацией, MIME, имя, размер = длина файла, `codec` `avc1`/`hvc1`, длительность, `hidden`, нет лишних полей), диапазон-подсказка; T1/T2 — JPEG размера `fit`, без EXIF-ориентации, цвета на нужных сторонах; оригинал по кускам 4 КиБ совпадает с файлом; неизвестный `local_id` — ошибка без `not_local:` быстрее 1 с; через ядро (`Core.start`): выбор диапазона видит файлы, скрытый не выбран, thumbhash появляется (T1 отрисован ядром), `GET …/blob/…/2` отдаёт JPEG 1920×1440. **На раннере CI эти интеграционные тесты пропускаются (`XCTSkip`)**: `simctl privacy … grant photos com.glumpo.pileup.testhost` записывает в `TCC.db` симулятора строку `kTCCServicePhotos|com.glumpo.pileup.testhost|2`, но `PHPhotoLibrary.authorizationStatus(for: .readWrite)` в хосте всё равно `.notDetermined`, а `requestAuthorization` ждёт системного диалога (Xcode 26.6, iOS 26, проверено и с грантом до, и после `simctl install`). Тесты запрашивают доступ сами с таймаутом 10 с и без доступа пропускаются; локально на Mac их можно прогнать, один раз нажав «Разрешить полный доступ» в диалоге симулятора. Кеш `Originals` — на временных файлах: один `open` на параллельные Range, не больше 2 открытых, простой, memory warning, ошибка открытия не запоминается.
 - `ios-smoke` (настоящее приложение, Release): после запуска процесс приложения слушает порт на `127.0.0.1` (находится через `lsof` по pid — симулятор делит сеть с хостом), `/health` без токена — 401, приложение живо через 10 с; после `simctl terminate` порт не отвечает; второй запуск снова поднимает ядро на новом порту. Это доказывает, что JS вызвал `start()` через Expo-модуль, pod с xcframework слинкован и ядро стартовало с Keychain в подписанном приложении. Ответ 200 с токеном внутри приложения автоматически не проверяется (токена нет вне процесса); его косвенно показывает скриншот `launch-*.png`: экран «Pileup» без ошибки означает, что `GET /piles` с токеном прошёл. Доставка `willTerminate` при `simctl terminate` не проверяется.
 
@@ -116,10 +117,72 @@ git show origin/ci-logs:$sha/<run>.<attempt>/ios-app/launch-1.png > /tmp/launch-
 
 - В podspec остался `tvos` из шаблона, а у xcframework нет среза tvOS — сборка модуля под tvOS не пойдёт.
 - Нет сборки под устройство и подписи: нужен Apple-аккаунт (TASK-1).
-- Обнаружения нет (TASK-44). Медиатека — разделы 11 и 12.
+- Медиатека — разделы 13 и 14.
 - Ветка `ci-logs` растёт на 1–3 МБ за прогон iOS-заданий; чистить её можно в любой момент, код от неё не зависит.
 
-## 11. Медиатека (A49)
+## 11. Интерфейс на iPhone (TASK-45, A51)
+
+- Имя и идентификатор: `app.json` — `name: Pileup`, `ios.bundleIdentifier` и `android.package` — `com.glumpo.pileup`. Prebuild создаёт `app/ios/Pileup.xcworkspace`, схему и продукт `Pileup`; от этого зависят `IOS_APP` и `ios-build` в `Makefile` и `scripts/ios-sizes.sh` (`Pileup.app/Pileup`, `Pileup-LinkMap-*`). Путь APK не меняется (модуль Gradle по-прежнему `app`). Тексты разрешений: камера — плагин `expo-camera` в `app.json`, медиатека и локальная сеть — `app.plugin.js` модуля ядра.
+- Безопасные области: `react-native-safe-area-context`; `SafeAreaProvider` с `initialWindowMetrics` в `App.tsx`, `Safe` в `ui.tsx` — отступ сверху `inset.top + 12`, снизу `inset.bottom` (вместо прежних постоянных 48 сверху); через него идут `Screen`, экран запуска ядра, ошибка запуска и запасной экран `Boundary`. Просмотр: подпись сверху — `inset.top + 12`, текст проблемы снизу — `inset.bottom + 16`; сами фото и видео занимают весь экран. Отступы слева и справа не учитываются: ориентация только портретная.
+- Назад: на каждом экране, кроме списка pile и пульта, — «‹ Назад» в шапке `Screen` или «Закрыть» (`✕`) в просмотре; `BackHandler` на iOS ничего не делает, на Android остаётся. С пульта — только «Остановить показ» (A25). Жеста «свайп от края» нет.
+- Клавиатура: `automaticallyAdjustKeyboardInsets` у списков с полями ввода (список pile, вход по приглашению, «Мои файлы»); у полей дат — клавиатура `numbers-and-punctuation` (на Android значение игнорируется).
+- Тесты: `npm test` запускает каждый тест дважды — проекты jest `iOS` (`jest-expo/ios`) и `Android` (`jest-expo/android`), `Platform.OS` и выбор `*.ios.*`/`*.android.*` как на устройстве; один проект — `npx jest --selectProjects iOS`. Отличия iPhone — `test/iphone.test.tsx` (безопасные области — штатный мок `react-native-safe-area-context` с подменой `initialWindowMetrics`).
+- Не проверено без iPhone: реальные вырезы и Dynamic Island разных моделей (кроме симулятора дымового запуска), индикатор Home на экранах со списками, сдвиг полей над клавиатурой, отсутствие конфликта системного жеста «назад» и листания (жеста нет — проверить, что листание просмотра не открывает ничего лишнего), чтение «Закрыть» в VoiceOver, экспорт журнала через системное окно «Поделиться». Как проверить: на iPhone с Dynamic Island и на iPhone SE пройти все экраны — шапка ниже выреза, последняя кнопка выше индикатора Home; на «Pileup» с несколькими pile ввести название и имя — поле видно над клавиатурой; в «Моих файлах» клавиатура дат с цифрами и дефисом; в «Журнале» «Экспортировать» открывает окно «Поделиться» с текстом журнала.
+
+## 12. Обнаружение и жизненный цикл (TASK-44, A22, A50)
+
+### Discovery
+
+Один экземпляр на процесс (`Core.discovery`), его получает каждый `MobileStart`; `Stop` ядра очищает его полностью. Всё состояние — на последовательной очереди `com.glumpo.pileup.discovery`; `advertise`/`browse` ставят работу в очередь, `stop` ждёт её (после возврата `stop` обратных вызовов в Go нет).
+
+- **Объявление:** `DNSServiceRegister(name, "_pileup._tcp", port, txt)` с `DNSServiceSetDispatchQueue`. Порт слушает Go, dns-sd свой сокет не открывает. TXT из Go уже в формате DNS-SD и уходит байтами как есть. Ошибка регистрации (сразу или в обратном вызове) — в журнал.
+- **Поиск:** `NWBrowser(.bonjourWithTXTRecord)` на каждый из трёх типов. Набор результатов сводится по имени экземпляра (`Results`): новое имя — разрешить; имя пропало из всех результатов (все интерфейсы) — `Lost`; изменился TXT — разрешить заново.
+- **Разрешение:** `DNSServiceResolve` (хост, порт из SRV, TXT байтами) → `DNSServiceGetAddrInfo` только IPv4 → `Found(name, "a.b.c.d", port, txt)`. Таймаут 10 с, ошибки и таймаут — в журнал (`discovery`, `dns-sd: …`). IPv6 не берётся: Android тоже даёт IPv4, а link-local IPv6 без зоны бесполезен.
+- **Запрет «Локальной сети»:** `NWBrowser.State` `.waiting`/`.failed` с `NWError.dns(kDNSServiceErr_PolicyDenied)` → `handler.denied(true)`, `.ready` → `denied(false)` (`localNetworkDenied`). Прочие `waiting`/`failed` — в журнал. В ядре признак общий для узла, последнее сообщение любого из трёх поисков выигрывает (A50).
+- **`restart()`:** снять все регистрации, поиски и незавершённые разрешения и создать их заново из запомненных. Найденные до перезапуска имена помечаются устаревшими: первый же набор результатов после перезапуска разрешает всё присутствующее заново (адрес мог смениться) и даёт `Lost` для пропавших.
+
+### Lifecycle и граница с JS
+
+| Событие | Натив (`Lifecycle`) | JS (`App.tsx`, A54) |
+|---|---|---|
+| `didEnterBackground` | `beginBackgroundTask` | — |
+| истекло фоновое время | `Core.stop()` синхронно на главном потоке, `endBackgroundTask` | — |
+| `willEnterForeground` | `endBackgroundTask`; `Core.discovery.restart()` (если ядро остановлено — ничего не делает) | — |
+| `AppState active` | — | `GET /health` (2 с): ответило → `POST /reconnect` (порты pile самоподключением, паузы подключений, A55, A36); нет → `stop` + `start` |
+| `willTerminate` | `Core.stop()` | — |
+
+Ядро запускает только JS, натив его лишь останавливает, поэтому двух перезапусков нет. Уведомления и `AppState` приходят на главном потоке, истечение фоновой задачи — тоже, а фоновая задача завершается в `willEnterForeground`: остановка по истечению не может начаться после возврата на передний план. Фоновая задача берётся на любой уход в фон, без признака «идёт раздача» (TASK-58): обычные фоновые режимы (audio, location) не используются.
+
+Почему ядро останавливается по истечении (V5 п. 2, вопрос TASK-49): участники и экран получают FIN сразу, а не ждут 10 с простоя и 5 с подключения; к моменту приостановки слушающих сокетов уже нет, так что `accept` на мёртвом сокете (`ECONNABORTED`) не может зациклиться. Если `beginBackgroundTask` не дал времени (`.invalid`), приложение приостанавливается с работающим ядром — тогда при возврате остаётся путь A54/A55.
+
+От TASK-58 натив ничего не требует. Признак «сейчас отдаю оригинал» нужен UI (не гасить экран и баннер «Не блокируйте экран, идёт раздача», V5 п. 1); если продукт решит не перезапускать ядро после фона без раздачи, условие `Core.stop()` в `Lifecycle.expired` можно будет взять оттуда.
+
+### Признак запрета в приложении
+
+`GET /local-network` → `{"denied": bool}`; компонент `src/LocalNetwork.tsx` (`LocalNetworkBanner`) опрашивает его при монтировании и раз в 3 с и показывает баннер с кнопкой «Открыть Настройки» (`Linking.openSettings()`, страница Pileup в Настройках). Подключён в `PileScreen.tsx`, `Join.tsx`, `ScreenPicker.tsx` первой строкой внутри `Screen`. Ошибка входа при запрете — `local_network_denied` (текст в `ui.tsx`). На Android признак всегда `false`.
+
+### ATS
+
+`make ios-prebuild` после `expo prebuild` проверяет `NSAppTransportSecurity` в `app/ios/Pileup/Info.plist`: ровно `NSAllowsArbitraryLoads = false` и `NSAllowsLocalNetworking = true`, без исключений доменов; словарь печатается в `ios-prebuild.log`. `NSAllowsLocalNetworking` разрешает `http://127.0.0.1` (UI API и картинки через `expo-image`), остальной cleartext запрещён.
+
+### Тесты на симуляторе
+
+- `DiscoveryLogicTests`: сведение результатов по имени, `Lost` по последнему результату, повторное разрешение при смене TXT и после перезапуска, `PolicyDenied`/`ready` → признак.
+- `DiscoveryTests` (тип `_pileuptest._tcp`, два экземпляра в одном процессе, mDNSResponder хоста): найдено с IPv4, портом и TXT байт в байт, `denied(false)`; `Lost` после `stop`; перезапущенный поиск находит снова без `Lost`; перезапущенное объявление находит новый поиск; после `stop` `restart` ничего не возвращает.
+- `LifecycleTests`: короткий фон не трогает ядро (тот же порт, `/health` 200); истечение фона останавливает ядро (порт не отвечает), возврат на передний план ядро не запускает.
+- mDNS на macOS-раннере работает: симулятор ходит через mDNSResponder хоста, `DiscoveryTests` идут ~10 с.
+- `TestHost` объявляет `NSLocalNetworkUsageDescription` и `NSBonjourServices` (XcodeGen `info`, файл `TestHost/Info.plist` генерируется).
+
+### Не проверено без iPhone и как проверить
+
+На симуляторе нет запроса «Локальная сеть» и приостановки как на устройстве. На устройстве (сборка с подписью, TASK-1), журнал — «Журнал» → «Поделиться»:
+
+1. **Запрет:** при первом запуске отклонить запрос (или Настройки → Pileup → «Локальная сеть» выкл.). Ожидается событие `discovery` «local network access denied: true», баннер на экране pile, входа и выбора экрана, вход по приглашению — «Нет доступа к локальной сети…». Включить в Настройках и вернуться: баннер пропадает за ≤3 с (если iOS перезапускает приложение при смене разрешения — после запуска). Если признак не появляется — смотреть в журнале `dns-sd: browse …` с кодом ошибки.
+2. **Возврат из фона < 30 с:** заблокировать iPhone на 10 с, разблокировать. Второй телефон в pile: участник «на связи» без перезапуска; экран Cast в списке; в журнале iPhone «reconnect, requested by the app».
+3. **Фон > 30 с во время раздачи видео:** показ видео с iPhone на Cast, у iPhone — домашний экран. Через ~30 с на ТВ постер почти сразу после остановки (без паузы ~15 с), у участников iPhone «нет связи». Возврат: ядро перезапускается приложением (A54), pile и участники на месте, в журнале событие запуска «Pileup … ios started».
+4. **ECONNABORTED (TASK-49):** если фоновая задача не дала времени (мало заряда/режим энергосбережения), заблокировать на минуту и вернуться: `POST /reconnect` должен ответить, в журнале «port … does not accept connections, reopening» и затем входящие подключения проходят; если `/health` не отвечает — приложение само перезапускает ядро (A54). Признак зацикливания — 100% CPU у приложения в фоне в Xcode Instruments и пустой журнал после возврата.
+
+## 13. Медиатека (A49)
 
 **Список (`MediaLibrary.media`).** Без доступа (`.denied`, `.restricted`, `.notDetermined`) — пустой массив и событие `media` в журнале; PhotoKit без разрешения не трогается. Иначе `PHAsset.fetchAssets`: фото и видео, `creationDate` в `[from − 14 ч, to + 14 ч]` (точный фильтр по `taken_at` — в ядре, A17), `includeHiddenAssets`; серии — только ключевой кадр (умолчание PhotoKit), общие альбомы не входят. Поля `node.MediaItem`:
 
@@ -135,7 +198,7 @@ git show origin/ci-logs:$sha/<run>.<attempt>/ios-app/launch-1.png > /tmp/launch-
 | `modified` | `modificationDate`, мс (ревизия) |
 | `screenshot`, `hidden` | `mediaSubtypes.contains(.photoScreenshot)`, `isHidden` |
 
-GPS не передаётся. Стоимость: на каждый файл — `PHAssetResource.assetResources(for:)` (чтение БД медиатеки, без файла); на каждое видео при первом вызове — `requestAVAsset` и разбор заголовка файла, параллельно (`concurrentPerform`), дальше из кеша. На устройстве не замерено (раздел 12).
+GPS не передаётся. Стоимость: на каждый файл — `PHAssetResource.assetResources(for:)` (чтение БД медиатеки, без файла); на каждое видео при первом вызове — `requestAVAsset` и разбор заголовка файла, параллельно (`concurrentPerform`), дальше из кеша. На устройстве не замерено (раздел 14).
 
 **Оригинал — текущая версия.** Ресурс `fullSizePhoto`/`fullSizeVideo`, если файл отредактирован, иначе `photo`/`video` (`servedResource`). `OriginalSize` открывает файл и кладёт его в кеш `Originals`, `ReadOriginal` читает `pread` не больше запрошенной длины:
 
@@ -148,7 +211,7 @@ GPS не передаётся. Стоимость: на каждый файл �
 
 **T1/T2 (`Rendition`).** `PHImageManager.requestImage` синхронно, без сети, `.current`, `.exact`, `aspectFit` в квадрат 256 или 1920: сначала `.highQualityFormat`, при отказе — `.fastFormat` (любой локальный дериватив, так T1/T2 строятся и при «Оптимизировать хранилище»). Размер — `fit` по размерам файла, но не больше полученной картинки (`renditionSize`); картинка перерисовывается `UIGraphicsImageRenderer` (scale 1, sRGB, ориентация применяется к пикселям) в JPEG q85. Для видео PhotoKit отдаёт кадр-постер. Оригинал целиком не декодируется: уменьшение делает PhotoKit.
 
-## 12. Медиатека: что не проверено на симуляторе и как проверить на iPhone
+## 14. Медиатека: что не проверено на симуляторе и как проверить на iPhone
 
 На раннере CI не прогоняются и проверки PhotoKit целиком (раздел 7): список, T1/T2, чтение оригинала и путь через ядро написаны и компилируются, но выполнены не были. Первым делом на Mac или iPhone — `make ios-test` с выданным доступом к фото. В симуляторе также нет iCloud, «Оптимизировать хранилище», отредактированных в «Фото» файлов, slow-mo, Dolby Vision и системного диалога (доступ выдаёт `simctl privacy`). Проверить на устройстве (TASK-20):
 

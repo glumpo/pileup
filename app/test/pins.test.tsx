@@ -132,7 +132,7 @@ test('loading progress is polled while the pile screen is open', async () => {
   pins[0].done = 1500;
   expect(await screen.findByText('Аня: 1500/1800', {}, { timeout: 3000 })).toBeOnTheScreen();
   pins[0].failed = 3;
-  expect(await screen.findByText('Аня: 1500/1800, ошибок: 3', {}, { timeout: 3000 })).toBeOnTheScreen();
+  expect(await screen.findByText(failed(1500, 3), {}, { timeout: 3000 })).toBeOnTheScreen();
 
   await user.press(screen.getByRole('button', { name: '‹ Назад' }));
   await screen.findByRole('button', { name: 'Создать' });
@@ -140,6 +140,59 @@ test('loading progress is polled while the pile screen is open', async () => {
   const before = polls();
   await act(() => new Promise((r) => setTimeout(r, 1500)));
   expect(polls()).toBe(before);
+});
+
+const failed = (done: number, count: number) =>
+  `Аня: ${done}/1800, не загрузилось: ${count}. Возможно, файлы удалены из галереи или в неподдерживаемом формате — Pileup попробует ещё раз через 5 минут.`;
+
+test('files that did not load are explained and progress is still polled for their retry', async () => {
+  const { pins } = core({}, [{ ...anya, done: 1797, failed: 3 }]);
+  await openPile();
+
+  expect(await screen.findByText(failed(1797, 3))).toBeOnTheScreen();
+  pins[0].done = 1800;
+  pins[0].failed = 0;
+  expect(await screen.findByText('Аня: 1800/1800', {}, { timeout: 3000 })).toBeOnTheScreen();
+});
+
+const waiting: [string, string][] = [
+  [
+    'unreachable',
+    'Боря: 0/300 — ждём: нет связи с участником. Возможно, погас экран — попросите разблокировать телефон и открыть Pileup.',
+  ],
+  [
+    'timeout',
+    'Боря: 0/300 — ждём: участник отвечает медленно. Возможно, погас экран — попросите разблокировать телефон и открыть Pileup.',
+  ],
+  ['video', 'Боря: 0/300 — пауза, пока на экране идёт видео'],
+];
+
+test.each(waiting)('loading that waits for a member (%s) says why', async (reason, text) => {
+  core({}, [{ ...borya, reason }]);
+  await openPile();
+
+  expect(await screen.findByText(text)).toBeOnTheScreen();
+});
+
+test('a failed progress poll is no longer shown once a poll succeeds, and polls do not overlap', async () => {
+  const { requests } = core({}, [anya]);
+  let calls = 0;
+  const reply = (globalThis.fetch as jest.Mock).getMockImplementation()!;
+  (globalThis.fetch as jest.Mock).mockImplementation(async (url: string, init?: RequestInit) => {
+    if (!url.endsWith('/piles/aa01/pins') || (init?.method ?? 'GET') !== 'GET') return reply(url, init);
+    calls++;
+    if (calls === 2)
+      return { ok: false, status: 500, json: async () => ({ error: 'internal' }) } as Response;
+    if (calls === 4) return new Promise(() => {});
+    return reply(url, init);
+  });
+  await openPile();
+
+  expect(await screen.findByText(/Что-то пошло не так в Pileup/, {}, { timeout: 3000 })).toBeOnTheScreen();
+  await waitFor(() => expect(screen.queryByText(/Что-то пошло не так в Pileup/)).toBeNull(), { timeout: 3000 });
+  await act(() => new Promise((r) => setTimeout(r, 2500)));
+  expect(calls).toBe(4);
+  expect(requests.length).toBeGreaterThan(0);
 });
 
 test('pins are removed per member and all at once', async () => {

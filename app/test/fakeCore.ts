@@ -4,7 +4,7 @@ export const BASE = 'http://127.0.0.1:4321';
 
 export const AUTH = { Authorization: 'Bearer test-token' };
 
-export type Reply = [number, unknown?];
+export type Reply = [number, unknown?, Record<string, string>?];
 
 export type Request = { url: string; method: string; path: string; body: unknown; headers: Record<string, string> };
 
@@ -16,11 +16,12 @@ export function fakeCore(routes: Record<string, Reply | ((body: any) => Reply | 
     const body = typeof init.body === 'string' ? JSON.parse(init.body) : undefined;
     requests.push({ url, method, path, body, headers: init.headers as Record<string, string> });
     const route = routes[`${method} ${path}`];
-    const [status, reply] =
+    const [status, reply, headers]: Reply =
       route === undefined ? [404, { error: 'unknown_pile' }] : typeof route === 'function' ? await route(body) : route;
     return {
       ok: status >= 200 && status < 300,
       status,
+      headers: { get: (name: string) => headers?.[name] ?? null },
       json: async () => reply,
       text: async () => (typeof reply === 'string' ? reply : JSON.stringify(reply)),
     } as Response;

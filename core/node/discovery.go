@@ -4,10 +4,13 @@ import (
 	"cmp"
 	"crypto/sha256"
 	"encoding/hex"
+	"fmt"
 	"maps"
 	"net/netip"
 	"slices"
 	"strings"
+
+	"github.com/glumpo/pileup/core/diag"
 )
 
 const (
@@ -27,6 +30,7 @@ type DiscoveryProvider interface {
 type DiscoveryHandler interface {
 	Found(name, host string, port int, txt []byte)
 	Lost(name string)
+	Denied(denied bool)
 }
 
 type Screen struct {
@@ -141,6 +145,23 @@ func (b browser) Lost(name string) {
 			delete(p.loops, addr)
 		}
 	}
+}
+
+func (b browser) Denied(denied bool) {
+	n := b.n
+	n.mu.Lock()
+	changed := n.denied != denied
+	n.denied = denied
+	n.mu.Unlock()
+	if changed {
+		n.diag.Add(diag.Discovery, nil, "", fmt.Sprintf("local network access denied: %t (%s)", denied, b.service))
+	}
+}
+
+func (n *Node) LocalNetworkDenied() bool {
+	n.mu.Lock()
+	defer n.mu.Unlock()
+	return n.denied
 }
 
 func (n *Node) advertised(p *pile, addr string) bool {

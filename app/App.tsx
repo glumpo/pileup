@@ -1,6 +1,7 @@
 import { StatusBar } from 'expo-status-bar';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { AppState, BackHandler, Share, StyleSheet, Text, View } from 'react-native';
+import { initialWindowMetrics, SafeAreaProvider } from 'react-native-safe-area-context';
 
 import { Api, Pile, ShowState, TimelineItem } from './src/api';
 import { restartCore, startCore } from './src/core';
@@ -13,7 +14,8 @@ import { ScreenPicker } from './src/screens/ScreenPicker';
 import { SelectionScreen } from './src/screens/SelectionScreen';
 import { Timeline } from './src/screens/Timeline';
 import { Viewer } from './src/screens/Viewer';
-import { Boundary, Button, styles } from './src/ui';
+import { ServingBanner } from './src/Serving';
+import { Boundary, Button, Safe, styles } from './src/ui';
 
 type Route =
   | { name: 'piles' }
@@ -36,14 +38,16 @@ function startFailure(error: string) {
 
 function StartFailure({ error, onRetry }: { error: string; onRetry: () => void }) {
   return (
-    <View style={[styles.screen, styles.body, { justifyContent: 'center' }]}>
-      <Text style={{ fontSize: 17 }}>{startFailure(error)}</Text>
-      <Button title="Повторить" onPress={onRetry} />
-      <Button
-        title="Поделиться подробностями"
-        onPress={() => Share.share({ title: 'Ошибка запуска Pileup', message: error }).catch(() => {})}
-      />
-    </View>
+    <Safe style={{ justifyContent: 'center' }}>
+      <View style={styles.body}>
+        <Text style={{ fontSize: 17 }}>{startFailure(error)}</Text>
+        <Button title="Повторить" onPress={onRetry} />
+        <Button
+          title="Поделиться подробностями"
+          onPress={() => Share.share({ title: 'Ошибка запуска Pileup', message: error }).catch(() => {})}
+        />
+      </View>
+    </Safe>
   );
 }
 
@@ -61,29 +65,65 @@ function alive(api: Api) {
 }
 
 export default function App() {
+  return (
+    <SafeAreaProvider initialMetrics={initialWindowMetrics}>
+      <Main />
+    </SafeAreaProvider>
+  );
+}
+
+function Main() {
   const [api, setApi] = useState<Api>();
   const [error, setError] = useState<string>();
   const [stack, setStack] = useState<Route[]>([{ name: 'piles' }]);
   const restarting = useRef(false);
+  const checking = useRef(false);
+  const lost = useRef(() => {});
+  const onLost = useCallback(() => lost.current(), []);
 
   const start = useCallback(() => {
     setError(undefined);
-    startCore().then(setApi, (e) => setError(String(e)));
-  }, []);
+    startCore(onLost).then((fresh) => {
+      setApi(fresh);
+      fresh
+        .show()
+        .then(async (state) => {
+          const pile = (await fresh.piles()).find((p) => p.id === state.pile);
+          if (pile) setStack([{ name: 'piles' }, { name: 'show', pile, state }]);
+        })
+        .catch(() => {});
+    }, (e) => setError(String(e)));
+  }, [onLost]);
   useEffect(start, [start]);
 
   const restart = useCallback(async () => {
     if (restarting.current) return;
     restarting.current = true;
     try {
-      setApi(await restartCore());
+      const fresh = await restartCore(onLost);
+      setApi(fresh);
+      return fresh;
     } catch (e) {
       setApi(undefined);
       setError(String(e));
     } finally {
       restarting.current = false;
     }
-  }, []);
+  }, [onLost]);
+
+  lost.current = () => {
+    if (!api || checking.current || restarting.current) return;
+    checking.current = true;
+    alive(api)
+      .then(async (ok) => {
+        const fresh = ok ? undefined : await restart();
+        if (fresh && !(await alive(fresh))) {
+          setApi(undefined);
+          setError('core does not answer after restart');
+        }
+      })
+      .finally(() => (checking.current = false));
+  };
 
   const depth = stack.length;
   const showing = stack[depth - 1].name === 'show';
@@ -100,7 +140,7 @@ export default function App() {
     if (!api) return;
     const sub = AppState.addEventListener('change', (state) => {
       if (state !== 'active') return;
-      alive(api).then((ok) => (ok ? api.reconnect().catch(() => {}) : restart()));
+      alive(api).then((ok) => void (ok ? api.reconnect().catch(() => {}) : restart()));
     });
     return () => sub.remove();
   }, [api, restart]);
@@ -108,9 +148,9 @@ export default function App() {
   if (!api) {
     if (error) return <StartFailure error={error} onRetry={start} />;
     return (
-      <View style={[styles.screen, { alignItems: 'center', justifyContent: 'center' }]}>
+      <Safe style={{ alignItems: 'center', justifyContent: 'center' }}>
         <Text>Запуск ядра…</Text>
-      </View>
+      </Safe>
     );
   }
 
@@ -129,6 +169,8 @@ export default function App() {
             onJoin={() => push({ name: 'join' })}
             onLog={() => push({ name: 'log' })}
             onRestart={restart}
+            onShow={(pile, state) => push({ name: 'show', pile, state })}
+            onPick={(pile, asset) => push({ name: 'screens', pile, asset })}
           />
         );
       case 'log':
@@ -179,7 +221,15 @@ export default function App() {
           />
         );
       case 'show':
-        return <Remote api={api} pile={route.pile} initial={route.state} onStop={back} />;
+        return (
+          <Remote
+            api={api}
+            pile={route.pile}
+            initial={route.state}
+            onStop={back}
+            onPick={(asset) => replace({ name: 'screens', pile: route.pile, asset })}
+          />
+        );
     }
   };
 
@@ -189,10 +239,12 @@ export default function App() {
       <Boundary
         item={stack}
         fallback={
-          <View style={[styles.screen, styles.body]}>
-            <Text style={{ fontSize: 17 }}>Этот экран не удалось показать из-за ошибки в приложении.</Text>
-            <Button title="К списку pile" onPress={() => setStack([{ name: 'piles' }])} />
-          </View>
+          <Safe>
+            <View style={styles.body}>
+              <Text style={{ fontSize: 17 }}>Этот экран не удалось показать из-за ошибки в приложении.</Text>
+              <Button title="К списку pile" onPress={() => setStack([{ name: 'piles' }])} />
+            </View>
+          </Safe>
         }
       >
         {visible.map((route, i) => (
@@ -206,6 +258,7 @@ export default function App() {
         </View>
         ))}
       </Boundary>
+      <ServingBanner api={api} />
       <StatusBar style={top.name === 'viewer' ? 'light' : 'auto'} />
     </>
   );

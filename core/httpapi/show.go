@@ -41,6 +41,10 @@ type showState struct {
 	Playing          bool           `json:"playing"`
 	VideoUnavailable bool           `json:"video_unavailable"`
 	VideoReason      string         `json:"video_reason,omitempty"`
+	Buffering        bool           `json:"buffering"`
+	Stalled          bool           `json:"stalled"`
+	NeedBitrate      int64          `json:"need_bps,omitempty"`
+	Bitrate          int64          `json:"rate_bps,omitempty"`
 	RendererError    *rendererError `json:"renderer_error,omitempty"`
 	Waiting          []showItem     `json:"waiting"`
 	Hints            []hint         `json:"hints"`
@@ -72,6 +76,10 @@ func toShowState(st show.State) showState {
 		Playing:          st.Playing,
 		VideoUnavailable: st.VideoUnavailable,
 		VideoReason:      st.VideoReason,
+		Buffering:        st.Buffering,
+		Stalled:          st.Stalled,
+		NeedBitrate:      int64(st.NeedBitrate),
+		Bitrate:          int64(st.Bitrate),
 		Waiting:          []showItem{},
 		Hints:            []hint{},
 	}
@@ -114,6 +122,23 @@ func shows(mux *http.ServeMux, h *show.Host) {
 	})
 	mux.HandleFunc("DELETE /show", func(w http.ResponseWriter, r *http.Request) {
 		h.Stop()
+		w.WriteHeader(http.StatusNoContent)
+	})
+	mux.HandleFunc("GET /show/interrupted", func(w http.ResponseWriter, r *http.Request) {
+		in, err := h.Interrupted()
+		if err != nil {
+			showReply(w, r, http.StatusOK, show.State{}, err)
+			return
+		}
+		s := in.Screen
+		reply(w, http.StatusOK, map[string]any{
+			"pile":   hex.EncodeToString(in.Pile),
+			"screen": screen{ID: s.ID, Name: s.Name, Kind: s.Kind, Address: s.Addr.String(), Available: s.Available},
+			"asset":  hex.EncodeToString(in.Asset),
+		})
+	})
+	mux.HandleFunc("DELETE /show/interrupted", func(w http.ResponseWriter, r *http.Request) {
+		h.Forget()
 		w.WriteHeader(http.StatusNoContent)
 	})
 	for path, f := range map[string]func() (show.State, error){

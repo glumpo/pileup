@@ -5,6 +5,7 @@ import (
 	"context"
 	"crypto/rand"
 	"errors"
+	"os"
 	"slices"
 	"sync"
 
@@ -47,6 +48,10 @@ type State struct {
 	Playing          bool
 	VideoUnavailable bool
 	VideoReason      string
+	Buffering        bool
+	Stalled          bool
+	NeedBitrate      float64
+	Bitrate          float64
 	Error            *RendererError
 	Waiting          []state.Asset
 	Hints            []Hint
@@ -96,6 +101,10 @@ func (h *Host) loader(pileID []byte) (*loader, error) {
 func (h *Host) pile(pileID, member []byte) (*loader, error) {
 	h.mu.Lock()
 	defer h.mu.Unlock()
+	changed, err := h.n.Changed(pileID)
+	if err != nil {
+		return nil, err
+	}
 	p, items, err := h.n.Timeline(pileID)
 	if err != nil {
 		return nil, err
@@ -107,7 +116,9 @@ func (h *Host) pile(pileID, member []byte) (*loader, error) {
 	if err != nil {
 		return nil, err
 	}
-	l.setItems(p, items)
+	if l.since(changed) {
+		l.setItems(p, items)
+	}
 	return l, nil
 }
 
@@ -168,8 +179,15 @@ func (h *Host) Close() {
 func (h *Host) Start(pileID []byte, screenID string, assetID []byte) (State, error) {
 	h.mu.Lock()
 	defer h.mu.Unlock()
-	h.stop()
+	if s := h.cur; s != nil && bytes.Equal(s.pile, pileID) && s.screen.ID == screenID {
+		if screen, err := h.screen(screenID); s.retry(screen, err == nil) {
+			return s.state(), nil
+		}
+	}
 	screen, err := h.screen(screenID)
+	if r, ok := h.saved(); ok && errors.Is(err, ErrUnknownScreen) && r.Screen == screenID && r.Kind == "cast" {
+		screen, err = r.screen(), nil
+	}
 	if err != nil {
 		return State{}, err
 	}
@@ -197,15 +215,18 @@ func (h *Host) Start(pileID []byte, screenID string, assetID []byte) (State, err
 	}
 	ctx, cancel := context.WithCancel(h.ctx)
 	s := &session{
-		n:      h.n,
-		pile:   pileID,
-		self:   h.n.Author(),
-		screen: screen,
-		token:  rand.Text(),
-		ctx:    ctx,
-		cancel: cancel,
-		wake:   make(chan struct{}, 1),
-		l:      l,
+		n:       h.n,
+		pile:    pileID,
+		self:    h.n.Author(),
+		screen:  screen,
+		token:   rand.Text(),
+		ctx:     ctx,
+		cancel:  cancel,
+		wake:    make(chan struct{}, 1),
+		kick:    make(chan struct{}, 1),
+		moved:   make(chan struct{}, 1),
+		answers: make(chan answer),
+		l:       l,
 	}
 	if screen.Kind == "cast" {
 		if err := s.connect(); err != nil {
@@ -213,6 +234,7 @@ func (h *Host) Start(pileID []byte, screenID string, assetID []byte) (State, err
 			return State{}, err
 		}
 	}
+	h.stop()
 	s.begin(p, items, cursor, changed)
 	h.cur = s
 	return s.state(), nil
@@ -278,6 +300,7 @@ func (h *Host) Stop() {
 	h.mu.Lock()
 	defer h.mu.Unlock()
 	h.stop()
+	os.Remove(recordPath(h.n))
 }
 
 func (h *Host) stop() {

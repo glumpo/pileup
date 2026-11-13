@@ -15,6 +15,11 @@ targets:
     type: application
     platform: iOS
     sources: [TestHost.swift]
+    info:
+      path: Info.plist
+      properties:
+        NSLocalNetworkUsageDescription: Discovery tests
+        NSBonjourServices: [_pileup._tcp, _googlecast._tcp, _airplay._tcp, _pileuptest._tcp]
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.glumpo.pileup.testhost

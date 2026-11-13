@@ -1,4 +1,5 @@
-import { act, render, screen, userEvent, waitFor, within } from '@testing-library/react-native';
+import { act, fireEvent, render, screen, userEvent, waitFor, within } from '@testing-library/react-native';
+import { Dimensions } from 'react-native';
 
 import App from '../App';
 import { TimelineItem } from '../src/api';
@@ -39,12 +40,12 @@ const items: TimelineItem[] = [
 const jpeg: Reply = [200, 'JPEG'];
 const blob = (id: string, tier: 1 | 2) => `/piles/aa01/blob/${id}/r${id}/${tier}`;
 
-async function openViewer(id: string, display: Reply | (() => Reply | Promise<Reply>)) {
+async function openViewer(id: string, display: Reply | (() => Reply | Promise<Reply>), list = items) {
   const requests = fakeCore({
     'GET /piles': [200, [georgia]],
     'GET /piles/aa01/invite': [200, { invite: INVITE }],
-    'GET /piles/aa01/timeline': [200, items],
-    ...Object.fromEntries(items.flatMap((i) => [`GET ${blob(i.id, 1)}`, `GET ${blob(i.id, 2)}`]).map((r) => [r, jpeg])),
+    'GET /piles/aa01/timeline': [200, list],
+    ...Object.fromEntries(list.flatMap((i) => [`GET ${blob(i.id, 1)}`, `GET ${blob(i.id, 2)}`]).map((r) => [r, jpeg])),
     [`GET ${blob(id, 2)}`]: display,
   });
   const user = userEvent.setup();
@@ -150,4 +151,53 @@ test('a page shows no loading indicator once the file is shown or has failed', a
 
   await screen.findByText('Нет ответа от участника: Боря. Pileup закрыт — попросите открыть Pileup.');
   await waitFor(() => expect(viewer().queryAllByTestId('loading')).toEqual([]));
+});
+
+test('a page that failed to show although the file is there is loaded once more', async () => {
+  let calls = 0;
+  const requests = await openViewer('07', () => (++calls === 1 ? [200, 'HTML'] : jpeg));
+  const asked = () => requests.filter((r) => r.path === blob('07', 2)).length;
+
+  await waitFor(() => expect(asked()).toBe(3));
+  await waitFor(() => expect(viewer().queryAllByTestId('loading')).toEqual([]));
+  expect(screen.queryByText('Не удалось показать файл')).toBeNull();
+});
+
+test('a video page is marked and says how to watch it', async () => {
+  await openViewer('v1', () => new Promise(() => {}), [
+    ...items,
+    asset('v1', 'Аня', july1 + 4 * minute, { kind: 'video', duration_ms: 32_000 }),
+  ]);
+
+  expect(await screen.findByTestId('video')).toBeOnTheScreen();
+  expect(screen.getByText('Видео воспроизводится на экране: нажмите «На экран».')).toBeOnTheScreen();
+});
+
+test('a photo page has no video mark', async () => {
+  await openViewer('c9', () => new Promise(() => {}));
+
+  await waitFor(() => expect(viewer().getAllByTestId('loading').length).toBeGreaterThan(0));
+  expect(screen.queryByTestId('video')).toBeNull();
+  expect(screen.queryByText(/Видео воспроизводится/)).toBeNull();
+});
+
+test('two neighbouring pages on each side are loaded in advance', async () => {
+  const many = Array.from({ length: 9 }, (_, i) => asset(`p${i}`, 'Аня', july1 + i * minute));
+  const requests = await openViewer('p4', () => new Promise(() => {}), many);
+  const { width, height } = Dimensions.get('window');
+  await fireEvent(screen.getByTestId('viewer'), 'layout', { nativeEvent: { layout: { x: 0, y: 0, width, height } } });
+  await fireEvent(screen.getByTestId('viewer'), 'contentSizeChange', width * many.length, height);
+  await fireEvent.scroll(screen.getByTestId('viewer'), {
+    nativeEvent: {
+      contentOffset: { x: width * 4, y: 0 },
+      contentSize: { width: width * many.length, height },
+      layoutMeasurement: { width, height },
+    },
+  });
+
+  const asked = () => requests.filter((r) => r.path.endsWith('/2')).map((r) => r.path);
+  await waitFor(() => expect(asked()).toEqual(expect.arrayContaining(['p2', 'p3', 'p4', 'p5', 'p6'].map((id) => blob(id, 2)))));
+  await act(() => new Promise((r) => setTimeout(r, 300)));
+  expect(asked()).not.toContain(blob('p0', 2));
+  expect(asked()).not.toContain(blob('p8', 2));
 });

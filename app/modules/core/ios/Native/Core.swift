@@ -2,10 +2,12 @@ import Foundation
 import Mobile
 
 enum Core {
+  static let discovery = Discovery()
+
   static func start(dir: URL, keystore: KeychainKeystore, appVersion: String) throws {
     try prepareDataDirectory(dir, keystore: keystore)
     var error: NSError?
-    guard MobileStart(dir.path, "ios", appVersion, keystore, MediaLibrary(), Renditions(), NetworkAddresses(), Discovery(), &error) else { throw error! }
+    guard MobileStart(dir.path, "ios", appVersion, keystore, MediaLibrary(), Renditions(), NetworkAddresses(), discovery, &error) else { throw error! }
   }
 
   static func stop() throws {

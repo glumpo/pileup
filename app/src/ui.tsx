@@ -1,5 +1,6 @@
 import { Component, ErrorInfo, ReactNode } from 'react';
-import { Pressable, StyleSheet, Text, TextInput, TextInputProps, View } from 'react-native';
+import { Pressable, StyleProp, StyleSheet, Text, TextInput, TextInputProps, View, ViewStyle } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { ApiError } from './api';
 import { report } from './report';
@@ -8,6 +9,7 @@ const messages: Record<string, string> = {
   bad_invite: 'Это не приглашение Pileup',
   unknown_invite_version: 'Приглашение из более новой версии приложения',
   already_joined: 'Вы уже участник этого pile',
+  local_network_denied: 'Нет доступа к локальной сети: откройте Настройки → Pileup и включите «Локальная сеть»',
   inviter_unreachable: 'Не удалось связаться с пригласившим: телефоны должны быть в одной сети',
   offline: 'Нет сети: подключитесь к Wi-Fi, чтобы пригласить',
   no_media: 'Медиатека недоступна',
@@ -23,18 +25,27 @@ const messages: Record<string, string> = {
   media_failed: 'Нет доступа к медиатеке. Разрешите доступ к фото и видео в настройках телефона.',
 };
 
+const restarting = 'Pileup перезапускается после сбоя: подождите несколько секунд.';
+
 export function describe(error: unknown): string {
   if (error instanceof ApiError && error.code === 'screen_unavailable' && error.reason) return error.reason;
-  if (error instanceof ApiError && error.status === 401) return 'Сессия устарела: закройте приложение и откройте снова.';
+  if (error instanceof ApiError && error.status === 401) return restarting;
   if (error instanceof ApiError) return messages[error.code] ?? `Ошибка ядра: ${error.code}`;
   if (error instanceof TypeError && error.message === 'Network request failed')
-    return 'Pileup не отвечает: закройте приложение и откройте снова.';
+    return restarting;
   return String(error);
+}
+
+export function Safe({ style, children }: { style?: StyleProp<ViewStyle>; children: ReactNode }) {
+  const insets = useSafeAreaInsets();
+  return (
+    <View style={[styles.screen, { paddingTop: insets.top + 12, paddingBottom: insets.bottom }, style]}>{children}</View>
+  );
 }
 
 export function Screen({ title, onBack, children }: { title: string; onBack?: () => void; children: ReactNode }) {
   return (
-    <View style={styles.screen}>
+    <Safe>
       <View style={styles.header}>
         {onBack && (
           <Pressable accessibilityRole="button" onPress={onBack} hitSlop={12}>
@@ -46,7 +57,7 @@ export function Screen({ title, onBack, children }: { title: string; onBack?: ()
         </Text>
       </View>
       {children}
-    </View>
+    </Safe>
   );
 }
 
@@ -68,7 +79,7 @@ export function Button({
       accessibilityState={{ disabled }}
       disabled={disabled}
       onPress={onPress}
-      style={[styles.button, disabled && styles.disabled]}
+      style={({ pressed }) => [styles.button, disabled && styles.disabled, pressed && styles.pressed]}
     >
       <Text style={styles.buttonText}>{title}</Text>
     </Pressable>
@@ -116,13 +127,14 @@ export function ErrorText({ error }: { error?: string }) {
 }
 
 export const styles = StyleSheet.create({
-  screen: { flex: 1, backgroundColor: '#fff', paddingTop: 48 },
+  screen: { flex: 1, backgroundColor: '#fff' },
   header: { flexDirection: 'row', alignItems: 'center', gap: 16, paddingHorizontal: 16, paddingBottom: 12 },
   back: { fontSize: 17, color: '#0a64d8' },
   title: { flex: 1, fontSize: 20, fontWeight: '600' },
   body: { padding: 16, gap: 12 },
   button: { backgroundColor: '#0a64d8', borderRadius: 8, padding: 12, alignItems: 'center' },
   disabled: { opacity: 0.4 },
+  pressed: { opacity: 0.6 },
   buttonText: { color: '#fff', fontSize: 16 },
   field: { borderWidth: 1, borderColor: '#ccc', borderRadius: 8, padding: 10, fontSize: 16 },
   error: { color: '#c62828' },

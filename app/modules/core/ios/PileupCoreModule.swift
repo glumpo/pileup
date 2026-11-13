@@ -1,16 +1,13 @@
 import ExpoModulesCore
-import UIKit
 
 public class PileupCoreModule: Module {
-  private var termination: NSObjectProtocol?
+  private let lifecycle = Lifecycle()
 
   public func definition() -> ModuleDefinition {
     Name("PileupCore")
 
     OnCreate {
-      self.termination = NotificationCenter.default.addObserver(forName: UIApplication.willTerminateNotification, object: nil, queue: nil) { _ in
-        try? Core.stop()
-      }
+      self.lifecycle.observe()
     }
 
     AsyncFunction("start") {
@@ -39,9 +36,7 @@ public class PileupCoreModule: Module {
     }
 
     OnDestroy {
-      if let termination = self.termination {
-        NotificationCenter.default.removeObserver(termination)
-      }
+      self.lifecycle.unobserve()
       try? Core.stop()
     }
   }

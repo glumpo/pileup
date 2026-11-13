@@ -1,11 +1,11 @@
 SHELL := /bin/bash
 .SHELLFLAGS := -eo pipefail -c
 
-.PHONY: check test build licenses licenses-go licenses-npm app mobile-android android-debug mobile-ios ios-boot ios-test ios-prebuild ios-build ios-smoke ios-simulator
+.PHONY: check test build licenses licenses-go licenses-npm app mobile-android android-debug android-test mobile-ios ios-boot ios-test ios-prebuild ios-build ios-smoke ios-simulator
 
 CORE_AAR := app/modules/core/android/libs/pileup-core.aar
 CORE_XCFRAMEWORK := app/modules/core/ios/Mobile.xcframework
-IOS_APP := app/ios/build/Build/Products/Release-iphonesimulator/app.app
+IOS_APP := app/ios/build/Build/Products/Release-iphonesimulator/Pileup.app
 IOS_SIMULATOR ?= $(shell xcrun simctl list devices available -j | jq -r '[.devices | to_entries | sort_by(.key)[] | select(.key | contains("iOS")) | .value[] | select(.name | startswith("iPhone"))] | last | .udid')
 TOOLS_BIN := $(CURDIR)/build/bin
 XCODEGEN := $(TOOLS_BIN)/xcodegen/bin/xcodegen
@@ -41,6 +41,9 @@ android-debug: mobile-android
 	cd app && CI=1 npx expo prebuild --platform android --clean --no-install
 	cd app/android && ./gradlew :app:assembleDebug
 
+android-test:
+	cd app/android && ./gradlew :core:testDebugUnitTest
+
 mobile-ios:
 	cd core && GOBIN=$(TOOLS_BIN) go install tool
 	rm -rf $(CORE_XCFRAMEWORK)
@@ -66,10 +69,11 @@ ios-test: $(XCODEGEN)
 ios-prebuild:
 	cd app && npm ci --no-audit --no-fund
 	cd app && CI=1 npx expo prebuild --platform ios --clean --no-install
+	plutil -convert json -o - app/ios/Pileup/Info.plist | node -e 'const a = JSON.parse(require("fs").readFileSync(0)).NSAppTransportSecurity; console.log("ATS", a); if (Object.keys(a).sort().join() !== "NSAllowsArbitraryLoads,NSAllowsLocalNetworking" || a.NSAllowsArbitraryLoads !== false || a.NSAllowsLocalNetworking !== true) process.exit(1)'
 	cd app/ios && pod install
 
 ios-build:
-	cd app/ios && xcodebuild build -workspace app.xcworkspace -scheme app -configuration Release -destination id=$(IOS_SIMULATOR) -derivedDataPath build ONLY_ACTIVE_ARCH=YES LD_GENERATE_MAP_FILE=YES -quiet
+	cd app/ios && xcodebuild build -workspace Pileup.xcworkspace -scheme Pileup -configuration Release -destination id=$(IOS_SIMULATOR) -derivedDataPath build ONLY_ACTIVE_ARCH=YES LD_GENERATE_MAP_FILE=YES -quiet
 
 ios-smoke:
 	scripts/ios-smoke.sh $(IOS_APP) $(IOS_SIMULATOR) build/ios-smoke

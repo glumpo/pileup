@@ -1,8 +1,8 @@
-import { render, screen, userEvent } from '@testing-library/react-native';
+import { act, render, screen, userEvent, waitFor } from '@testing-library/react-native';
 
 import App from '../App';
 import { Member } from '../src/api';
-import { fakeCore, INVITE } from './fakeCore';
+import { fakeCore, georgia, INVITE, Reply } from './fakeCore';
 
 const at = (hours: number, minutes: number) => new Date(2026, 10, 10, hours, minutes).getTime();
 
@@ -61,4 +61,52 @@ test('the state of members follows their connection while the pile screen is ope
     ),
   ).toBeOnTheScreen();
   expect(screen.queryByText('Боря — на связи')).toBeNull();
+});
+
+const internal =
+  'Что-то пошло не так в Pileup. Подробности записаны в «Журнал» на главном экране — отправьте его разработчику.';
+const wait = (ms: number) => act(() => new Promise((r) => setTimeout(r, ms)));
+
+function polled(piles: () => Reply | Promise<Reply>) {
+  return fakeCore({
+    'GET /piles': piles,
+    'GET /piles/aa01/invite': [503, { error: 'offline' }],
+    'GET /piles/aa01/timeline': [200, []],
+    'GET /piles/aa01/pins': [200, []],
+  });
+}
+
+test('a failed poll of the pile screen is no longer shown once a poll succeeds', async () => {
+  let calls = 0;
+  polled(() => (++calls === 3 ? [500, { error: 'internal' }] : [200, [georgia]]));
+  await openPile();
+
+  expect(await screen.findByText(internal, {}, { timeout: 5000 })).toBeOnTheScreen();
+  await waitFor(() => expect(screen.queryByText(internal)).toBeNull(), { timeout: 5000 });
+});
+
+test('the pile screen does not ask again while its poll is still waiting for an answer', async () => {
+  let calls = 0;
+  const requests = polled(() => (++calls <= 2 ? [200, [georgia]] : new Promise<Reply>(() => {})));
+  await openPile();
+  await screen.findByText('Аня — на связи');
+
+  await wait(7000);
+  expect(requests.filter((r) => r.path === '/piles').length).toBe(3);
+});
+
+test('an invite error stays on the pile screen after a successful poll', async () => {
+  const requests = polled(() => [200, [georgia]]);
+  await openPile();
+  const user = userEvent.setup();
+  await user.press(await screen.findByRole('button', { name: 'Показать приглашение' }));
+  const offline = 'Нет сети: подключитесь к Wi-Fi, чтобы пригласить';
+  expect(await screen.findByText(offline)).toBeOnTheScreen();
+
+  const before = requests.filter((r) => r.path === '/piles').length;
+  await waitFor(() => expect(requests.filter((r) => r.path === '/piles').length).toBeGreaterThan(before), {
+    timeout: 5000,
+  });
+  await wait(100);
+  expect(screen.getByText(offline)).toBeOnTheScreen();
 });

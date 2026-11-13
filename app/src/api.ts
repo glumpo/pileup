@@ -65,6 +65,8 @@ export type ShowItem = {
   codec?: string;
 };
 
+export type InterruptedShow = { pile: string; screen: Screen; asset: string };
+
 export type Hint = { author: string; name: string; platform: string; reason: string; last_error?: string };
 
 export type ShowState = {
@@ -76,6 +78,10 @@ export type ShowState = {
   playing: boolean;
   video_unavailable: boolean;
   video_reason?: string;
+  buffering?: boolean;
+  stalled?: boolean;
+  need_bps?: number;
+  rate_bps?: number;
   renderer_error?: { code: string; message: string };
   waiting: ShowItem[];
   hints: Hint[];
@@ -112,12 +118,24 @@ export class ApiError extends Error {
   }
 }
 
-export function connect(port: number, token: string) {
+export function connect(port: number, token: string, lost?: () => void) {
   const base = `http://127.0.0.1:${port}`;
   const auth = { Authorization: `Bearer ${token}` };
+  const timelines = new Map<string, { etag: string; items: TimelineItem[] }>();
+
+  async function send(url: string, init: RequestInit) {
+    try {
+      const res = await fetch(url, init);
+      if (res.status === 401) lost?.();
+      return res;
+    } catch (e) {
+      if (e instanceof TypeError) lost?.();
+      throw e;
+    }
+  }
 
   async function call<T>(method: string, path: string, body?: unknown): Promise<T> {
-    const res = await fetch(base + path, {
+    const res = await send(base + path, {
       method,
       headers: body === undefined ? auth : { ...auth, 'Content-Type': 'application/json' },
       body: body === undefined ? undefined : JSON.stringify(body),
@@ -132,13 +150,14 @@ export function connect(port: number, token: string) {
   reportTo((kind, message) => call<void>('POST', '/diag', { kind, message }));
 
   async function text(path: string): Promise<string> {
-    const res = await fetch(base + path, { headers: auth });
+    const res = await send(base + path, { headers: auth });
     if (!res.ok) throw new ApiError(res.status, 'internal');
     return res.text();
   }
 
   return {
     health: () => call<{ status: string }>('GET', '/health'),
+    serving: async () => (await call<{ serving: boolean }>('GET', '/serving')).serving,
     piles: () => call<Pile[]>('GET', '/piles'),
     createPile: (name: string, member: string) => call<Pile>('POST', '/piles', { name, member }),
     invite: async (pile: string) => (await call<{ invite: string }>('GET', `/piles/${pile}/invite`)).invite,
@@ -148,9 +167,24 @@ export function connect(port: number, token: string) {
       call<void>('PUT', `/piles/${pile}/selection`, { from, to }),
     setSelected: (pile: string, asset: string, selected: boolean) =>
       call<void>('PUT', `/piles/${pile}/selection/${asset}`, { selected }),
-    timeline: (pile: string) => call<TimelineItem[]>('GET', `/piles/${pile}/timeline`),
+    timeline: async (pile: string) => {
+      const known = timelines.get(pile);
+      const res = await send(`${base}/piles/${pile}/timeline`, {
+        headers: known ? { ...auth, 'If-None-Match': known.etag } : auth,
+      });
+      if (known && res.status === 304) return known.items;
+      if (!res.ok) {
+        const problem = await res.json().catch(() => ({}));
+        throw new ApiError(res.status, problem.error ?? 'internal', problem.reason);
+      }
+      const items: TimelineItem[] = await res.json();
+      const etag = res.headers.get('ETag');
+      if (etag) timelines.set(pile, { etag, items });
+      return items;
+    },
     diag: () => call<DiagEvent[]>('GET', '/diag'),
     reconnect: () => call<void>('POST', '/reconnect'),
+    localNetwork: () => call<{ denied: boolean }>('GET', '/local-network'),
     diagExport: () => text('/diag/export'),
     screens: () => call<Screen[]>('GET', '/screens'),
     startShow: (pile: string, screen: string, asset?: string) =>
@@ -158,6 +192,8 @@ export function connect(port: number, token: string) {
     show: () => call<ShowState>('GET', '/show'),
     showCommand: (command: 'next' | 'prev' | 'play' | 'pause') => call<ShowState>('POST', `/show/${command}`),
     stopShow: () => call<void>('DELETE', '/show'),
+    interruptedShow: () => call<InterruptedShow>('GET', '/show/interrupted'),
+    forgetShow: () => call<void>('DELETE', '/show/interrupted'),
     pins: (pile: string) => call<PinProgress[]>('GET', `/piles/${pile}/pins`),
     pinEstimate: (pile: string, member?: string) =>
       call<PinEstimate>('GET', `/piles/${pile}/pins/estimate${member ? `?member=${member}` : ''}`),
@@ -169,7 +205,7 @@ export function connect(port: number, token: string) {
       headers: auth,
     }),
     checkBlob: async (pile: string, item: { id: string; revision: string }, tier: 1 | 2) => {
-      const res = await fetch(`${base}/piles/${pile}/blob/${item.id}/${item.revision}/${tier}`, {
+      const res = await send(`${base}/piles/${pile}/blob/${item.id}/${item.revision}/${tier}`, {
         headers: auth,
       });
       if (!res.ok) {

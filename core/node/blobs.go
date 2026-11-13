@@ -511,11 +511,15 @@ func (n *Node) serveBlob(p *pile, w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 	default:
 		w.Header().Set("Cache-Control", Immutable)
+		if tier == T3 {
+			w = counted{w, &n.serving}
+		}
 		http.ServeContent(w, r, "", time.Time{}, content)
 	}
 }
 
 func (n *Node) ServeOriginal(w http.ResponseWriter, r *http.Request, pileID, assetID, revision []byte) error {
+	w = counted{w, &n.streamed}
 	p, err := n.find(pileID)
 	var a state.Asset
 	if err == nil {
@@ -537,7 +541,7 @@ func (n *Node) ServeOriginal(w http.ResponseWriter, r *http.Request, pileID, ass
 	w.Header().Set("ETag", `"`+hex.EncodeToString(revision)+`"`)
 	w.Header().Set("Content-Type", a.Meta.MIME)
 	w.Header().Set("Cache-Control", Immutable)
-	http.ServeContent(w, r, "", time.Time{}, content)
+	http.ServeContent(counted{w, &n.serving}, r, "", time.Time{}, content)
 	return nil
 }
 

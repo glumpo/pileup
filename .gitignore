@@ -1,4 +1,4 @@
-node_modules/
+node_modules
 .expo/
 dist/
 web-build/
@@ -15,3 +15,4 @@ web-build/
 /app/modules/core/ios/.build/
 /app/modules/core/ios/.swiftpm/
 /app/modules/core/ios/TestHost/PileupNativeTests.xcodeproj/
+/app/modules/core/ios/TestHost/Info.plist

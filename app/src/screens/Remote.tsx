@@ -1,8 +1,8 @@
 import { useKeepAwake } from 'expo-keep-awake';
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { ScrollView, Text, View } from 'react-native';
 
-import { Api, Hint, Pile, ShowState, TimelineItem } from '../api';
+import { Api, ApiError, Hint, Pile, ShowState, TimelineItem } from '../api';
 import { diskFull, PinsPanel, usePins } from '../Pins';
 import { adviceFor } from '../presence';
 import { Preview } from '../Preview';
@@ -12,7 +12,6 @@ import { Button, describe, ErrorText, Screen, styles } from '../ui';
 const rendererErrors: Record<string, string> = {
   load_failed: 'Экран не смог открыть этот файл. Попробуйте следующий.',
   command_failed: 'Экран не выполнил команду. Попробуйте ещё раз.',
-  playback_failed: 'Экран не смог воспроизвести видео. Попробуйте следующий файл.',
   reconnecting: 'Переподключаемся к экрану…',
 };
 
@@ -31,9 +30,35 @@ function videoText(reason: string | undefined, codec: string | undefined, author
 }
 
 function hintText({ name, platform, reason, last_error }: Hint): string {
-  const phone = `${platform === 'ios' ? 'iPhone' : 'телефон'}: ${name}`;
   const advice = adviceFor(last_error);
-  return reason === 'timeout' ? `Медленно отвечает ${phone}. ${advice}` : `Нет ответа от ${phone}. ${advice}`;
+  return reason === 'timeout'
+    ? `Медленно отвечает ${platform === 'ios' ? 'iPhone' : 'телефон'}: ${name}. ${advice}`
+    : `Нет ответа от ${platform === 'ios' ? 'iPhone' : 'телефона'}: ${name}. ${advice}`;
+}
+
+const reconnectAdvice = 30_000;
+
+function rendererText(code: string, kind: string, screen: string, since: number | undefined): string {
+  if (code === 'playback_failed')
+    return kind === 'video'
+      ? 'Экран не смог воспроизвести видео — возможно, телевизор не поддерживает его формат. Перейдите к следующему файлу.'
+      : 'Экран не смог показать этот файл. Перейдите к следующему.';
+  if (code === 'reconnecting' && since !== undefined && Date.now() - since >= reconnectAdvice)
+    return `Не удаётся подключиться к экрану «${screen}». Проверьте, что телевизор включён и в той же сети Wi-Fi, затем нажмите «Перезапустить показ».`;
+  return rendererErrors[code] ?? `Ошибка экрана: ${code}`;
+}
+
+const mbps = (bps: number) => {
+  const v = bps / 1e6;
+  return String(v >= 10 ? Math.round(v) : Math.round(v * 10) / 10).replace('.', ',');
+};
+
+function bufferingText({ buffering, stalled, need_bps, rate_bps }: ShowState): string | undefined {
+  if (!buffering) return undefined;
+  if (!stalled) return 'Видео подгружается…';
+  if (need_bps && rate_bps && rate_bps < need_bps)
+    return `Wi-Fi не успевает за видео: нужно ≈ ${mbps(need_bps)} Мбит/с, идёт ≈ ${mbps(rate_bps)}. Поднесите телефон ближе к роутеру или переходите к следующему файлу.`;
+  return 'Видео долго подгружается.';
 }
 
 export function Remote({
@@ -41,34 +66,83 @@ export function Remote({
   pile,
   initial,
   onStop,
+  onPick,
 }: {
   api: Api;
   pile: Pile;
   initial: ShowState;
   onStop: () => void;
+  onPick: (asset: string) => void;
 }) {
   const [state, setState] = useState(initial);
   const [timeline, setTimeline] = useState<TimelineItem[]>([]);
   const [error, setError] = useState<string>();
+  const [pollError, setPollError] = useState<string>();
+  const [ended, setEnded] = useState(false);
+  const [reconnecting, setReconnecting] = useState<number>();
+  const commands = useRef(0);
+  const resumed = useRef<Api>(undefined);
   const pins = usePins(api, pile.id);
   useKeepAwake();
 
   useEffect(() => {
-    const fail = (e: unknown) => setError(describe(e));
-    api.timeline(pile.id).then(setTimeline, fail);
-    const timer = setInterval(() => api.show().then(setState, fail), 1000);
-    return () => clearInterval(timer);
+    api.timeline(pile.id).then(setTimeline, (e: unknown) => setError(describe(e)));
+    let stopped = false;
+    let timer: ReturnType<typeof setTimeout>;
+    const resume = async () => {
+      if (resumed.current === api) return undefined;
+      resumed.current = api;
+      try {
+        const show = await api.interruptedShow();
+        if (show.pile !== pile.id) return undefined;
+        return await api.startShow(show.pile, show.screen.id, show.asset || undefined);
+      } catch (e) {
+        if (!(e instanceof ApiError && e.code === 'no_show')) setError(describe(e));
+      }
+    };
+    const poll = async () => {
+      const seen = commands.current;
+      try {
+        const st = await api.show();
+        if (stopped) return;
+        setPollError(undefined);
+        if (seen === commands.current) setState(st);
+      } catch (e) {
+        if (stopped) return;
+        if (e instanceof ApiError && e.code === 'no_show') {
+          const st = await resume();
+          if (stopped) return;
+          if (!st) {
+            setEnded(true);
+            return;
+          }
+          setState(st);
+        } else setPollError(describe(e));
+      }
+      timer = setTimeout(poll, 1000);
+    };
+    timer = setTimeout(poll, 1000);
+    return () => {
+      stopped = true;
+      clearTimeout(timer);
+    };
   }, [api, pile.id]);
+
+  const code = state.renderer_error?.code;
+  useEffect(() => setReconnecting((at) => (code === 'reconnecting' ? (at ?? Date.now()) : undefined)), [code]);
 
   const byId = useMemo(() => new Map(timeline.map((i) => [i.id, i])), [timeline]);
   const names = useMemo(() => new Map(timeline.map((i) => [i.author, i.author_name])), [timeline]);
 
   async function run(command: () => Promise<ShowState>) {
     setError(undefined);
+    commands.current++;
     try {
       setState(await command());
     } catch (e) {
       setError(describe(e));
+    } finally {
+      commands.current++;
     }
   }
 
@@ -88,6 +162,19 @@ export function Remote({
   const hints = state.hints.filter((h) => h.reason !== 'disk_full');
   const full = hints.length < state.hints.length && !pins.progress.some((p) => p.reason === 'disk_full');
   const rendererError = state.renderer_error?.code === 'load_failed' && ownerAway ? undefined : state.renderer_error;
+
+  if (ended) {
+    return (
+      <Screen title={`На экране «${state.screen.name}»`}>
+        <ScrollView contentContainerStyle={styles.body}>
+          <Text style={{ fontSize: 17, fontWeight: '600' }}>Показ завершён. Чтобы продолжить, начните показ снова.</Text>
+          <ErrorText error={error} />
+          <Button title="Выбрать экран" onPress={() => onPick(state.current.id)} />
+          <Button title="Закрыть" onPress={onStop} />
+        </ScrollView>
+      </Screen>
+    );
+  }
 
   if (state.total === 0) {
     return (
@@ -136,6 +223,7 @@ export function Remote({
           {dayOf(item ?? current)} {timeOf(item ?? current)}
           {current.kind === 'video' ? ' · видео' : ''}
         </Text>
+        {bufferingText(state) && <Text>{bufferingText(state)}</Text>}
         {full && <ErrorText error={diskFull} />}
         {hints.length > 0 && (
           <View testID="waiting" style={{ backgroundColor: '#fff3cd', borderRadius: 8, padding: 12, gap: 8 }}>
@@ -153,7 +241,7 @@ export function Remote({
         )}
         <PinsPanel pins={pins} />
         {rendererError && (
-          <ErrorText error={rendererErrors[rendererError.code] ?? `Ошибка экрана: ${rendererError.code}`} />
+          <ErrorText error={rendererText(rendererError.code, current.kind, state.screen.name, reconnecting)} />
         )}
         {rendererError?.code === 'reconnecting' && (
           <Button
@@ -161,7 +249,7 @@ export function Remote({
             onPress={() => run(() => api.startShow(pile.id, state.screen.id, current.id))}
           />
         )}
-        <ErrorText error={error} />
+        <ErrorText error={error ?? pollError} />
         <View style={{ flexDirection: 'row', gap: 12 }}>
           <View style={{ flex: 1 }}>
             <Button title="Предыдущий" onPress={() => run(() => api.showCommand('prev'))} />

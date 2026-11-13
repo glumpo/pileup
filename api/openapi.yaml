@@ -32,6 +32,29 @@ paths:
                     const: ok
         "401":
           description: Missing or invalid token.
+  /serving:
+    get:
+      operationId: getServing
+      summary: Whether an original is being read from this device
+      description: >-
+        True while this device has sent bytes of one of its own originals in
+        the last 5 seconds: to a member over the pile port (T3), or to a
+        screen by its own show. Relaying another member's original does not
+        count. The app keeps the screen on and shows a banner meanwhile.
+      responses:
+        "200":
+          description: Serving state.
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - serving
+                properties:
+                  serving:
+                    type: boolean
+        "401":
+          description: Missing or invalid token.
   /piles:
     get:
       operationId: listPiles
@@ -537,7 +560,10 @@ paths:
       operationId: startShow
       summary: Start a show of a pile on a screen, with this device as the host
       description: >-
-        One show per host: a running show is stopped first. The session lives
+        One show per host: a running show is stopped once the new screen is
+        connected; if the new screen cannot be found or connected, the running
+        show goes on. The same pile and screen while reconnecting only ends
+        the reconnect pause (see renderer_error). The session lives
         only on this device. On a Cast screen the host connects to the Default
         Media Receiver, serves media to it over plain HTTP in the local network
         under a token valid until the show stops, and loads the current file
@@ -609,6 +635,48 @@ paths:
       responses:
         "204":
           description: No show is running.
+        "401":
+          description: Missing or invalid token.
+  /show/interrupted:
+    get:
+      operationId: getInterruptedShow
+      summary: The show that was running when the core last stopped
+      description: >-
+        The host remembers the running show in show.json (pile, screen, its
+        address and the current file) and forgets it only on DELETE /show.
+        Continue it with POST /show; a Cast screen not yet found by discovery
+        is then connected at the remembered address. asset is the remembered
+        file or, if it was removed, the next remaining one.
+      responses:
+        "200":
+          description: Interrupted show.
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - pile
+                  - screen
+                  - asset
+                properties:
+                  pile:
+                    type: string
+                  screen:
+                    $ref: "#/components/schemas/Screen"
+                  asset:
+                    type: string
+                    description: Empty if the pile has no files.
+        "401":
+          description: Missing or invalid token.
+        "404":
+          description: no_show — nothing interrupted, a show is running, or the pile is gone.
+          $ref: "#/components/responses/Error"
+    delete:
+      operationId: forgetInterruptedShow
+      summary: Forget the interrupted show; a running show is not affected
+      responses:
+        "204":
+          description: Forgotten.
         "401":
           description: Missing or invalid token.
   /show/next:
@@ -1011,6 +1079,22 @@ components:
             not on the owner's device (only in iCloud). unreadable: the owner
             cannot read the original (deleted from the gallery, no access).
             Newer versions may add others.
+        buffering:
+          type: boolean
+          description: The current video is buffering on the screen (playing stays true).
+        stalled:
+          type: boolean
+          description: >-
+            Buffering lasts over 2 s or repeats for this file. need_bps and
+            rate_bps are set when known.
+        need_bps:
+          type: integer
+          description: Bitrate of the video, size × 8 / duration, bit/s. With stalled; absent if the duration is unknown.
+        rate_bps:
+          type: integer
+          description: >-
+            Bytes of originals the host gave the screen over the last 5 s,
+            bit/s. With stalled; absent if nothing was streamed for this file.
         renderer_error:
           type: object
           description: >-
@@ -1018,8 +1102,10 @@ components:
             command. reconnecting: the connection to the Cast screen is lost
             and the host connects to the same screen again with pauses of 1,
             2, 4 … 30 s until the show stops; then the screen loads the
-            current file and the error clears. Restarting the show (POST
-            /show with the current file) stays a fallback.
+            current file and the error clears. POST /show for the same pile
+            and screen while reconnecting does not restart the show: it
+            ends the pause and connects now (at the screen's current address
+            if it is discovered).
           required:
             - code
             - message
@@ -1115,7 +1201,9 @@ components:
           description: >-
             Present while files remain and the member is not answering:
             unreachable or timeout, as in Hint; disk_full while files remain
-            and this device's disk is full.
+            and this device's disk is full; video while files remain, the
+            member is answering and a video plays on the screen of the show
+            (pinned files outside the show window wait until it stops).
   responses:
     PinProgress:
       description: Members with pinned files, by name.

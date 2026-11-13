@@ -1,13 +1,14 @@
 {
   "expo": {
-    "name": "app",
+    "name": "Pileup",
     "slug": "app",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "light",
     "ios": {
-      "supportsTablet": true
+      "supportsTablet": true,
+      "bundleIdentifier": "com.glumpo.pileup"
     },
     "android": {
       "adaptiveIcon": {
@@ -17,7 +18,7 @@
         "monochromeImage": "./assets/android-icon-monochrome.png"
       },
       "predictiveBackGestureEnabled": false,
-      "package": "com.anonymous.app"
+      "package": "com.glumpo.pileup"
     },
     "web": {
       "favicon": "./assets/favicon.png"

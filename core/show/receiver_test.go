@@ -12,6 +12,7 @@ import (
 	"math/big"
 	"net"
 	"net/http"
+	"slices"
 	"strings"
 	"sync"
 	"testing"
@@ -53,6 +54,9 @@ type receiver struct {
 	loads    []load
 	answered int
 	commands []string
+	hold     bool
+	gen      int
+	waiting  func(map[string]any)
 }
 
 func newReceiver(t *testing.T) *receiver {
@@ -115,24 +119,20 @@ func (r *receiver) serve(c net.Conn) {
 			reply = map[string]any{"type": "RECEIVER_STATUS", "requestId": id, "status": map[string]any{"applications": []any{
 				map[string]any{"appId": "CC1AD845", "sessionId": "session-1", "transportId": transport},
 			}}}
+		case m.namespace == nsMedia && typ == "LOAD":
+			go r.load(c, m, id)
 		case m.namespace == nsMedia:
 			reply = r.control(typ, id, m.payload)
 		}
 		if reply != nil {
 			r.mu.Lock()
 			writeMessage(c, message{m.destination, m.source, m.namespace, reply})
-			if typ == "LOAD" {
-				r.answered++
-			}
 			r.mu.Unlock()
 		}
 	}
 }
 
 func (r *receiver) control(typ string, id any, p map[string]any) map[string]any {
-	if typ == "LOAD" {
-		return r.load(id, p)
-	}
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	r.commands = append(r.commands, typ)
@@ -154,12 +154,33 @@ func (r *receiver) control(typ string, id any, p map[string]any) map[string]any 
 	return r.status(id, "")
 }
 
-func (r *receiver) load(id any, p map[string]any) map[string]any {
-	media, _ := p["media"].(map[string]any)
+func (r *receiver) load(c net.Conn, m message, id any) {
+	media, _ := m.payload["media"].(map[string]any)
 	url, _ := media["contentId"].(string)
 	ct, _ := media["contentType"].(string)
-	at, _ := p["currentTime"].(float64)
+	at, _ := m.payload["currentTime"].(float64)
+	reply := func(p map[string]any) {
+		writeMessage(c, message{m.destination, m.source, m.namespace, p})
+		r.answered++
+	}
 	r.mu.Lock()
+	r.loads = append(r.loads, load{url, ct, at})
+	if r.waiting != nil {
+		r.waiting(map[string]any{"type": "LOAD_CANCELLED"})
+	}
+	if r.media > 0 && r.state != "IDLE" {
+		r.state = "IDLE"
+		for _, c := range r.conns {
+			writeMessage(c, message{transport, "*", nsMedia, r.status(0, "INTERRUPTED")})
+		}
+	}
+	r.gen++
+	gen := r.gen
+	r.waiting = func(p map[string]any) {
+		p["requestId"] = id
+		reply(p)
+		r.waiting = nil
+	}
 	fetch := r.fetch
 	r.mu.Unlock()
 	body, fetched := "", true
@@ -168,25 +189,41 @@ func (r *receiver) load(id any, p map[string]any) map[string]any {
 	}
 	r.mu.Lock()
 	defer r.mu.Unlock()
-	r.loads = append(r.loads, load{url, ct, at})
+	for r.hold && r.gen == gen && slices.Contains(r.conns, c) {
+		r.mu.Unlock()
+		time.Sleep(5 * time.Millisecond)
+		r.mu.Lock()
+	}
+	if r.gen != gen || !slices.Contains(r.conns, c) {
+		return
+	}
 	if r.fail || !fetched {
-		return map[string]any{"type": "LOAD_FAILED", "requestId": id, "detailedErrorCode": 905}
+		r.waiting(map[string]any{"type": "LOAD_FAILED", "detailedErrorCode": 905})
+		return
 	}
 	r.media++
 	r.time = at
-	if r.rejects != "" && strings.HasPrefix(ct, r.rejects) {
+	switch {
+	case r.rejects != "" && strings.HasPrefix(ct, r.rejects):
 		r.state = "IDLE"
-		return r.status(id, "ERROR")
-	}
-	if fetch {
+		r.waiting(r.status(id, "ERROR"))
+		return
+	case fetch:
 		r.shown = append(r.shown, body)
 	}
 	if r.idle {
 		r.state = "IDLE"
-		return r.status(id, "ERROR")
+		r.waiting(r.status(id, "ERROR"))
+		return
 	}
 	r.state = "PLAYING"
-	return r.status(id, "")
+	r.waiting(r.status(id, ""))
+}
+
+func (r *receiver) holding(hold bool) {
+	r.mu.Lock()
+	r.hold = hold
+	r.mu.Unlock()
 }
 
 func download(url string) (string, bool) {
@@ -289,6 +326,22 @@ func (r *receiver) commanded() []string {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	return append([]string(nil), r.commands...)
+}
+
+func (r *receiver) received(t *testing.T, n int, within time.Duration) load {
+	t.Helper()
+	deadline := time.Now().Add(within)
+	for len(r.loaded()) < n {
+		if time.Now().After(deadline) {
+			t.Fatalf("receiver got %d LOADs in %v, want %d: %v", len(r.loaded()), within, n, r.loaded())
+		}
+		time.Sleep(5 * time.Millisecond)
+	}
+	l := r.loaded()
+	if len(l) != n {
+		t.Fatalf("receiver got %d LOADs, want %d: %v", len(l), n, l)
+	}
+	return l[n-1]
 }
 
 func (r *receiver) waitLoad(t *testing.T, n int) load {

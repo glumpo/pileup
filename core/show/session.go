@@ -17,30 +17,35 @@ import (
 )
 
 const (
-	playing = "PLAYING"
-	paused  = "PAUSED"
-	tick    = time.Second
+	playing   = "PLAYING"
+	paused    = "PAUSED"
+	buffering = "BUFFERING"
+	tick      = time.Second
 )
 
 var settle = 200 * time.Millisecond
 
 type session struct {
-	n      *node.Node
-	pile   []byte
-	self   op.Author
-	screen node.Screen
-	token  string
-	ctx    context.Context
-	cancel context.CancelFunc
-	wg     sync.WaitGroup
-	cast   *cast.Session
-	srv    *http.Server
-	base   string
-	wake   chan struct{}
+	n       *node.Node
+	pile    []byte
+	self    op.Author
+	screen  node.Screen
+	token   string
+	ctx     context.Context
+	cancel  context.CancelFunc
+	wg      sync.WaitGroup
+	cast    *cast.Session
+	srv     *http.Server
+	base    string
+	wake    chan struct{}
+	kick    chan struct{}
+	moved   chan struct{}
+	answers chan answer
 
 	l *loader
 
 	mu        sync.Mutex
+	version   <-chan struct{}
 	items     []state.Asset
 	index     map[string]int
 	cursor    int
@@ -54,6 +59,10 @@ type session struct {
 	ended     bool
 	offset    float64
 	since     time.Time
+	episodes  int
+	buffered  time.Time
+	noted     bool
+	streamed  int64
 }
 
 func key(a state.Asset) string {
@@ -69,13 +78,15 @@ func parseKey(k string) (assetID, revision []byte) {
 
 func (s *session) begin(p node.Pile, items []state.Asset, cursor int, changed <-chan struct{}) {
 	s.mu.Lock()
+	s.version = changed
 	s.setItems(p, items)
 	s.cursor = -1
 	s.move(cursor)
 	s.mu.Unlock()
 	s.n.Diag().Add(diag.Renderer, s.pile, s.screen.Name, "show started")
-	s.wg.Add(1)
+	s.wg.Add(2)
 	go s.follow(changed)
+	go s.keep()
 	if s.cast != nil {
 		s.wg.Add(1)
 		go s.drive()
@@ -116,10 +127,15 @@ func (s *session) follow(changed <-chan struct{}) {
 }
 
 func (s *session) refresh() (int, bool) {
+	changed, err := s.n.Changed(s.pile)
+	if err == nil && changed == s.version {
+		return max(s.cursor, 0), s.cursor >= 0
+	}
 	p, items, err := s.n.Timeline(s.pile)
 	if err != nil {
 		return s.cursor, true
 	}
+	s.version = changed
 	old, cur := s.items, s.cursor
 	s.setItems(p, items)
 	pos := make(map[string]int, len(items))
@@ -163,6 +179,12 @@ func (s *session) move(i int) {
 		cur := s.items[i]
 		s.videoDown = cur.Meta.Kind == op.KindVideo && !s.l.reachable(cur.Owner)
 		s.why, s.revived, s.misses, s.ended, s.offset, s.since = "", s.videoDown, 0, false, 0, time.Time{}
+		s.episodes, s.buffered, s.noted = 0, time.Time{}, false
+		s.streamed, _ = s.n.Streamed()
+		select {
+		case s.moved <- struct{}{}:
+		default:
+		}
 		if s.videoDown {
 			s.why = Unreachable
 			s.posterOnly(cur, Unreachable)
@@ -170,6 +192,7 @@ func (s *session) move(i int) {
 		s.signal()
 	}
 	s.l.setCursor(key(s.items[i]))
+	s.l.setVideo(s.video())
 }
 
 func (s *session) control(command string) error {
@@ -199,6 +222,7 @@ func (s *session) control(command string) error {
 	}
 	if s.cast == nil {
 		s.player = command
+		s.l.setVideo(s.video())
 		return nil
 	}
 	s.command = command
@@ -218,6 +242,7 @@ func (s *session) unavailable(a state.Asset, why string) {
 	down := s.cursor >= 0 && key(s.items[s.cursor]) == key(a) && !s.videoDown
 	if down {
 		s.videoDown, s.why = true, why
+		s.l.setVideo(s.video())
 		s.signal()
 	}
 	s.mu.Unlock()
@@ -246,7 +271,12 @@ func (s *session) state() State {
 		cur := s.items[s.cursor]
 		st.Index = s.cursor
 		st.Current = cur
-		st.Playing = cur.Meta.Kind == op.KindVideo && !s.videoDown && !s.ended && (s.player == playing || s.player == "BUFFERING")
+		st.Playing = s.video()
+		st.Buffering = s.buffers()
+		if s.stalled() {
+			st.Stalled = true
+			st.NeedBitrate, st.Bitrate = s.rates()
+		}
 		st.VideoUnavailable = s.videoDown
 		st.VideoReason = s.why
 		if s.why == Unreachable {
@@ -261,9 +291,79 @@ func (s *session) state() State {
 	return st
 }
 
+func (s *session) video() bool {
+	return s.cursor >= 0 && s.items[s.cursor].Meta.Kind == op.KindVideo && !s.videoDown && !s.ended && (s.player == playing || s.player == buffering)
+}
+
+func (s *session) buffers() bool {
+	return s.cursor >= 0 && s.items[s.cursor].Meta.Kind == op.KindVideo && !s.videoDown && !s.ended && s.player == buffering
+}
+
+func (s *session) stalled() bool {
+	return s.buffers() && (s.episodes > 1 || time.Since(s.buffered) >= stall)
+}
+
+func (s *session) stallIn() time.Duration {
+	switch {
+	case s.noted || !s.buffers():
+		return -1
+	case s.episodes > 1:
+		return 0
+	}
+	return max(0, stall-time.Since(s.buffered))
+}
+
+func (s *session) rates() (need, rate float64) {
+	m := s.items[s.cursor].Meta
+	if m.DurationMs != nil && *m.DurationMs > 0 {
+		need = float64(m.SizeBytes) * 8000 / float64(*m.DurationMs)
+	}
+	if total, r := s.n.Streamed(); total > s.streamed {
+		rate = r * 8
+	}
+	return need, rate
+}
+
+func (s *session) note() {
+	s.mu.Lock()
+	if s.noted || !s.stalled() {
+		s.mu.Unlock()
+		return
+	}
+	s.noted = true
+	cur := s.items[s.cursor]
+	need, rate := s.rates()
+	s.mu.Unlock()
+	msg := fmt.Sprintf("video %x buffers on the screen", cur.Meta.AssetID)
+	if need > 0 {
+		msg += fmt.Sprintf(", needs ~%.1f Mbit/s", need/1e6)
+	}
+	if rate > 0 {
+		msg += fmt.Sprintf(", streaming ~%.1f Mbit/s", rate/1e6)
+	}
+	s.n.Diag().Add(diag.Renderer, s.pile, s.screen.Name, msg)
+}
+
+func (s *session) retry(screen node.Screen, found bool) bool {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.fault == nil || s.fault.Code != "reconnecting" {
+		return false
+	}
+	if found {
+		s.screen.Addr = screen.Addr
+	}
+	select {
+	case s.kick <- struct{}{}:
+	default:
+	}
+	return true
+}
+
 func (s *session) stop() {
 	s.cancel()
 	s.wg.Wait()
 	s.l.setCursor("")
+	s.l.setVideo(false)
 	s.n.Diag().Add(diag.Renderer, s.pile, s.screen.Name, "show stopped")
 }

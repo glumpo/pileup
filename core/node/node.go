@@ -47,11 +47,12 @@ const (
 var announceTimeout = timeout
 
 var (
-	ErrUnknownPile = errors.New("node: unknown pile")
-	ErrJoined      = errors.New("node: already a member of this pile")
-	ErrUnreachable = errors.New("node: no inviter address accepted the invite")
-	ErrOffline     = errors.New("node: no network address to invite with")
-	ErrBrokenPile  = errors.New("node: pile could not be opened")
+	ErrUnknownPile  = errors.New("node: unknown pile")
+	ErrJoined       = errors.New("node: already a member of this pile")
+	ErrUnreachable  = errors.New("node: no inviter address accepted the invite")
+	ErrLocalNetwork = errors.New("node: local network access is denied")
+	ErrOffline      = errors.New("node: no network address to invite with")
+	ErrBrokenPile   = errors.New("node: pile could not be opened")
 )
 
 type Config struct {
@@ -126,9 +127,12 @@ type Node struct {
 	piles  []*pile
 	broken []broken
 	found  map[string]map[string]service
+	denied bool
 
 	selecting sync.Mutex
 	rendering turns
+	streamed  meter
+	serving   meter
 }
 
 func Open(cfg Config) (*Node, error) {
@@ -241,6 +245,10 @@ func (n *Node) Close() error {
 	return errors.Join(errs...)
 }
 
+func (n *Node) Dir() string {
+	return n.cfg.Dir
+}
+
 func (n *Node) Author() op.Author {
 	return op.Author(n.key.Public().(ed25519.PublicKey))
 }
@@ -259,6 +267,9 @@ func (n *Node) Join(ctx context.Context, inv, member string) (Pile, error) {
 		return Pile{}, cmp.Or(err, ErrJoined)
 	}
 	addr, who, err := n.reach(ctx, i)
+	if errors.Is(err, ErrUnreachable) && n.LocalNetworkDenied() {
+		err = fmt.Errorf("%w: %w", ErrLocalNetwork, err)
+	}
 	if err != nil {
 		return Pile{}, err
 	}
@@ -336,7 +347,16 @@ func (n *Node) reach(ctx context.Context, i invite.Invite) (string, op.Author, e
 		n.report(diag.Connection, i.PileID, a, "join", err)
 		errs = append(errs, err)
 	}
-	return "", op.Author{}, fmt.Errorf("%w: %w", ErrUnreachable, errors.Join(errs...))
+	if len(n.cfg.Addrs()) == 0 {
+		return "", op.Author{}, fmt.Errorf("%w: %w", ErrOffline, errors.Join(errs...))
+	}
+	best := NoAddress
+	for _, err := range errs {
+		if c := class(err); slices.Index(hopeful, c) < slices.Index(hopeful, best) {
+			best = c
+		}
+	}
+	return "", op.Author{}, fmt.Errorf("%w: %w: %w", ErrUnreachable, offline(best), errors.Join(errs...))
 }
 
 func (n *Node) add(e entry, addrs map[op.Author]string, changes ...op.Change) (Pile, error) {

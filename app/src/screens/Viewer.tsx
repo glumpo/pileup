@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   FlatList,
@@ -10,6 +10,7 @@ import {
   View,
   ViewStyle,
 } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { Api, ApiError, Pile, TimelineItem } from '../api';
 import { adviceFor } from '../presence';
@@ -40,7 +41,9 @@ function problemOf(error: unknown, author: string): Problem {
 function Page({ api, pile, item, style }: { api: Api; pile: string; item: TimelineItem; style: ViewStyle }) {
   const [attempt, setAttempt] = useState(0);
   const [problem, setProblem] = useState<Problem>();
+  const insets = useSafeAreaInsets();
   const [loaded, setLoaded] = useState(false);
+  const reloaded = useRef(false);
 
   useEffect(() => {
     if (!problem?.retry) return;
@@ -50,7 +53,10 @@ function Page({ api, pile, item, style }: { api: Api; pile: string; item: Timeli
 
   const failed = () =>
     api.checkBlob(pile, item, 2).then(
-      () => setProblem({ text: 'Не удалось показать файл', retry: false }),
+      () =>
+        reloaded.current
+          ? setProblem({ text: 'Не удалось показать файл', retry: false })
+          : ((reloaded.current = true), setAttempt((a) => a + 1)),
       (e) => setProblem(problemOf(e, item.author_name)),
     );
 
@@ -75,7 +81,15 @@ function Page({ api, pile, item, style }: { api: Api; pile: string; item: Timeli
         onError={failed}
       />
       {!loaded && !problem && <ActivityIndicator testID="loading" style={StyleSheet.absoluteFill} color="#fff" />}
-      {problem && <Text style={styles.problem}>{problem.text}</Text>}
+      {item.kind === 'video' && (
+        <View style={styles.video} pointerEvents="none">
+          <Text testID="video" style={styles.play}>
+            ▶
+          </Text>
+          <Text style={styles.text}>Видео воспроизводится на экране: нажмите «На экран».</Text>
+        </View>
+      )}
+      {problem && <Text style={[styles.problem, { paddingBottom: insets.bottom + 16 }]}>{problem.text}</Text>}
     </View>
   );
 }
@@ -96,6 +110,7 @@ export function Viewer({
   onShow: (item: TimelineItem) => void;
 }) {
   const { width, height } = useWindowDimensions();
+  const insets = useSafeAreaInsets();
   const [current, setCurrent] = useState(index);
   const item = items[current];
   const renderPage = useCallback(
@@ -114,14 +129,14 @@ export function Viewer({
         initialScrollIndex={index}
         initialNumToRender={1}
         maxToRenderPerBatch={2}
-        windowSize={3}
+        windowSize={5}
         keyExtractor={(i) => i.id}
         getItemLayout={(_, i) => ({ length: width, offset: width * i, index: i })}
         onMomentumScrollEnd={(e) => setCurrent(Math.round(e.nativeEvent.contentOffset.x / width))}
         renderItem={renderPage}
       />
-      <View style={styles.caption}>
-        <Pressable accessibilityRole="button" onPress={onBack} hitSlop={12}>
+      <View style={[styles.caption, { paddingTop: insets.top + 12 }]}>
+        <Pressable accessibilityRole="button" accessibilityLabel="Закрыть" onPress={onBack} hitSlop={12}>
           <Text style={styles.text}>✕</Text>
         </Pressable>
         <View style={{ flex: 1 }}>
@@ -156,7 +171,6 @@ const styles = StyleSheet.create({
     top: 0,
     left: 0,
     right: 0,
-    paddingTop: 48,
     paddingHorizontal: 16,
     paddingBottom: 12,
     flexDirection: 'row',
@@ -165,13 +179,14 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(0,0,0,0.4)',
   },
   text: { color: '#fff', fontSize: 16 },
+  video: { position: 'absolute', top: 0, right: 0, bottom: 0, left: 0, alignItems: 'center', justifyContent: 'center', gap: 12, padding: 32 },
+  play: { color: '#fff', fontSize: 64, textShadowColor: 'rgba(0,0,0,0.6)', textShadowRadius: 8 },
   problem: {
     position: 'absolute',
     left: 0,
     right: 0,
     bottom: 0,
     padding: 16,
-    paddingBottom: 32,
     color: '#fff',
     fontSize: 16,
     backgroundColor: 'rgba(0,0,0,0.6)',
