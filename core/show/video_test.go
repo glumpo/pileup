@@ -256,3 +256,34 @@ func TestFinishedVideoShowsPosterAndPlaysFromStart(t *testing.T) {
 		t.Fatalf("receiver commands %v", cmds)
 	}
 }
+
+func TestOwnerOfVideoOnTheScreenReportsServing(t *testing.T) {
+	a, b := newPhone(t, "android", node.DefaultBudget), newPhone(t, "ios", node.DefaultBudget)
+	p := pileOf(t, a, b)
+	b.lib.add("V", "video", "video/mp4", 0, randomBytes(100_000, 5))
+	b.share(p)
+	waitTimeline(t, p, 1, a)
+	eventually(t, "a connects to b", func() bool { return a.Online(p.ID)[b.Author()] })
+	serving := func(ph *phone) bool {
+		t.Helper()
+		ui := httptest.NewServer(httpapi.WithNode("ui", ph.Node, ph.show))
+		defer ui.Close()
+		resp, body := get(t, ui.URL+"/serving", "Authorization", "Bearer ui")
+		if resp.StatusCode != http.StatusOK {
+			t.Fatalf("GET /serving: status %d", resp.StatusCode)
+		}
+		return string(body) == `{"serving":true}`+"\n"
+	}
+	if serving(a) || serving(b) {
+		t.Fatal("serving before the show")
+	}
+
+	rx := newReceiver(t)
+	rx.fetching()
+	must(t)(a.show.Start(p.ID, a.tv(rx), nil))
+	eventually(t, "owner of the video on the screen is serving", func() bool { return serving(b) })
+	if serving(a) {
+		t.Fatal("host that relays the video is serving")
+	}
+	eventually(t, "owner stops serving after the screen read the video", func() bool { return !serving(b) })
+}

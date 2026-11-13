@@ -164,6 +164,7 @@ const waiting: [string, string][] = [
     'timeout',
     'Боря: 0/300 — ждём: участник отвечает медленно. Возможно, погас экран — попросите разблокировать телефон и открыть Pileup.',
   ],
+  ['video', 'Боря: 0/300 — пауза, пока на экране идёт видео'],
 ];
 
 test.each(waiting)('loading that waits for a member (%s) says why', async (reason, text) => {

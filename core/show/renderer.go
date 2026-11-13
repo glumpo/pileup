@@ -188,6 +188,7 @@ func (s *session) drive() {
 		case stalled == nil:
 			stalled = time.After(wait)
 		}
+		s.l.setVideo(s.video())
 		s.mu.Unlock()
 		switch {
 		case url != loaded && url == "":
