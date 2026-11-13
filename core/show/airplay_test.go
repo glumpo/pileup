@@ -191,7 +191,10 @@ func TestAppleTVPlayerStateReachesTheRemote(t *testing.T) {
 
 func TestInterruptedAppleTVShowContinuesBeforeTheScreenIsFoundAgain(t *testing.T) {
 	a, _, p, tv := appleTVShow(t)
-	must(t)(a.show.Start(p.ID, tv, a.asset(p, "B1").Meta.AssetID))
+	shown := must(t)(a.show.Start(p.ID, tv, a.asset(p, "B1").Meta.AssetID))
+	if body(t, shown.Slide.Image) != display("B1") {
+		t.Fatalf("show on Apple TV: %+v", shown)
+	}
 	a.show.Close()
 	if err := a.Close(); err != nil {
 		t.Fatal(err)
