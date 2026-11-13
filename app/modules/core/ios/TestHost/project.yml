@@ -20,10 +20,10 @@ targets:
       properties:
         NSLocalNetworkUsageDescription: Discovery tests
         NSBonjourServices: [_pileup._tcp, _googlecast._tcp, _airplay._tcp, _pileuptest._tcp]
+        NSPhotoLibraryUsageDescription: Pileup native tests read and add test media
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.glumpo.pileup.testhost
-        INFOPLIST_KEY_NSPhotoLibraryUsageDescription: Pileup native tests read and add test media
   PileupNativeTests:
     type: bundle.unit-test
     platform: iOS
@@ -31,11 +31,21 @@ targets:
     dependencies:
       - target: TestHost
       - package: PileupNative
+  PhotoAccessUITests:
+    type: bundle.ui-testing
+    platform: iOS
+    sources: [../UITests]
+    dependencies:
+      - target: TestHost
+    settings:
+      base:
+        TEST_TARGET_NAME: TestHost
 schemes:
   PileupNativeTests:
     build:
       targets:
         TestHost: all
         PileupNativeTests: [test]
+        PhotoAccessUITests: [test]
     test:
-      targets: [PileupNativeTests]
+      targets: [PileupNativeTests, PhotoAccessUITests]
