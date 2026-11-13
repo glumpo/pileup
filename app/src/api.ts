@@ -85,6 +85,7 @@ export type ShowState = {
   renderer_error?: { code: string; message: string };
   waiting: ShowItem[];
   hints: Hint[];
+  slide?: { image: string; video?: string; around: string[] };
 };
 
 export type PinProgress = {
@@ -191,6 +192,8 @@ export function connect(port: number, token: string, lost?: () => void) {
       call<ShowState>('POST', '/show', { pile, screen, asset }),
     show: () => call<ShowState>('GET', '/show'),
     showCommand: (command: 'next' | 'prev' | 'play' | 'pause') => call<ShowState>('POST', `/show/${command}`),
+    showPlayer: (asset: string, state: string, message?: string) =>
+      call<ShowState>('POST', '/show/player', { asset, state, message }),
     stopShow: () => call<void>('DELETE', '/show'),
     interruptedShow: () => call<InterruptedShow>('GET', '/show/interrupted'),
     forgetShow: () => call<void>('DELETE', '/show/interrupted'),

@@ -158,3 +158,19 @@ func TestScreenThatLeftIsNotListed(t *testing.T) {
 		t.Fatalf("screens = %+v, want %+v", got, want)
 	}
 }
+
+func TestSpeakersWithAirPlayAreNotScreens(t *testing.T) {
+	for _, platform := range []string{"ios", "android"} {
+		c, r := startIn(t, platform)
+		livingRoom(t, r)
+		r.handler(t, "_airplay._tcp").Found("Кухня", "192.168.1.40", 7000, txt("model=AudioAccessory5,1"))
+		r.handler(t, "_airplay._tcp").Found("AirPort", "192.168.1.41", 7000, txt("model=AirPort10,115"))
+		var names []string
+		for _, s := range c.screens() {
+			names = append(names, s.Name)
+		}
+		if !reflect.DeepEqual(names, []string{"Гостиная", "Спальня"}) {
+			t.Fatalf("%s host lists %v", platform, names)
+		}
+	}
+}

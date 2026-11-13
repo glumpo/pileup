@@ -44,14 +44,33 @@ func (s *session) connect() error {
 		s.n.Diag().Error(diag.Renderer, s.pile, s.screen.Name, fmt.Errorf("connect: %w", err))
 		return fmt.Errorf("%w: %w", ErrUnreachable, err)
 	}
-	local := cs.LocalAddr().(*net.TCPAddr).AddrPort().Addr().Unmap()
-	ln, err := net.Listen("tcp", netip.AddrPortFrom(local, 0).String())
-	if err != nil {
+	if err := s.open(cs.LocalAddr().(*net.TCPAddr).AddrPort().Addr()); err != nil {
 		cs.Close()
 		return err
 	}
 	s.mu.Lock()
 	s.cast = cs
+	s.mu.Unlock()
+	return nil
+}
+
+func (s *session) route() error {
+	c, err := net.Dial("udp", s.screen.Addr.String())
+	if err != nil {
+		s.n.Diag().Error(diag.Renderer, s.pile, s.screen.Name, fmt.Errorf("route: %w", err))
+		return fmt.Errorf("%w: %w", ErrUnreachable, err)
+	}
+	local := c.LocalAddr().(*net.UDPAddr).AddrPort().Addr()
+	c.Close()
+	return s.open(local)
+}
+
+func (s *session) open(local netip.Addr) error {
+	ln, err := net.Listen("tcp", netip.AddrPortFrom(local.Unmap(), 0).String())
+	if err != nil {
+		return err
+	}
+	s.mu.Lock()
 	s.base = "http://" + ln.Addr().String() + "/show/" + s.token
 	s.mu.Unlock()
 	mux := http.NewServeMux()
@@ -129,12 +148,15 @@ func (s *session) display(w http.ResponseWriter, r *http.Request, a state.Asset)
 	http.ServeContent(w, r, "", time.Time{}, f)
 }
 
+func (s *session) url(a state.Asset, tier int) string {
+	return fmt.Sprintf("%s/%x/%x/%d", s.base, a.Meta.AssetID, a.Meta.Revision, tier)
+}
+
 func (s *session) media(a state.Asset) (string, string) {
-	u := fmt.Sprintf("%s/%x/%x/", s.base, a.Meta.AssetID, a.Meta.Revision)
 	if a.Meta.Kind == op.KindVideo && !s.videoDown && !s.ended {
-		return u + "3", castType(a.Meta.MIME)
+		return s.url(a, 3), castType(a.Meta.MIME)
 	}
-	return u + "2", "image/jpeg"
+	return s.url(a, 2), "image/jpeg"
 }
 
 type answer struct {

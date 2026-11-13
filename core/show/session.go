@@ -1,10 +1,12 @@
 package show
 
 import (
+	"bytes"
 	"context"
 	"encoding/hex"
 	"fmt"
 	"net/http"
+	"slices"
 	"strings"
 	"sync"
 	"time"
@@ -287,8 +289,61 @@ func (s *session) state() State {
 		f := *s.fault
 		st.Error = &f
 	}
+	if s.cast == nil && s.base != "" && s.cursor >= 0 {
+		st.Slide = s.slide()
+	}
 	st.Waiting, st.Hints = s.l.status(down...)
 	return st
+}
+
+func (s *session) slide() *Slide {
+	cur := s.items[s.cursor]
+	sl := &Slide{Image: s.url(cur, 2)}
+	if u, _ := s.media(cur); u != sl.Image {
+		sl.Video = u
+	}
+	for _, i := range []int{s.cursor + 1, s.cursor - 1} {
+		if i >= 0 && i < len(s.items) {
+			sl.Around = append(sl.Around, s.url(s.items[i], 2))
+		}
+	}
+	return sl
+}
+
+func (s *session) played(assetID []byte, state, message string) error {
+	if !slices.Contains([]string{"playing", "buffering", "ended", "failed"}, state) {
+		return ErrPlayerState
+	}
+	if s.cast != nil || s.cursor < 0 {
+		return nil
+	}
+	cur := s.items[s.cursor]
+	if !bytes.Equal(cur.Meta.AssetID, assetID) || cur.Meta.Kind != op.KindVideo || s.videoDown || s.ended {
+		return nil
+	}
+	switch {
+	case state == "buffering" && s.player == playing:
+		s.player, s.episodes, s.buffered = buffering, s.episodes+1, time.Now()
+		if d := s.stallIn(); d >= 0 {
+			time.AfterFunc(d, func() {
+				if s.ctx.Err() == nil {
+					s.note()
+				}
+			})
+		}
+	case state == "playing" && s.player == buffering:
+		s.player = playing
+	case state == "ended" && s.video():
+		s.ended = true
+	case state == "failed":
+		s.videoDown, s.why = true, Unsupported
+		s.posterOnly(cur, Unsupported)
+		if message != "" {
+			s.n.Diag().Error(diag.Renderer, s.pile, s.screen.Name, fmt.Errorf("playback %x: %s", cur.Meta.AssetID, message))
+		}
+	}
+	s.l.setVideo(s.video())
+	return nil
 }
 
 func (s *session) video() bool {
@@ -363,6 +418,9 @@ func (s *session) retry(screen node.Screen, found bool) bool {
 func (s *session) stop() {
 	s.cancel()
 	s.wg.Wait()
+	if s.srv != nil {
+		s.srv.Close()
+	}
 	s.l.setCursor("")
 	s.l.setVideo(false)
 	s.n.Diag().Add(diag.Renderer, s.pile, s.screen.Name, "show stopped")

@@ -22,6 +22,7 @@ var (
 	ErrNotVideo      = errors.New("show: current file is not a video")
 	ErrUnreachable   = errors.New("show: screen is unreachable")
 	ErrUnknownMember = errors.New("show: unknown member")
+	ErrPlayerState   = errors.New("show: unknown player state")
 )
 
 const (
@@ -55,6 +56,13 @@ type State struct {
 	Error            *RendererError
 	Waiting          []state.Asset
 	Hints            []Hint
+	Slide            *Slide
+}
+
+type Slide struct {
+	Image  string
+	Video  string
+	Around []string
 }
 
 type Host struct {
@@ -185,7 +193,7 @@ func (h *Host) Start(pileID []byte, screenID string, assetID []byte) (State, err
 		}
 	}
 	screen, err := h.screen(screenID)
-	if r, ok := h.saved(); ok && errors.Is(err, ErrUnknownScreen) && r.Screen == screenID && r.Kind == "cast" {
+	if r, ok := h.saved(); ok && errors.Is(err, ErrUnknownScreen) && r.Screen == screenID && (r.Kind == "cast" || r.Kind == "airplay") {
 		screen, err = r.screen(), nil
 	}
 	if err != nil {
@@ -228,11 +236,15 @@ func (h *Host) Start(pileID []byte, screenID string, assetID []byte) (State, err
 		answers: make(chan answer),
 		l:       l,
 	}
-	if screen.Kind == "cast" {
-		if err := s.connect(); err != nil {
-			cancel()
-			return State{}, err
-		}
+	switch screen.Kind {
+	case "cast":
+		err = s.connect()
+	case "airplay":
+		err = s.route()
+	}
+	if err != nil {
+		cancel()
+		return State{}, err
 	}
 	h.stop()
 	s.begin(p, items, cursor, changed)
@@ -294,6 +306,10 @@ func (h *Host) Play() (State, error) {
 
 func (h *Host) Pause() (State, error) {
 	return h.do(func(s *session) error { return s.control(paused) })
+}
+
+func (h *Host) Player(assetID []byte, state, message string) (State, error) {
+	return h.do(func(s *session) error { return s.played(assetID, state, message) })
 }
 
 func (h *Host) Stop() {
