@@ -1,0 +1,36 @@
+cd core && go test ./...
+go: downloading github.com/fxamacker/cbor/v2 v2.10.0
+go: downloading modernc.org/sqlite v1.62.0
+go: downloading pgregory.net/rapid v1.3.0
+go: downloading github.com/x448/float16 v0.8.4
+go: downloading modernc.org/libc v1.80.1
+go: downloading golang.org/x/sys v0.49.0
+go: downloading modernc.org/mathutil v1.7.1
+go: downloading github.com/google/uuid v1.6.0
+go: downloading github.com/dustin/go-humanize v1.1.0
+go: downloading modernc.org/memory v1.12.1
+go: downloading github.com/remyoudompheng/bigfft v0.0.0-20230129092748-24d4a6f8daec
+ok  	github.com/glumpo/pileup/core/blob	0.242s
+ok  	github.com/glumpo/pileup/core/cast	0.970s
+ok  	github.com/glumpo/pileup/core/crdt/clock	0.004s
+ok  	github.com/glumpo/pileup/core/crdt/op	0.072s
+ok  	github.com/glumpo/pileup/core/crdt/state	0.848s
+ok  	github.com/glumpo/pileup/core/crdt/vv	0.002s
+ok  	github.com/glumpo/pileup/core/device	0.008s
+ok  	github.com/glumpo/pileup/core/diag	0.741s
+ok  	github.com/glumpo/pileup/core/httpapi	1.544s
+ok  	github.com/glumpo/pileup/core/invite	0.004s
+ok  	github.com/glumpo/pileup/core/media	0.004s
+ok  	github.com/glumpo/pileup/core/mobile	0.371s
+ok  	github.com/glumpo/pileup/core/node	57.644s
+ok  	github.com/glumpo/pileup/core/peer	0.032s
+ok  	github.com/glumpo/pileup/core/prefetch	0.111s
+ok  	github.com/glumpo/pileup/core/replica	3.013s
+--- FAIL: TestInterruptedAppleTVShowContinuesBeforeTheScreenIsFoundAgain (0.09s)
+    airplay_test.go:206: GET slide: 502 node: asset owner is unavailable: Get "http://7474d7de1a80756832f26f059e47b728dac58c3c92b4af1aa451acc746680087/blob/d66c288d4dbaf75d18ec90e30e1550bcbb96216f961865303d3a336d8f9c5f05/fd8d4dec51707c03990323b9f5659aefdbc5804f5c1079bf7a93cece5c0a7e0a/2": node: owner address is unknown
+FAIL
+FAIL	github.com/glumpo/pileup/core/show	97.185s
+ok  	github.com/glumpo/pileup/core/store	5.225s
+ok  	github.com/glumpo/pileup/core/thumbhash	0.012s
+FAIL
+make: *** [Makefile:16: test] Error 1
