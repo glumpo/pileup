@@ -62,9 +62,8 @@ ios-test: $(XCODEGEN)
 	cd app/modules/core/ios/TestHost && $(XCODEGEN) generate
 	cd app/modules/core/ios/TestHost && xcodebuild build-for-testing -project PileupNativeTests.xcodeproj -scheme PileupNativeTests -destination id=$(IOS_SIMULATOR) -derivedDataPath ../.build/xcode
 	xcrun simctl bootstatus $(IOS_SIMULATOR) -b
-	xcrun simctl install $(IOS_SIMULATOR) app/modules/core/ios/.build/xcode/Build/Products/Debug-iphonesimulator/TestHost.app
-	xcrun simctl privacy $(IOS_SIMULATOR) grant photos com.glumpo.pileup.testhost
-	cd app/modules/core/ios/TestHost && xcodebuild test-without-building -project PileupNativeTests.xcodeproj -scheme PileupNativeTests -destination id=$(IOS_SIMULATOR) -derivedDataPath ../.build/xcode
+	cd app/modules/core/ios/TestHost && xcodebuild test-without-building -project PileupNativeTests.xcodeproj -scheme PileupNativeTests -destination id=$(IOS_SIMULATOR) -derivedDataPath ../.build/xcode -only-testing:PhotoAccessUITests
+	cd app/modules/core/ios/TestHost && xcodebuild test-without-building -project PileupNativeTests.xcodeproj -scheme PileupNativeTests -destination id=$(IOS_SIMULATOR) -derivedDataPath ../.build/xcode -only-testing:PileupNativeTests
 
 ios-prebuild:
 	cd app && npm ci --no-audit --no-fund
