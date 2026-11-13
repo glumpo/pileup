@@ -6,6 +6,8 @@ out=$3
 mkdir -p "$out"
 id=$(/usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' "$app/Info.plist")
 echo "bundle $id, display name $(/usr/libexec/PlistBuddy -c 'Print :CFBundleDisplayName' "$app/Info.plist")"
+prompt=$(/usr/libexec/PlistBuddy -c 'Print :NSPhotoLibraryUsageDescription' "$app/Info.plist")
+echo "photo library prompt: $prompt"
 xcrun simctl boot "$sim" || true
 xcrun simctl bootstatus "$sim" -b
 xcrun simctl install "$sim" "$app"
