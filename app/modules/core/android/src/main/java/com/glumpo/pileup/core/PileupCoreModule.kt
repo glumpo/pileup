@@ -50,10 +50,6 @@ class PileupCoreModule : Module() {
       )
     }
 
-    OnActivityDestroys {
-      Mobile.stop()
-    }
-
     OnDestroy {
       Mobile.stop()
     }

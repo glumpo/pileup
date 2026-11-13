@@ -83,7 +83,16 @@ function Main() {
 
   const start = useCallback(() => {
     setError(undefined);
-    startCore(onLost).then(setApi, (e) => setError(String(e)));
+    startCore(onLost).then((fresh) => {
+      setApi(fresh);
+      fresh
+        .show()
+        .then(async (state) => {
+          const pile = (await fresh.piles()).find((p) => p.id === state.pile);
+          if (pile) setStack([{ name: 'piles' }, { name: 'show', pile, state }]);
+        })
+        .catch(() => {});
+    }, (e) => setError(String(e)));
   }, [onLost]);
   useEffect(start, [start]);
 
@@ -160,6 +169,8 @@ function Main() {
             onJoin={() => push({ name: 'join' })}
             onLog={() => push({ name: 'log' })}
             onRestart={restart}
+            onShow={(pile, state) => push({ name: 'show', pile, state })}
+            onPick={(pile, asset) => push({ name: 'screens', pile, asset })}
           />
         );
       case 'log':
@@ -210,7 +221,15 @@ function Main() {
           />
         );
       case 'show':
-        return <Remote api={api} pile={route.pile} initial={route.state} onStop={back} />;
+        return (
+          <Remote
+            api={api}
+            pile={route.pile}
+            initial={route.state}
+            onStop={back}
+            onPick={(asset) => replace({ name: 'screens', pile: route.pile, asset })}
+          />
+        );
     }
   };
 

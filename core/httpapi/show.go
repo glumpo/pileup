@@ -124,6 +124,23 @@ func shows(mux *http.ServeMux, h *show.Host) {
 		h.Stop()
 		w.WriteHeader(http.StatusNoContent)
 	})
+	mux.HandleFunc("GET /show/interrupted", func(w http.ResponseWriter, r *http.Request) {
+		in, err := h.Interrupted()
+		if err != nil {
+			showReply(w, r, http.StatusOK, show.State{}, err)
+			return
+		}
+		s := in.Screen
+		reply(w, http.StatusOK, map[string]any{
+			"pile":   hex.EncodeToString(in.Pile),
+			"screen": screen{ID: s.ID, Name: s.Name, Kind: s.Kind, Address: s.Addr.String(), Available: s.Available},
+			"asset":  hex.EncodeToString(in.Asset),
+		})
+	})
+	mux.HandleFunc("DELETE /show/interrupted", func(w http.ResponseWriter, r *http.Request) {
+		h.Forget()
+		w.WriteHeader(http.StatusNoContent)
+	})
 	for path, f := range map[string]func() (show.State, error){
 		"/show/next":  h.Next,
 		"/show/prev":  h.Prev,

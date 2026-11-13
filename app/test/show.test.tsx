@@ -84,6 +84,7 @@ function core(screens: Screen[] = [livingRoom, bedroom], start?: [number, unknow
     codec: undefined as string | undefined,
     extra: {} as Partial<ShowState>,
     poll: undefined as undefined | ((state: ShowState) => Reply | Promise<Reply>),
+    running: false,
   };
   const state = (): ShowState => ({
     pile: 'aa01',
@@ -112,9 +113,11 @@ function core(screens: Screen[] = [livingRoom, bedroom], start?: [number, unknow
       );
       show.playing = items[show.index].kind === 'video';
       show.renderer_error = undefined;
+      show.running = true;
       return [201, state()];
     },
-    'GET /show': () => (show.poll ? show.poll(state()) : [200, state()]),
+    'GET /show': () =>
+      !show.running ? [404, { error: 'no_show' }] : show.poll ? show.poll(state()) : [200, state()],
     'POST /show/next': () => {
       show.index = Math.min(show.index + 1, items.length - 1);
       show.playing = items[show.index].kind === 'video';
@@ -135,7 +138,10 @@ function core(screens: Screen[] = [livingRoom, bedroom], start?: [number, unknow
       show.playing = false;
       return [200, state()];
     },
-    'DELETE /show': [204],
+    'DELETE /show': () => {
+      show.running = false;
+      return [204];
+    },
     'GET /piles/aa01/pins': [200, [] as PinProgress[]],
     'GET /piles/aa01/pins/estimate?member=01': [200, estimate],
     'GET /piles/aa01/pins/estimate': [200, { ...estimate, files: 3, missing: 2, estimated_bytes: 800 * 1024 }],

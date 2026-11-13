@@ -39,6 +39,7 @@ type session struct {
 	base    string
 	wake    chan struct{}
 	kick    chan struct{}
+	moved   chan struct{}
 	answers chan answer
 
 	l *loader
@@ -83,8 +84,9 @@ func (s *session) begin(p node.Pile, items []state.Asset, cursor int, changed <-
 	s.move(cursor)
 	s.mu.Unlock()
 	s.n.Diag().Add(diag.Renderer, s.pile, s.screen.Name, "show started")
-	s.wg.Add(1)
+	s.wg.Add(2)
 	go s.follow(changed)
+	go s.keep()
 	if s.cast != nil {
 		s.wg.Add(1)
 		go s.drive()
@@ -179,6 +181,10 @@ func (s *session) move(i int) {
 		s.why, s.revived, s.misses, s.ended, s.offset, s.since = "", s.videoDown, 0, false, 0, time.Time{}
 		s.episodes, s.buffered, s.noted = 0, time.Time{}, false
 		s.streamed, _ = s.n.Streamed()
+		select {
+		case s.moved <- struct{}{}:
+		default:
+		}
 		if s.videoDown {
 			s.why = Unreachable
 			s.posterOnly(cur, Unreachable)

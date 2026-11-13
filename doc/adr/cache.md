@@ -27,6 +27,7 @@
 | `blobs/cache.db` | SQLite, WAL, `synchronous=NORMAL` (при обрыве питания теряются только последние транзакции, согласованность восстанавливает сверка при открытии, 5.7), одно соединение | да |
 | `blobs/refs/` | старый формат (до A30) | удаляется при открытии |
 | `piles/<id>.pins.json` | старые закрепления (до A30) | импортируются в `cache.db` при старте pile и удаляются |
+| `show.json` (в `<Dir>`, не в `blobs/`) | прерванный показ (6.6): pile, экран, его адрес, текущий файл | да, до «Остановить показ» или «Забыть» |
 
 Таблицы `cache.db`:
 
@@ -121,6 +122,8 @@
 | `func (*Host) Estimate(pileID, member []byte) (Estimate, error)` | оценка до закрепления |
 | `Start/Next/Prev/Goto/Stop` | двигают курсор, а с ним окно и защиту |
 | `func (*Host) Close()` | остановить показ и все загрузчики, дождаться их горутин |
+| `func (*Host) Interrupted() (Interrupted, error)` | прерванный показ из `show.json` (6.6); `ErrNoShow`, если записи нет, показ идёт или pile больше нет |
+| `func (*Host) Forget()` | удалить запись прерванного показа, если показ не идёт |
 | `type Progress struct{ Hint; Total, Done, Failed int }` | по источнику: закреплено / в кеше / «битые» |
 | `type Hint struct{ Member; Name; Platform; Reason; LastError }`, `Reason ∈ {Unreachable, Timeout}` | подсказка о неотвечающем участнике; `LastError` — класс из `Node.Presence` |
 | `type Estimate struct{ Files, Missing int; Bytes, Budget int64; Free *int64; OverBudget bool }` | см. 6.3 |
@@ -311,6 +314,14 @@
 - **Раздача оригинала (A64).** Отдельный от `Node.Streamed` счётчик `serving` (`core/node/meter.go`) считает байты своих оригиналов: успешные ответы T3 участникам в `serveBlob` и `ServeOriginal` для своего видео (не прокси чужого). `Node.Serving()` — были ли такие байты за последние 5 с; UI-маршрут `GET /serving` → `{"serving": bool}`. Приложение (`app/src/Serving.tsx`, подключён в `App.tsx` поверх любого экрана) спрашивает его раз в 3 с, пока приложение активно; пока признак был виден за последнюю минуту, держит экран включённым (`useKeepAwake("serving")`) и показывает баннер «Не блокируйте телефон и не сворачивайте Pileup: с него идёт видео на экран.»
 - **«Перезапустить показ» (A57).** `Host.Start` того же pile и экрана, когда показ в `reconnecting`, только прерывает паузу переподключения (если экран виден в обнаружении — по его текущему адресу) и возвращает состояние. Иначе новый экран подключается до остановки старого показа; ошибка подключения или поиска экрана старый показ не трогает.
 
+### 6.6 Прерванный показ (`core/show/resume.go`, A63)
+
+- **Запись.** Сессия пишет `<Dir>/show.json` (`device.WriteFile`: временный файл, `fsync`, переименование): pile, id, имя, вид и адрес экрана, asset и `taken_at` текущего файла. Токен показа не пишется. Первая смена курсора (старт) пишется сразу, следующие — не чаще раза в 2 с (`remember`), последний курсор дописывается при закрытии сессии; серия «Следующий» даёт одну-две записи. Ошибка записи — в журнал (`renderer`, «remember show»), показ идёт дальше.
+- **Удаление.** Только `Host.Stop` («Остановить показ») и `Host.Forget` («Забыть»). `Host.Close` (остановка ядра, `mobile.Stop`) запись оставляет; смерть процесса оставляет последнюю записанную (курсор отстаёт не больше чем на 2 с нажатий).
+- **`Interrupted`.** Пока показ идёт — `ErrNoShow`. Pile больше нет (`ErrUnknownPile`) — запись удаляется, `ErrNoShow`. Файл записи удалён из хронологии — первый файл с `taken_at` не раньше записанного, иначе последний (как A32); пустой pile — без файла.
+- **Подключение по адресу.** `Host.Start` с экраном, которого ещё нет в обнаружении, но который совпадает с экраном записи вида `cast`, подключается по записанному адресу; не ответил — `ErrUnreachable` (`screen_unreachable`). AirPlay и прочие экраны без обнаружения — `unknown_screen`.
+- **HTTP.** `GET /show/interrupted` → `{pile, screen, asset}` или 404 `no_show`; `DELETE /show/interrupted` → 204.
+
 ## 7. Инварианты
 
 1. Физический файл удаляется только тогда, когда на его hash не ссылается ни один объект. Объект удаляется только тогда, когда его не удерживает ни один pile. Снятие, публикация и вытеснение идут под одним мьютексом.
@@ -364,7 +375,7 @@
 
 - `core/blob/blob.go`, `blob_test.go` — хранилище, попытки, бюджет (сценарии на `testing/synctest`).
 - `core/node/blobs.go` (Blob, open, render, fetch, download, dialOwner, serveBlob, ServeOriginal, thumbnails, Retain), `pins.go`, `thumbhash.go`, `timeline.go`, `media.go` (asset_id, revision), `node.go` (Open/Close, таймауты, `learn`, announce, вход), `address.go` (чей адрес, вытеснение устаревших адресов); тесты `blobs_test.go`, `render_test.go` (очередь рендера, брошенный запрос участника), `cache_test.go`, `pins_test.go`, `thumbhash_test.go`, `thumbnails_test.go` (фоновые T1: недоступный владелец, пауза файла, проход без обращения к кешу), `owner_test.go` (адрес владельца, таймауты загрузки и прокси оригинала, переиспользование соединений), `silent_test.go` (память об отказе владельца, A59), `address_test.go` (смена адреса участника).
-- `core/show/loader.go`, `show.go`, `session.go`, `renderer.go`; тесты `cache_test.go`, `pins_test.go`, `show_test.go`, `removal_test.go`, `reload_test.go`.
+- `core/show/loader.go`, `show.go`, `session.go`, `renderer.go`, `resume.go`; тесты `cache_test.go`, `pins_test.go`, `show_test.go`, `removal_test.go`, `reload_test.go`, `resume_test.go`.
 - `core/prefetch/prefetch.go`; тесты `prefetch_test.go`, `property_test.go` (rapid).
 - `core/httpapi/blobs.go`, `pins.go`; тесты `blobs_test.go`, `pins_test.go`. Контракт — `api/openapi.yaml`.
 - `core/mobile/mobile.go` — порядок остановки.

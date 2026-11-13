@@ -65,6 +65,8 @@ export type ShowItem = {
   codec?: string;
 };
 
+export type InterruptedShow = { pile: string; screen: Screen; asset: string };
+
 export type Hint = { author: string; name: string; platform: string; reason: string; last_error?: string };
 
 export type ShowState = {
@@ -190,6 +192,8 @@ export function connect(port: number, token: string, lost?: () => void) {
     show: () => call<ShowState>('GET', '/show'),
     showCommand: (command: 'next' | 'prev' | 'play' | 'pause') => call<ShowState>('POST', `/show/${command}`),
     stopShow: () => call<void>('DELETE', '/show'),
+    interruptedShow: () => call<InterruptedShow>('GET', '/show/interrupted'),
+    forgetShow: () => call<void>('DELETE', '/show/interrupted'),
     pins: (pile: string) => call<PinProgress[]>('GET', `/piles/${pile}/pins`),
     pinEstimate: (pile: string, member?: string) =>
       call<PinEstimate>('GET', `/piles/${pile}/pins/estimate${member ? `?member=${member}` : ''}`),

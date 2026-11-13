@@ -26,7 +26,7 @@ const notch = { top: 59, bottom: 34, left: 0, right: 0 };
 const july1 = Date.UTC(2026, 6, 1, 6, 0);
 const items: TimelineItem[] = [asset('f3', 'Аня', july1), asset('a1', 'Боря', july1 + 60_000)];
 
-function core(extra: Record<string, Reply> = {}) {
+function core(extra: Record<string, Reply | (() => Reply)> = {}) {
   return fakeCore({
     'GET /piles': [200, [georgia]],
     'GET /piles/aa01/invite': [200, { invite: INVITE }],
@@ -101,7 +101,12 @@ test('the show remote is left only by stopping the show', async () => {
     waiting: [],
     hints: [],
   };
-  core({ 'POST /show': [201, state], 'GET /show': [200, state], 'DELETE /show': [204] });
+  let running = false;
+  core({
+    'POST /show': () => ((running = true), [201, state]),
+    'GET /show': () => (running ? [200, state] : [404, { error: 'no_show' }]),
+    'DELETE /show': () => ((running = false), [204]),
+  });
   const user = userEvent.setup();
   await render(<App />);
   await user.press(await screen.findByText('Грузия'));

@@ -66,11 +66,13 @@ export function Remote({
   pile,
   initial,
   onStop,
+  onPick,
 }: {
   api: Api;
   pile: Pile;
   initial: ShowState;
   onStop: () => void;
+  onPick: (asset: string) => void;
 }) {
   const [state, setState] = useState(initial);
   const [timeline, setTimeline] = useState<TimelineItem[]>([]);
@@ -79,6 +81,7 @@ export function Remote({
   const [ended, setEnded] = useState(false);
   const [reconnecting, setReconnecting] = useState<number>();
   const commands = useRef(0);
+  const resumed = useRef<Api>(undefined);
   const pins = usePins(api, pile.id);
   useKeepAwake();
 
@@ -86,6 +89,17 @@ export function Remote({
     api.timeline(pile.id).then(setTimeline, (e: unknown) => setError(describe(e)));
     let stopped = false;
     let timer: ReturnType<typeof setTimeout>;
+    const resume = async () => {
+      if (resumed.current === api) return undefined;
+      resumed.current = api;
+      try {
+        const show = await api.interruptedShow();
+        if (show.pile !== pile.id) return undefined;
+        return await api.startShow(show.pile, show.screen.id, show.asset || undefined);
+      } catch (e) {
+        if (!(e instanceof ApiError && e.code === 'no_show')) setError(describe(e));
+      }
+    };
     const poll = async () => {
       const seen = commands.current;
       try {
@@ -96,10 +110,14 @@ export function Remote({
       } catch (e) {
         if (stopped) return;
         if (e instanceof ApiError && e.code === 'no_show') {
-          setEnded(true);
-          return;
-        }
-        setPollError(describe(e));
+          const st = await resume();
+          if (stopped) return;
+          if (!st) {
+            setEnded(true);
+            return;
+          }
+          setState(st);
+        } else setPollError(describe(e));
       }
       timer = setTimeout(poll, 1000);
     };
@@ -150,6 +168,8 @@ export function Remote({
       <Screen title={`На экране «${state.screen.name}»`}>
         <ScrollView contentContainerStyle={styles.body}>
           <Text style={{ fontSize: 17, fontWeight: '600' }}>Показ завершён. Чтобы продолжить, начните показ снова.</Text>
+          <ErrorText error={error} />
+          <Button title="Выбрать экран" onPress={() => onPick(state.current.id)} />
           <Button title="Закрыть" onPress={onStop} />
         </ScrollView>
       </Screen>
