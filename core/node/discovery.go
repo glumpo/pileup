@@ -182,6 +182,9 @@ func (n *Node) Screens() []Screen {
 		out = append(out, Screen{ID: "cast:" + name, Name: cmp.Or(s.txt["fn"], name), Kind: "cast", Addr: s.addr, Available: true})
 	}
 	for name, s := range n.found[airplayService] {
+		if speaker(s.txt["model"]) {
+			continue
+		}
 		sc := Screen{ID: "airplay:" + name, Name: name, Kind: "airplay", Addr: s.addr, Available: ios}
 		if !ios {
 			sc.Reason = airplayReason
@@ -190,6 +193,10 @@ func (n *Node) Screens() []Screen {
 	}
 	slices.SortFunc(out, func(x, y Screen) int { return cmp.Or(cmp.Compare(x.Name, y.Name), cmp.Compare(x.ID, y.ID)) })
 	return out
+}
+
+func speaker(model string) bool {
+	return strings.HasPrefix(model, "AudioAccessory") || strings.HasPrefix(model, "AirPort")
 }
 
 func txtRecord(entries ...string) []byte {

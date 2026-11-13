@@ -48,6 +48,13 @@ type showState struct {
 	RendererError    *rendererError `json:"renderer_error,omitempty"`
 	Waiting          []showItem     `json:"waiting"`
 	Hints            []hint         `json:"hints"`
+	Slide            *slide         `json:"slide,omitempty"`
+}
+
+type slide struct {
+	Image  string   `json:"image"`
+	Video  string   `json:"video,omitempty"`
+	Around []string `json:"around"`
 }
 
 func toHint(h show.Hint) hint {
@@ -91,6 +98,9 @@ func toShowState(st show.State) showState {
 	}
 	for _, h := range st.Hints {
 		out.Hints = append(out.Hints, toHint(h))
+	}
+	if sl := st.Slide; sl != nil {
+		out.Slide = &slide{Image: sl.Image, Video: sl.Video, Around: append([]string{}, sl.Around...)}
 	}
 	return out
 }
@@ -152,6 +162,19 @@ func shows(mux *http.ServeMux, h *show.Host) {
 			showReply(w, r, http.StatusOK, st, err)
 		})
 	}
+	mux.HandleFunc("POST /show/player", func(w http.ResponseWriter, r *http.Request) {
+		var req struct{ Asset, State, Message string }
+		if !decode(w, r, &req) {
+			return
+		}
+		asset, err := hex.DecodeString(req.Asset)
+		if err != nil {
+			fail(w, r, node.ErrUnknownAsset)
+			return
+		}
+		st, err := h.Player(asset, req.State, req.Message)
+		showReply(w, r, http.StatusOK, st, err)
+	})
 	mux.HandleFunc("POST /show/goto", func(w http.ResponseWriter, r *http.Request) {
 		var req struct{ Asset string }
 		if !decode(w, r, &req) {
@@ -184,6 +207,8 @@ func showReply(w http.ResponseWriter, r *http.Request, status int, st show.State
 		reply(w, http.StatusConflict, problem("not_video"))
 	case errors.Is(err, show.ErrUnreachable):
 		reply(w, http.StatusBadGateway, problem("screen_unreachable"))
+	case errors.Is(err, show.ErrPlayerState):
+		reply(w, http.StatusBadRequest, problem("bad_request"))
 	default:
 		fail(w, r, err)
 	}

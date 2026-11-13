@@ -489,7 +489,8 @@ paths:
       description: >-
         Google Cast (_googlecast._tcp) and AirPlay (_airplay._tcp) receivers
         currently seen by mDNS, ordered by name. A screen this device cannot
-        show on is still listed, with the reason.
+        show on is still listed, with the reason. AirPlay speakers (TXT model
+        AudioAccessory… or AirPort…: HomePod, AirPort Express) are not listed.
       responses:
         "200":
           description: Screens in the local network.
@@ -571,7 +572,11 @@ paths:
         the 5 files before the cursor is prefetched from their owners into
         the cache of the pile, which
         outlives the show (see /piles/{id}/pins). An AirPlay screen is
-        available only on an iPhone host, where the app renders it natively.
+        available only on an iPhone host, where the app renders it natively:
+        the host serves the same media port on its address in the route to
+        the Apple TV, and the state carries slide with its URLs. A Cast or
+        AirPlay screen remembered in /show/interrupted and not yet found by
+        discovery is taken at the remembered address.
       requestBody:
         required: true
         content:
@@ -644,8 +649,8 @@ paths:
       description: >-
         The host remembers the running show in show.json (pile, screen, its
         address and the current file) and forgets it only on DELETE /show.
-        Continue it with POST /show; a Cast screen not yet found by discovery
-        is then connected at the remembered address. asset is the remembered
+        Continue it with POST /show; a Cast or AirPlay screen not yet found
+        by discovery is then taken at the remembered address. asset is the remembered
         file or, if it was removed, the next remaining one.
       responses:
         "200":
@@ -721,6 +726,47 @@ paths:
         "200":
           $ref: "#/components/responses/ShowState"
         "400":
+          $ref: "#/components/responses/Error"
+        "401":
+          description: Missing or invalid token.
+        "404":
+          description: no_show or unknown_asset.
+          $ref: "#/components/responses/Error"
+  /show/player:
+    post:
+      operationId: showPlayer
+      summary: State of the native video player of an AirPlay show
+      description: >-
+        The iPhone host app reports what its AVPlayer does with slide.video.
+        buffering (only while playing) and playing (only after buffering)
+        drive buffering and stalled; ended shows the poster until play;
+        failed makes the video unavailable with video_reason unsupported and
+        logs message. A report about another file than the current video,
+        or on a Cast show, changes nothing.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - asset
+                - state
+              properties:
+                asset:
+                  type: string
+                  pattern: "^[0-9a-f]+$"
+                state:
+                  type: string
+                  enum: [playing, buffering, ended, failed]
+                message:
+                  type: string
+                  description: Error of the player, with failed; written to /diag.
+      responses:
+        "200":
+          $ref: "#/components/responses/ShowState"
+        "400":
+          description: bad_request — unknown state or body.
           $ref: "#/components/responses/Error"
         "401":
           description: Missing or invalid token.
@@ -1137,6 +1183,29 @@ components:
             A member whose files wait is also logged in /diag as kind timeout.
           items:
             $ref: "#/components/schemas/Hint"
+        slide:
+          type: object
+          description: >-
+            Only on an AirPlay show: what the iPhone host draws on the external
+            display. URLs of the show's media port on the LAN address, valid
+            until the show stops, without headers.
+          required:
+            - image
+            - around
+          properties:
+            image:
+              type: string
+              description: T2 of the current file (the poster of a video).
+            video:
+              type: string
+              description: >-
+                Original of the current video with Range, for AVPlayer external
+                playback; absent while the video is unavailable or has ended.
+            around:
+              type: array
+              description: T2 of the next and the previous file, to decode ahead.
+              items:
+                type: string
     Hint:
       type: object
       required:
