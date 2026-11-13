@@ -29,12 +29,20 @@ import (
 type library struct {
 	mu    sync.Mutex
 	items []any
+	scans int
 }
 
 func (l *library) Media(from, to int64) ([]byte, error) {
 	l.mu.Lock()
 	defer l.mu.Unlock()
+	l.scans++
 	return json.Marshal(l.items)
+}
+
+func (l *library) scanned() int {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	return l.scans
 }
 
 func (l *library) set(items ...any) {
@@ -345,6 +353,37 @@ func TestExcludedFileDisappearsForEveryone(t *testing.T) {
 
 	decide(t, a, p.ID, ids["2"], true)
 	waitAssets(t, p.ID, idSet(ids["1"], ids["2"], ids["3"]), a, b, c)
+}
+
+func TestTogglingListedFilesDoesNotScanTheLibraryAgain(t *testing.T) {
+	lib := shelf(photo("1", "2026-07-02T10:00:00Z"), photo("2", "2026-07-02T11:00:00Z"), photo("3", "2026-07-02T12:00:00Z"))
+	a := openWith(t, t.TempDir(), "ios", lib)
+	p := create(t, a, "Грузия", "Аня")
+	choose(t, a, p.ID, "2026-07-01T00:00:00Z", "2026-07-10T00:00:00Z")
+	ids := assetIDs(t, a, p.ID)
+	listed := lib.scanned()
+	for i := range 5 {
+		decide(t, a, p.ID, ids["1"], i%2 == 1)
+		decide(t, a, p.ID, ids["2"], false)
+	}
+	if got := lib.scanned() - listed; got != 0 {
+		t.Fatalf("10 toggles after the list scanned the library %d times, want 0", got)
+	}
+	if got := keys(assetsOn(t, a, p.ID)); !slices.Equal(got, idSet(ids["3"])) {
+		t.Fatalf("published %d files after the toggles, want only 3", len(got))
+	}
+
+	lib.set(photo("1", "2026-07-02T10:00:00Z"), photo("2", "2026-07-02T11:00:00Z"), photo("3", "2026-07-02T12:00:00Z"), photo("4", "2026-07-02T13:00:00Z"))
+	fresh := assetIDs(t, a, p.ID)
+	decide(t, a, p.ID, fresh["4"], true)
+	if got := keys(assetsOn(t, a, p.ID)); !slices.Equal(got, idSet(ids["3"], fresh["4"])) {
+		t.Fatal("a file that appeared in a new list cannot be toggled")
+	}
+	choose(t, a, p.ID, "2026-07-02T11:30:00Z", "2026-07-10T00:00:00Z")
+	decide(t, a, p.ID, fresh["3"], false)
+	if got := keys(assetsOn(t, a, p.ID)); !slices.Equal(got, idSet(fresh["4"])) {
+		t.Fatal("toggle after a new range used the files of the old range")
+	}
 }
 
 func TestManualDecisionsSurviveRestart(t *testing.T) {
