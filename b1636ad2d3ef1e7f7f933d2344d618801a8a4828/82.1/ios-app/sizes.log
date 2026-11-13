@@ -1,0 +1,5 @@
+68908	app/modules/core/ios/Mobile.xcframework/ios-arm64_x86_64-simulator/Mobile.framework/Mobile
+35040	app/modules/core/ios/Mobile.xcframework/ios-arm64/Mobile.framework/Mobile
+53556	app/ios/build/Build/Products/Release-iphonesimulator/Pileup.app
+15284	app/ios/build/Build/Products/Release-iphonesimulator/Pileup.app/Pileup
+app/ios/build/Build/Intermediates.noindex/Pileup.build/Release-iphonesimulator/Pileup.build/Pileup-LinkMap-normal-arm64.txt: linked without zerofill 12783806 bytes, core 12355697 bytes
