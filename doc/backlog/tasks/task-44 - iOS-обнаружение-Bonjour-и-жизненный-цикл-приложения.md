@@ -1,11 +1,11 @@
 ---
 id: TASK-44
 title: 'iOS: обнаружение Bonjour и жизненный цикл приложения'
-status: In Progress
+status: Done
 assignee:
   - '@claude'
 created_date: '2026-11-11T01:20:00Z'
-updated_date: '2026-11-12T17:32:00Z'
+updated_date: '2026-11-13T07:48:00Z'
 labels:
   - ios
   - app
@@ -51,6 +51,8 @@ iPhone должен находить участников и экраны без
 Лид, 2026-11-11: объём уточнён после ревью. Перезапуск слушателя порта pile в ядре уже сделан в TASK-49 (A55): Node.Reconnect проверяет каждый порт pile подключением к себе и переоткрывает его; связь UI с ядром проверяется приложением при возврате на передний план (TASK-48, A54). В этой задаче остаётся нативная сторона. Добавлены находки ревью D5 (запрет «Локальной сети» неотличим от «другой сети») и V5 п. 2 (фон во время раздачи) — doc/review-2026-11-11/diagnosability.md, video.md.
 
 Реализовано (A50): Discovery.swift (DNSServiceRegister / NWBrowser / DNSServiceResolve+GetAddrInfo IPv4), Lifecycle.swift (willEnterForeground → restart Bonjour; didEnterBackground → beginBackgroundTask, по истечении Core.stop), DiscoveryHandler.Denied → Node.LocalNetworkDenied, GET /local-network, join → local_network_denied, баннер src/LocalNetwork.tsx в PileScreen/Join/ScreenPicker, проверка ATS в make ios-prebuild. mDNS на macOS-раннере работает (DiscoveryTests ~10 с). Не отмечены #2, #4, #5: логика проверена на симуляторе и тестами (restart, Lifecycle.expired, PolicyDenied→признак, баннер), но поведение при реальной приостановке и реальный запрет «Локальной сети» требуют iPhone — сценарии проверки в doc/adr/ios.md §11.
+
+Лид: слито в master. Критерии 2, 4, 5 не отмечены осознанно: логика покрыта тестами на симуляторе и в ядре, но реальная приостановка, запрет «Локальной сети» и фон во время раздачи проверяются только на iPhone — сценарии в doc/adr/ios.md §12, проверка в TASK-20.
 <!-- SECTION:NOTES:END -->
 
 ## Final Summary
