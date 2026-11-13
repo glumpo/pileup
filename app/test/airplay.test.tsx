@@ -185,10 +185,11 @@ test('what the native player does with the video reaches the core', async () => 
   await user.press(screen.getByRole('button', { name: 'Следующий' }));
   await screen.findByText('2 / 3');
 
-  await act(() => native.emit('onPlayer', { asset: 'a1', state: 'buffering' }));
-  await act(() => native.emit('onPlayer', { asset: 'a1', state: 'failed', message: 'Cannot Open' }));
+  const video = 'http://192.168.1.5:50123/show/t/a1/r1/3';
+  await act(() => native.emit('onPlayer', { asset: 'a1', video, state: 'buffering' }));
+  await act(() => native.emit('onPlayer', { asset: 'a1', video, state: 'failed', reason: 'network', message: 'NSURLErrorDomain -1004' }));
   expect(requests.filter((r) => r.path === '/show/player').map((r) => r.body)).toEqual([
-    { asset: 'a1', state: 'buffering' },
-    { asset: 'a1', state: 'failed', message: 'Cannot Open' },
+    { asset: 'a1', video, state: 'buffering' },
+    { asset: 'a1', video, state: 'failed', reason: 'network', message: 'NSURLErrorDomain -1004' },
   ]);
 });

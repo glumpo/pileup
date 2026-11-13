@@ -139,34 +139,37 @@ func TestAppleTVPlayerStateReachesTheRemote(t *testing.T) {
 	show.Stalls(t, time.Hour)
 	a, _, p, tv := appleTVShow(t)
 	v := a.asset(p, "V").Meta.AssetID
-	must(t)(a.show.Start(p.ID, tv, v))
+	video := must(t)(a.show.Start(p.ID, tv, v)).Slide.Video
+	report := func(asset []byte, state string) (show.State, error) {
+		return a.show.Player(show.PlayerReport{Asset: asset, Video: video, State: state})
+	}
 
-	if st := must(t)(a.show.Player(v, "buffering", "")); !st.Buffering || !st.Playing || st.Stalled {
+	if st := must(t)(report(v, "buffering")); !st.Buffering || !st.Playing || st.Stalled {
 		t.Fatalf("buffering: %+v", st)
 	}
-	if st := must(t)(a.show.Player(v, "playing", "")); st.Buffering || !st.Playing {
+	if st := must(t)(report(v, "playing")); st.Buffering || !st.Playing {
 		t.Fatalf("playing after buffering: %+v", st)
 	}
-	if st := must(t)(a.show.Player(v, "buffering", "")); !st.Stalled {
+	if st := must(t)(report(v, "buffering")); !st.Stalled {
 		t.Fatalf("second buffering is not stalled: %+v", st)
 	}
-	must(t)(a.show.Player(v, "playing", ""))
+	must(t)(report(v, "playing"))
 
 	must(t)(a.show.Pause())
-	if st := must(t)(a.show.Player(v, "buffering", "")); st.Buffering || st.Playing {
+	if st := must(t)(report(v, "buffering")); st.Buffering || st.Playing {
 		t.Fatalf("paused video reported buffering: %+v", st)
 	}
-	if st := must(t)(a.show.Player(v, "playing", "")); st.Playing {
+	if st := must(t)(report(v, "playing")); st.Playing {
 		t.Fatal("late report from the player resumed a paused video")
 	}
 	must(t)(a.show.Play())
 
 	other := a.asset(p, "A1").Meta.AssetID
-	if st := must(t)(a.show.Player(other, "ended", "")); !st.Playing || st.Slide.Video == "" {
+	if st := must(t)(report(other, "ended")); !st.Playing || st.Slide.Video == "" {
 		t.Fatalf("report about another file changed the video: %+v", st)
 	}
 
-	st := must(t)(a.show.Player(v, "ended", ""))
+	st := must(t)(report(v, "ended"))
 	if st.Playing || st.Slide.Video != "" || body(t, st.Slide.Image) != display("V") {
 		t.Fatalf("finished video: %+v", st)
 	}
@@ -174,18 +177,60 @@ func TestAppleTVPlayerStateReachesTheRemote(t *testing.T) {
 		t.Fatalf("play after the end: %+v", st)
 	}
 
-	st = must(t)(a.show.Player(v, "failed", "Cannot Open"))
+	st = must(t)(a.show.Player(show.PlayerReport{Asset: v, Video: video, State: "failed", Reason: "unsupported", Message: "Cannot Open"}))
 	if !st.VideoUnavailable || st.VideoReason != show.Unsupported || st.Playing || st.Slide.Video != "" {
 		t.Fatalf("failed video: %+v", st)
 	}
 	eventually(t, "player failure in diag", func() bool { return logged(a, "Cannot Open") })
 
-	if _, err := a.show.Player(v, "dancing", ""); !errors.Is(err, show.ErrPlayerState) {
+	if _, err := report(v, "dancing"); !errors.Is(err, show.ErrPlayerState) {
 		t.Fatalf("unknown player state: %v", err)
 	}
 	a.show.Stop()
-	if _, err := a.show.Player(v, "playing", ""); !errors.Is(err, show.ErrNoShow) {
+	if _, err := report(v, "playing"); !errors.Is(err, show.ErrNoShow) {
 		t.Fatalf("player report without a show: %v", err)
+	}
+}
+
+func TestAppleTVPlayerFailureTellsFormatFromNetwork(t *testing.T) {
+	a, _, p, tv := appleTVShow(t)
+	v := a.asset(p, "V").Meta.AssetID
+	video := must(t)(a.show.Start(p.ID, tv, v)).Slide.Video
+	for _, c := range []struct{ reason, want string }{
+		{"network", show.Network},
+		{"", show.Unplayable},
+		{"unsupported", show.Unsupported},
+	} {
+		st := must(t)(a.show.Player(show.PlayerReport{Asset: v, Video: video, State: "failed", Reason: c.reason, Message: "error " + c.reason}))
+		if !st.VideoUnavailable || st.VideoReason != c.want || st.Playing {
+			t.Fatalf("failure %q: %+v, want reason %q", c.reason, st, c.want)
+		}
+		if st := must(t)(a.show.Play()); !st.Playing || st.Slide.Video != video {
+			t.Fatalf("play after failure %q: %+v", c.reason, st)
+		}
+	}
+}
+
+func TestAppleTVReportOfAnEarlierShowDoesNotTouchTheCurrentVideo(t *testing.T) {
+	a, _, p, tv := appleTVShow(t)
+	v := a.asset(p, "V").Meta.AssetID
+	earlier := must(t)(a.show.Start(p.ID, tv, v)).Slide.Video
+	a.show.Stop()
+	video := must(t)(a.show.Start(p.ID, tv, v)).Slide.Video
+	if video == earlier {
+		t.Fatalf("both shows play %q", video)
+	}
+	for _, r := range []show.PlayerReport{
+		{Asset: v, Video: earlier, State: "failed", Reason: "network"},
+		{Asset: v, Video: earlier, State: "ended"},
+		{Asset: v, State: "failed"},
+	} {
+		if st := must(t)(a.show.Player(r)); !st.Playing || st.VideoUnavailable || st.Slide.Video != video {
+			t.Fatalf("report %+v changed the current video: %+v", r, st)
+		}
+	}
+	if st := must(t)(a.show.Player(show.PlayerReport{Asset: v, Video: video, State: "ended"})); st.Playing {
+		t.Fatalf("report of the current show is ignored: %+v", st)
 	}
 }
 

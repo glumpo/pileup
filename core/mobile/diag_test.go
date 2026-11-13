@@ -7,11 +7,13 @@ import (
 	"os/exec"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/glumpo/pileup/core/mobile"
 )
 
 type logged struct {
+	Time    int64  `json:"time"`
 	Kind    string `json:"kind"`
 	Message string `json:"message"`
 	Count   int    `json:"count"`
@@ -65,6 +67,22 @@ func TestReportReachesLogBeforeStartWhileRunningAndAfterStop(t *testing.T) {
 	es := events(t)
 	if len(find(es, "discovery", "nsd: stop discovery")) != 1 || len(find(es, "media", "no cursor")) != 1 || len(find(es, "app", "1.4.0 android started")) != 1 || find(es, "app", "1.4.0 android started")[0].Count != 2 {
 		t.Fatalf("events after restart %+v, want the report after Stop, the earlier events and the start counted twice", es)
+	}
+}
+
+func TestReportWhileStoppedKeepsItsTime(t *testing.T) {
+	d := newDevice(t)
+	start(t, d)
+	if err := mobile.Stop(); err != nil {
+		t.Fatal(err)
+	}
+	reported := time.Now()
+	mobile.Report("app", "core stopped after background expiration in 120 ms")
+	time.Sleep(300 * time.Millisecond)
+	start(t, d)
+	es := find(events(t), "app", "background expiration")
+	if len(es) != 1 || es[0].Time < reported.UnixMilli()-1 || es[0].Time > reported.UnixMilli()+100 {
+		t.Fatalf("events %+v, want the report with its own time %d", es, reported.UnixMilli())
 	}
 }
 

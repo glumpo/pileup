@@ -458,6 +458,24 @@ test('a video the screen or its owner cannot give is explained by its reason', a
       { timeout: 10000 },
     ),
   ).toBeOnTheScreen();
+
+  show.videoReason = 'network';
+  expect(
+    await screen.findByText(
+      'Экран не смог загрузить это видео с iPhone: пропала связь или источник недоступен. На экране постер. Проверьте Wi-Fi и нажмите «Воспроизвести» или переходите к следующему файлу.',
+      {},
+      { timeout: 10000 },
+    ),
+  ).toBeOnTheScreen();
+
+  show.videoReason = 'unplayable';
+  expect(
+    await screen.findByText(
+      'Экран не смог воспроизвести это видео. На экране постер. Нажмите «Воспроизвести», чтобы попробовать ещё раз, или переходите к следующему файлу.',
+      {},
+      { timeout: 10000 },
+    ),
+  ).toBeOnTheScreen();
   expect(screen.queryByText(/Видео недоступно/)).toBeNull();
 });
 

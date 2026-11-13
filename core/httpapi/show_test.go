@@ -229,9 +229,16 @@ func TestAppleTVSlideAndPlayerStateThroughAPI(t *testing.T) {
 	if st.Slide == nil || st.Slide.Image == "" || st.Slide.Video == "" || len(st.Slide.Around) != 2 {
 		t.Fatalf("slide of a video on Apple TV: %+v", st.Slide)
 	}
-	c.do("POST", "/show/player", map[string]string{"asset": items[1].ID, "state": "buffering"}, http.StatusOK, &st)
+	c.do("POST", "/show/player", map[string]string{"asset": items[1].ID, "video": st.Slide.Video, "state": "buffering"}, http.StatusOK, &st)
 	if !st.Buffering || !st.Playing {
 		t.Fatalf("buffering reported by the player: %+v", st)
+	}
+	var failed struct {
+		Reason string `json:"video_reason"`
+	}
+	c.do("POST", "/show/player", map[string]string{"asset": items[1].ID, "video": st.Slide.Video, "state": "failed", "reason": "network", "message": "NSURLErrorDomain -1004"}, http.StatusOK, &failed)
+	if failed.Reason != "network" {
+		t.Fatalf("network failure reported by the player: %+v", failed)
 	}
 	c.fails("POST", "/show/player", map[string]string{"asset": items[1].ID, "state": "dancing"}, http.StatusBadRequest, "bad_request")
 	c.fails("POST", "/show/player", map[string]string{"asset": "zz", "state": "playing"}, http.StatusNotFound, "unknown_asset")
