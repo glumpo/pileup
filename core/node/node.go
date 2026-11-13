@@ -47,11 +47,12 @@ const (
 var announceTimeout = timeout
 
 var (
-	ErrUnknownPile = errors.New("node: unknown pile")
-	ErrJoined      = errors.New("node: already a member of this pile")
-	ErrUnreachable = errors.New("node: no inviter address accepted the invite")
-	ErrOffline     = errors.New("node: no network address to invite with")
-	ErrBrokenPile  = errors.New("node: pile could not be opened")
+	ErrUnknownPile  = errors.New("node: unknown pile")
+	ErrJoined       = errors.New("node: already a member of this pile")
+	ErrUnreachable  = errors.New("node: no inviter address accepted the invite")
+	ErrLocalNetwork = errors.New("node: local network access is denied")
+	ErrOffline      = errors.New("node: no network address to invite with")
+	ErrBrokenPile   = errors.New("node: pile could not be opened")
 )
 
 type Config struct {
@@ -126,6 +127,7 @@ type Node struct {
 	piles  []*pile
 	broken []broken
 	found  map[string]map[string]service
+	denied bool
 
 	selecting sync.Mutex
 	rendering turns
@@ -261,6 +263,9 @@ func (n *Node) Join(ctx context.Context, inv, member string) (Pile, error) {
 		return Pile{}, cmp.Or(err, ErrJoined)
 	}
 	addr, who, err := n.reach(ctx, i)
+	if errors.Is(err, ErrUnreachable) && n.LocalNetworkDenied() {
+		err = fmt.Errorf("%w: %w", ErrLocalNetwork, err)
+	}
 	if err != nil {
 		return Pile{}, err
 	}

@@ -51,6 +51,7 @@ type DiscoveryProvider interface {
 type DiscoveryHandler interface {
 	Found(name, host string, port int, txt []byte)
 	Lost(name string)
+	Denied(denied bool)
 }
 
 type nativeDiscovery struct{ DiscoveryProvider }

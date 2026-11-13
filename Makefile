@@ -65,6 +65,7 @@ ios-test: $(XCODEGEN)
 ios-prebuild:
 	cd app && npm ci --no-audit --no-fund
 	cd app && CI=1 npx expo prebuild --platform ios --clean --no-install
+	plutil -convert json -o - app/ios/Pileup/Info.plist | node -e 'const a = JSON.parse(require("fs").readFileSync(0)).NSAppTransportSecurity; console.log("ATS", a); if (Object.keys(a).sort().join() !== "NSAllowsArbitraryLoads,NSAllowsLocalNetworking" || a.NSAllowsArbitraryLoads !== false || a.NSAllowsLocalNetworking !== true) process.exit(1)'
 	cd app/ios && pod install
 
 ios-build:

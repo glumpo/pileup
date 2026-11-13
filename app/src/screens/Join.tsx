@@ -4,6 +4,7 @@ import { ActivityIndicator, Linking, ScrollView, StyleSheet, Text } from 'react-
 
 import { Api, ApiError, Pile } from '../api';
 import { Button, describe, ErrorText, Field, Screen, styles } from '../ui';
+import { LocalNetworkBanner } from '../LocalNetwork';
 
 const unreachable: Record<string, string> = {
   refused: 'Пригласивший телефон не принимает подключение: попросите открыть Pileup на экране с приглашением.',
@@ -57,6 +58,7 @@ export function Join({ api, onBack, onJoined }: { api: Api; onBack: () => void; 
 
   return (
     <Screen title="Войти в pile" onBack={onBack}>
+      <LocalNetworkBanner api={api} />
       <ScrollView contentContainerStyle={styles.body} keyboardShouldPersistTaps="handled" automaticallyAdjustKeyboardInsets>
         {scanning ? (
           <CameraView

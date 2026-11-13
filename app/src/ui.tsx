@@ -9,6 +9,7 @@ const messages: Record<string, string> = {
   bad_invite: 'Это не приглашение Pileup',
   unknown_invite_version: 'Приглашение из более новой версии приложения',
   already_joined: 'Вы уже участник этого pile',
+  local_network_denied: 'Нет доступа к локальной сети: откройте Настройки → Pileup и включите «Локальная сеть»',
   inviter_unreachable: 'Не удалось связаться с пригласившим: телефоны должны быть в одной сети',
   offline: 'Нет сети: подключитесь к Wi-Fi, чтобы пригласить',
   no_media: 'Медиатека недоступна',
