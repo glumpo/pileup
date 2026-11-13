@@ -1,0 +1,3 @@
+cd core && GOBIN=/Users/runner/work/pileup/pileup/build/bin go install tool
+rm -rf app/modules/core/ios/Mobile.xcframework
+cd core && PATH=/Users/runner/work/pileup/pileup/build/bin:$PATH gomobile bind -target=ios -iosversion 16.4 -o ../app/modules/core/ios/Mobile.xcframework ./mobile
