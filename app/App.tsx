@@ -80,6 +80,14 @@ function Main() {
   const checking = useRef(false);
   const lost = useRef(() => {});
   const onLost = useCallback(() => lost.current(), []);
+  const active = useRef(AppState.currentState !== 'background' && AppState.currentState !== 'inactive');
+
+  useEffect(() => {
+    const sub = AppState.addEventListener('change', (state) => {
+      active.current = state === 'active';
+    });
+    return () => sub.remove();
+  }, []);
 
   const start = useCallback(() => {
     setError(undefined);
@@ -112,7 +120,7 @@ function Main() {
   }, [onLost]);
 
   lost.current = () => {
-    if (!api || checking.current || restarting.current) return;
+    if (!api || !active.current || checking.current || restarting.current) return;
     checking.current = true;
     alive(api)
       .then(async (ok) => {
