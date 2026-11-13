@@ -1,11 +1,11 @@
 ---
 id: TASK-18
 title: Показ на Apple TV через AirPlay с iPhone-хоста
-status: In Progress
+status: Done
 assignee:
   - '@claude'
 created_date: '2026-11-08T06:49:00Z'
-updated_date: '2026-11-13T12:41:00Z'
+updated_date: '2026-11-13T13:32:00Z'
 labels:
   - app
   - ios
@@ -54,6 +54,8 @@ Android-сторона AC #5 в ядре (TASK-7): узел ищет _airplay._t
 Сделано (A52, doc/adr/ios.md §15): медиапорт показа для AirPlay на локальном адресе маршрута к Apple TV, slide {image, video, around} в состоянии показа, POST /show/player (buffering/playing/ended/failed), продолжение AirPlay-показа по записи A63, HomePod/AirPort (TXT model) не экраны. Приложение: подсказка «Повтор экрана» на выборе экрана и пульте по признаку внешнего экрана, present(slide) из каждого ответа ядра, события плеера в ядро, «Не блокируйте iPhone…». Натив: Native/Presentation.swift — сцена UIWindowSceneSessionRoleExternalDisplayNonInteractive (PileupPresentationSceneDelegate через app.plugin.js), предекодирование соседних слайдов, AVPlayer с external playback.
 Доказано: Go core/show/airplay_test.go, core/httpapi (TestAppleTVSlideAndPlayerStateThroughAPI, TestSpeakersWithAirPlayAreNotScreens, TestAndroidHostListsAppleTVWithExplanation), jest test/airplay.test.tsx и show.test.tsx (Apple TV с причиной на Android, keep-awake пульта), ios-native SlideTests + PresentationTests (контроллер показывает слайд с медиапорта настоящего ядра на LAN-адресе), ios-app: манифест сцен в Info.plist и класс делегата в бинарнике.
 AC #1–#3 не отмечены: нужна проверка на iPhone + Apple TV по сценарию doc/adr/ios.md §15 (сцена вместо зеркала, видео HEVC/H.264 через external playback, понятность подсказки). Риски: UIApplicationSupportsMultipleScenes=false и правило iOS 27 о scene accessory (SDK 27 в CI нет).
+
+Лид: слито в master. Критерии 1–3 не отмечены осознанно: презентационная сцена, AirPlay-видео и понятность подсказки проверяются только на iPhone с Apple TV — пошаговый сценарий из 12 шагов в doc/adr/ios.md §15, проверка в TASK-20. Два главных риска (создаётся ли сцена внешнего экрана при UIApplicationSupportsMultipleScenes=false; правило iOS 27 про registerSceneAccessory) описаны там же.
 <!-- SECTION:NOTES:END -->
 
 ## Final Summary
