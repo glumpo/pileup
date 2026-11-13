@@ -1,0 +1,7 @@
+ios-boot began=08:06:14 exit=0 seconds=67
+mobile-ios began=08:08:25 exit=0 seconds=251
+ios-prebuild began=08:12:37 exit=0 seconds=412
+ios-build began=08:19:30 exit=0 seconds=367
+ios-smoke began=08:25:37 exit=0 seconds=75
+sizes began=08:26:53 exit=0 seconds=0
+finished 08:26:54
