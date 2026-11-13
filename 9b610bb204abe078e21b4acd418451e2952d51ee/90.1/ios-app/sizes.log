@@ -1,0 +1,4 @@
+68992	app/modules/core/ios/Mobile.xcframework/ios-arm64_x86_64-simulator/Mobile.framework/Mobile
+35084	app/modules/core/ios/Mobile.xcframework/ios-arm64/Mobile.framework/Mobile
+du: app/ios/build/Build/Products/Release-iphonesimulator/Pileup.app/Pileup: No such file or directory
+0	app/ios/build/Build/Products/Release-iphonesimulator/Pileup.app
