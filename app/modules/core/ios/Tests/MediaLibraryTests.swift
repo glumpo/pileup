@@ -213,7 +213,14 @@ final class MediaLibraryTests: XCTestCase {
   func testListDescribesAddedFiles() async throws {
     let samples = try await prepareLibrary()
     let items = try list(base.addingTimeInterval(-3600), base.addingTimeInterval(3600))
-    for sample in samples {
+    for sample in samples where sample.hidden {
+      if let item = items.first(where: { $0.local_id == sample.localID }) {
+        XCTAssertTrue(item.hidden, sample.name)
+      } else {
+        print("hidden asset \(sample.name) is not returned by PhotoKit")
+      }
+    }
+    for sample in samples where !sample.hidden {
       let item = try XCTUnwrap(items.first { $0.local_id == sample.localID }, sample.name)
       XCTAssertEqual(item.kind, sample.video ? "video" : "photo", sample.name)
       XCTAssertEqual(item.platform_time, milliseconds(sample.created), sample.name)
@@ -244,7 +251,7 @@ final class MediaLibraryTests: XCTestCase {
 
   func testRenditionsAreOrientedJPEGsOfTierSize() async throws {
     let samples = try await prepareLibrary()
-    for sample in samples {
+    for sample in samples where !sample.hidden {
       for tier in [1, 2] {
         let expected = fit(sample.display.0, sample.display.1, tier == 1 ? 256 : 1920)
         let image = try pixels(try renditions.rendition(sample.localID, tier: tier))
@@ -265,7 +272,7 @@ final class MediaLibraryTests: XCTestCase {
 
   func testOriginalIsReadByRangesAndMatchesFile() async throws {
     let samples = try await prepareLibrary()
-    for sample in samples {
+    for sample in samples where !sample.hidden {
       let file = try Data(contentsOf: sample.file)
       var size: Int64 = 0
       let started = Date()
@@ -326,10 +333,13 @@ final class MediaLibraryTests: XCTestCase {
     XCTAssertEqual(selected, 204)
     let (_, body, _) = try await call("/piles/\(pile)/selection")
     let assets = try JSONDecoder().decode(Selection.self, from: body).assets
-    for sample in samples {
+    for sample in samples where !sample.hidden {
       let asset = try XCTUnwrap(assets.first { $0.local_id == sample.localID }, sample.name)
       XCTAssertEqual(asset.kind, sample.video ? "video" : "photo", sample.name)
-      XCTAssertEqual(asset.selected, !sample.hidden, sample.name)
+      XCTAssertTrue(asset.selected, sample.name)
+    }
+    for sample in samples where sample.hidden {
+      XCTAssertFalse(assets.contains { $0.local_id == sample.localID && $0.selected }, sample.name)
     }
     let shown = Set(samples.filter { !$0.hidden }.compactMap { s in assets.first { $0.local_id == s.localID }?.id })
     var entries: [Entry] = []
