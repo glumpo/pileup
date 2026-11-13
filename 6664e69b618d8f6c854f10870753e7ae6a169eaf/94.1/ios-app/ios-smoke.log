@@ -1,0 +1,20 @@
+scripts/ios-smoke.sh app/ios/build/Build/Products/Release-iphonesimulator/Pileup.app 23C8F95C-765D-46A9-AE82-0BEE2921C8D7 build/ios-smoke
+bundle com.glumpo.pileup, display name Pileup
+scenes {"UIApplicationSupportsMultipleScenes":false,"UISceneConfigurations":{"UIWindowSceneSessionRoleApplication":[{"UISceneDelegateClassName":"Pileup.SceneDelegate","UISceneConfigurationName":"Default Configuration"}],"UIWindowSceneSessionRoleExternalDisplayNonInteractive":[{"UISceneDelegateClassName":"PileupPresentationSceneDelegate","UISceneConfigurationName":"Presentation"}]}}
+0000000100bf0e98 s _OBJC_CLASS_$_PileupPresentationSceneDelegate
+external display scene delegate is linked
+photo library prompt: Pileup добавляет фото и видео за выбранные даты в общую хронологию поездки. Участники видят их по Wi-Fi прямо с этого iPhone, без серверов.
+An error was encountered processing the command (domain=com.apple.CoreSimulator.SimError, code=405):
+Unable to boot device in current state: Booted
+Monitoring boot status for iPhone 17 (23C8F95C-765D-46A9-AE82-0BEE2921C8D7).
+Device already booted, nothing to do.
+
+launch 1: pid 37372, core port 53811, /health without token: 401
+Detected file type from extension: PNG
+Note: No display specified. Defaulting to display: 8F713EB6-4318-41FA-85F4-C483B56C2076 (screenID: 1, name: LCD)
+Wrote screenshot to: /Users/runner/work/pileup/pileup/build/ios-smoke/launch-1.png
+launch 2: pid 38102, core port 53979, /health without token: 401
+Detected file type from extension: PNG
+Note: No display specified. Defaulting to display: 8F713EB6-4318-41FA-85F4-C483B56C2076 (screenID: 1, name: LCD)
+Wrote screenshot to: /Users/runner/work/pileup/pileup/build/ios-smoke/launch-2.png
+smoke ok
