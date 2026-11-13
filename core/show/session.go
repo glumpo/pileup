@@ -259,6 +259,10 @@ func (s *session) posterOnly(a state.Asset, why string) {
 		s.n.Diag().Add(diag.Media, s.pile, source(a.Owner), "video source is unavailable, showing the poster")
 	case Unsupported:
 		s.n.Diag().Add(diag.Renderer, s.pile, s.screen.Name, fmt.Sprintf("screen cannot play video %x (%s, codec %q), showing the poster", a.Meta.AssetID, a.Meta.MIME, a.Meta.Codec))
+	case Network:
+		s.n.Diag().Add(diag.Renderer, s.pile, s.screen.Name, fmt.Sprintf("screen could not load video %x over the network, showing the poster", a.Meta.AssetID))
+	case Unplayable:
+		s.n.Diag().Add(diag.Renderer, s.pile, s.screen.Name, fmt.Sprintf("screen stopped video %x with an error, showing the poster", a.Meta.AssetID))
 	default:
 		s.n.Diag().Add(diag.Media, s.pile, source(a.Owner), fmt.Sprintf("video original cannot be read (%s), showing the poster", why))
 	}
@@ -310,19 +314,19 @@ func (s *session) slide() *Slide {
 	return sl
 }
 
-func (s *session) played(assetID []byte, state, message string) error {
-	if !slices.Contains([]string{"playing", "buffering", "ended", "failed"}, state) {
+func (s *session) played(r PlayerReport) error {
+	if !slices.Contains([]string{"playing", "buffering", "ended", "failed"}, r.State) {
 		return ErrPlayerState
 	}
 	if s.cast != nil || s.cursor < 0 {
 		return nil
 	}
 	cur := s.items[s.cursor]
-	if !bytes.Equal(cur.Meta.AssetID, assetID) || cur.Meta.Kind != op.KindVideo || s.videoDown || s.ended {
+	if !bytes.Equal(cur.Meta.AssetID, r.Asset) || cur.Meta.Kind != op.KindVideo || r.Video != s.url(cur, 3) || s.videoDown || s.ended {
 		return nil
 	}
 	switch {
-	case state == "buffering" && s.player == playing:
+	case r.State == "buffering" && s.player == playing:
 		s.player, s.episodes, s.buffered = buffering, s.episodes+1, time.Now()
 		if d := s.stallIn(); d >= 0 {
 			time.AfterFunc(d, func() {
@@ -331,15 +335,19 @@ func (s *session) played(assetID []byte, state, message string) error {
 				}
 			})
 		}
-	case state == "playing" && s.player == buffering:
+	case r.State == "playing" && s.player == buffering:
 		s.player = playing
-	case state == "ended" && s.video():
+	case r.State == "ended" && s.video():
 		s.ended = true
-	case state == "failed":
-		s.videoDown, s.why = true, Unsupported
-		s.posterOnly(cur, Unsupported)
-		if message != "" {
-			s.n.Diag().Error(diag.Renderer, s.pile, s.screen.Name, fmt.Errorf("playback %x: %s", cur.Meta.AssetID, message))
+	case r.State == "failed":
+		why := Unplayable
+		if r.Reason == Unsupported || r.Reason == Network {
+			why = r.Reason
+		}
+		s.videoDown, s.why = true, why
+		s.posterOnly(cur, why)
+		if r.Message != "" {
+			s.n.Diag().Error(diag.Renderer, s.pile, s.screen.Name, fmt.Errorf("playback %x: %s", cur.Meta.AssetID, r.Message))
 		}
 	}
 	s.l.setVideo(s.video())

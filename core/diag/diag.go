@@ -185,11 +185,15 @@ func (l *Log) keep(e Event) *Event {
 }
 
 func (l *Log) Add(k Kind, pile []byte, peer, message string) {
+	l.AddAt(time.Now(), k, pile, peer, message)
+}
+
+func (l *Log) AddAt(at time.Time, k Kind, pile []byte, peer, message string) {
 	message = invites.ReplaceAllString(message, "PILEUP:…")
 	if len(message) > maxMessage {
 		message = strings.ToValidUTF8(message[:maxMessage], "") + "…"
 	}
-	e := Event{Time: time.Now(), Kind: k, Pile: bytes.Clone(pile), Peer: peer, Message: message, Count: 1}
+	e := Event{Time: at, Kind: k, Pile: bytes.Clone(pile), Peer: peer, Message: message, Count: 1}
 	l.mu.Lock()
 	defer l.mu.Unlock()
 	if i := slices.IndexFunc(l.events, e.same); i >= 0 {

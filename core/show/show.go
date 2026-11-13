@@ -29,7 +29,14 @@ const (
 	Unsupported = "unsupported"
 	NotLocal    = "not_local"
 	Unreadable  = "unreadable"
+	Network     = "network"
+	Unplayable  = "unplayable"
 )
+
+type PlayerReport struct {
+	Asset                         []byte
+	Video, State, Reason, Message string
+}
 
 type UnavailableError struct{ Reason string }
 
@@ -308,8 +315,8 @@ func (h *Host) Pause() (State, error) {
 	return h.do(func(s *session) error { return s.control(paused) })
 }
 
-func (h *Host) Player(assetID []byte, state, message string) (State, error) {
-	return h.do(func(s *session) error { return s.played(assetID, state, message) })
+func (h *Host) Player(r PlayerReport) (State, error) {
+	return h.do(func(s *session) error { return s.played(r) })
 }
 
 func (h *Host) Stop() {

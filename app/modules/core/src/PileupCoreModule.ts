@@ -2,7 +2,13 @@ import { NativeModule, requireNativeModule } from 'expo';
 
 export type Presented = { asset: string; image: string; video?: string; around: string[]; playing: boolean };
 
-export type PlayerEvent = { asset: string; state: 'playing' | 'buffering' | 'ended' | 'failed'; message?: string };
+export type PlayerEvent = {
+  asset: string;
+  video: string;
+  state: 'playing' | 'buffering' | 'ended' | 'failed';
+  reason?: 'unsupported' | 'network';
+  message?: string;
+};
 
 type Events = {
   onExternalDisplay: (event: { connected: boolean }) => void;

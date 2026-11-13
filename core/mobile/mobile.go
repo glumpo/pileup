@@ -87,7 +87,7 @@ func Report(kind, message string) {
 	if journal != nil {
 		journal.Add(diag.Kind(kind), nil, "", message)
 	} else if len(pending) < maxPending {
-		pending = append(pending, diag.Event{Kind: diag.Kind(kind), Message: message})
+		pending = append(pending, diag.Event{Time: time.Now(), Kind: diag.Kind(kind), Message: message})
 	}
 }
 
@@ -161,7 +161,7 @@ func Start(dir, platform, appVersion string, keystore Keystore, media MediaProvi
 	reports.Lock()
 	journal, hidden = n.Diag(), t
 	for _, e := range pending {
-		journal.Add(e.Kind, nil, "", e.Message)
+		journal.AddAt(e.Time, e.Kind, nil, "", e.Message)
 	}
 	pending = nil
 	reports.Unlock()

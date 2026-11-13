@@ -163,7 +163,7 @@ func shows(mux *http.ServeMux, h *show.Host) {
 		})
 	}
 	mux.HandleFunc("POST /show/player", func(w http.ResponseWriter, r *http.Request) {
-		var req struct{ Asset, State, Message string }
+		var req struct{ Asset, Video, State, Reason, Message string }
 		if !decode(w, r, &req) {
 			return
 		}
@@ -172,7 +172,7 @@ func shows(mux *http.ServeMux, h *show.Host) {
 			fail(w, r, node.ErrUnknownAsset)
 			return
 		}
-		st, err := h.Player(asset, req.State, req.Message)
+		st, err := h.Player(show.PlayerReport{Asset: asset, Video: req.Video, State: req.State, Reason: req.Reason, Message: req.Message})
 		showReply(w, r, http.StatusOK, st, err)
 	})
 	mux.HandleFunc("POST /show/goto", func(w http.ResponseWriter, r *http.Request) {

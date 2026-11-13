@@ -26,6 +26,10 @@ function videoText(reason: string | undefined, codec: string | undefined, author
   }
   if (reason === 'not_local')
     return `Видео участника: ${author} — только в iCloud, на телефоне его нет. Откройте его в «Фото» на iPhone, чтобы скачать, и нажмите «Воспроизвести» или переходите к следующему файлу.`;
+  if (reason === 'network')
+    return 'Экран не смог загрузить это видео с iPhone: пропала связь или источник недоступен. На экране постер. Проверьте Wi-Fi и нажмите «Воспроизвести» или переходите к следующему файлу.';
+  if (reason === 'unplayable')
+    return 'Экран не смог воспроизвести это видео. На экране постер. Нажмите «Воспроизвести», чтобы попробовать ещё раз, или переходите к следующему файлу.';
   if (reason === 'unreadable')
     return `Телефон участника не может прочитать это видео: ${author}. Возможно, оно удалено из галереи или у Pileup нет к нему доступа. Переходите к следующему файлу.`;
   return 'Видео недоступно — на экране постер. Попросите разблокировать телефон и открыть Pileup или переходите к следующему файлу.';
@@ -141,7 +145,7 @@ export function Remote({
   useEffect(() => (airplay ? () => void PileupCore.present(null).catch(() => {}) : undefined), [airplay]);
   useEffect(() => {
     if (!airplay) return;
-    const sub = PileupCore.addListener('onPlayer', (e) => void api.showPlayer(e.asset, e.state, e.message).catch(() => {}));
+    const sub = PileupCore.addListener('onPlayer', (e) => void api.showPlayer(e).catch(() => {}));
     return () => sub.remove();
   }, [api, airplay]);
 

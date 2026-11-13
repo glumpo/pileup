@@ -1,3 +1,4 @@
+import type { PlayerEvent } from '../modules/core/src/PileupCoreModule';
 import { reportTo } from './report';
 
 export type Member = {
@@ -192,8 +193,7 @@ export function connect(port: number, token: string, lost?: () => void) {
       call<ShowState>('POST', '/show', { pile, screen, asset }),
     show: () => call<ShowState>('GET', '/show'),
     showCommand: (command: 'next' | 'prev' | 'play' | 'pause') => call<ShowState>('POST', `/show/${command}`),
-    showPlayer: (asset: string, state: string, message?: string) =>
-      call<ShowState>('POST', '/show/player', { asset, state, message }),
+    showPlayer: (report: PlayerEvent) => call<ShowState>('POST', '/show/player', report),
     stopShow: () => call<void>('DELETE', '/show'),
     interruptedShow: () => call<InterruptedShow>('GET', '/show/interrupted'),
     forgetShow: () => call<void>('DELETE', '/show/interrupted'),
