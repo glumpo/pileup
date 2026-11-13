@@ -1,4 +1,5 @@
 import { act, render, screen, userEvent } from '@testing-library/react-native';
+import { StyleSheet } from 'react-native';
 
 import App from '../App';
 import { fakeCore, georgia, INVITE } from './fakeCore';
@@ -66,4 +67,18 @@ test('while this phone serves a video the screen is kept on and a banner is show
   await wait(30_000);
   expect(screen.queryByText(banner)).toBeNull();
   expect(screenKeptOn()).toBe(false);
+});
+
+test('the banner stays above the home indicator', async () => {
+  const safeArea = jest.requireMock('react-native-safe-area-context');
+  jest.replaceProperty(safeArea, 'initialWindowMetrics', {
+    frame: { x: 0, y: 0, width: 402, height: 874 },
+    insets: { top: 59, bottom: 34, left: 0, right: 0 },
+  });
+  fakeCore({ 'GET /piles': [200, [georgia]], 'GET /serving': [200, { serving: true }] });
+  render(<App />);
+
+  await wait(100);
+
+  expect(StyleSheet.flatten(screen.getByTestId('serving').props.style).bottom).toBeGreaterThanOrEqual(34 + 12);
 });
