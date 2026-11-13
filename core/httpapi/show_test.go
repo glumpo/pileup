@@ -212,3 +212,31 @@ func TestShowStartErrors(t *testing.T) {
 	}
 	c.fails("GET", "/show", nil, http.StatusNotFound, "no_show")
 }
+
+func TestAppleTVSlideAndPlayerStateThroughAPI(t *testing.T) {
+	c, r, p, items := hostIn(t, "ios")
+	tv := appleTV(t, c, r)
+	var st struct {
+		Playing   bool `json:"playing"`
+		Buffering bool `json:"buffering"`
+		Slide     *struct {
+			Image  string   `json:"image"`
+			Video  string   `json:"video"`
+			Around []string `json:"around"`
+		} `json:"slide"`
+	}
+	c.do("POST", "/show", map[string]string{"pile": p.ID, "screen": tv, "asset": items[1].ID}, http.StatusCreated, &st)
+	if st.Slide == nil || st.Slide.Image == "" || st.Slide.Video == "" || len(st.Slide.Around) != 2 {
+		t.Fatalf("slide of a video on Apple TV: %+v", st.Slide)
+	}
+	c.do("POST", "/show/player", map[string]string{"asset": items[1].ID, "state": "buffering"}, http.StatusOK, &st)
+	if !st.Buffering || !st.Playing {
+		t.Fatalf("buffering reported by the player: %+v", st)
+	}
+	c.fails("POST", "/show/player", map[string]string{"asset": items[1].ID, "state": "dancing"}, http.StatusBadRequest, "bad_request")
+	c.fails("POST", "/show/player", map[string]string{"asset": "zz", "state": "playing"}, http.StatusNotFound, "unknown_asset")
+	c.fails("POST", "/show/player", "not an object", http.StatusBadRequest, "bad_request")
+	c.call("POST", "/show/player", "wrong", map[string]string{"asset": items[1].ID, "state": "playing"}, http.StatusUnauthorized, nil)
+	c.do("DELETE", "/show", nil, http.StatusNoContent, nil)
+	c.fails("POST", "/show/player", map[string]string{"asset": items[1].ID, "state": "playing"}, http.StatusNotFound, "no_show")
+}
