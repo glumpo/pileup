@@ -26,6 +26,7 @@ targets:
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.glumpo.pileup.testhost
+        INFOPLIST_KEY_NSPhotoLibraryUsageDescription: Pileup native tests read and add test media
   PileupNativeTests:
     type: bundle.unit-test
     platform: iOS

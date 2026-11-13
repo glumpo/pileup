@@ -1,11 +1,11 @@
 ---
 id: TASK-43
 title: 'iOS: медиатека, разрешения и превью'
-status: To Do
+status: In Progress
 assignee:
   - '@claude'
 created_date: '2026-11-11T01:20:00Z'
-updated_date: '2026-11-11T12:17:00Z'
+updated_date: '2026-11-13T12:35:00Z'
 labels:
   - ios
   - app
@@ -35,8 +35,31 @@ iPhone должен быть полноценным источником, как
 - [ ] #8 Для видео заполняется codec (hvc1, avc1); при отказе в доступе к медиатеке пользователь получает объяснение и путь в настройки
 <!-- AC:END -->
 
+## Implementation Plan
+
+<!-- SECTION:PLAN:BEGIN -->
+1. Чистая логика в Native/Media.swift: MediaRecord → JSON node.MediaItem, интервал запроса ±14 ч, выбор ресурса текущей версии, имя/MIME, fit/tier/readLength, разрешения, текст not_local; unit-тесты по образцу Android (MediaTest, ScaleTest, PermissionsTest).
+2. MediaLibrary.swift: PHAsset fetch (с скрытыми), local_id = localIdentifier, размеры/время/флаги из PHAsset, размер/имя/MIME из PHAssetResource, codec из дорожки видео с кешем по (local_id, modified); requestPermissions через PHPhotoLibrary.requestAuthorization(.readWrite), .limited = доступ.
+3. Renditions.swift: T1/T2 через PHImageManager (без сети, сначала highQuality, затем локальный дериватив), перерисовка с ориентацией в JPEG q85; оригинал: видео — файл AVURLAsset, иначе writeData во временный файл; кеш 2 открытых файлов с закрытием через 60 с и по memory warning; not_local: за <1 с.
+4. app.plugin.js — NSPhotoLibraryUsageDescription; PileupCoreModule — только requestMediaPermissions; Core.swift — строка провайдеров.
+5. Интеграционные тесты на симуляторе: тестовые медиа генерируются в тесте (ImageIO/AVAssetWriter) и добавляются в медиатеку; Makefile — simctl privacy grant photos для TestHost.
+6. doc/adr/ios.md, A49; CI зелёный; merge origin/master.
+<!-- SECTION:PLAN:END -->
+
 ## Implementation Notes
 
 <!-- SECTION:NOTES:BEGIN -->
 Лид, 2026-11-11: добавлены требования из ревью — doc/review-2026-11-11/video.md, раздел «Вход для TASK-43» (8 требований к OriginalSize/ReadOriginal), находки V3, D7; контракт not_local — doc/adr/cache.md (TASK-50, A56); канал ошибок натива — mobile.Report (TASK-54, A60, doc/adr/diag.md).
+
+Реализация: Native/Media.swift (чистая логика), MediaLibrary.swift, Renditions.swift (Originals — кеш 2 открытых файлов, 60 с простоя, memory warning), NSPhotoLibraryUsageDescription в app.plugin.js, проверка ключа в ios-smoke. local_id = PHAsset.localIdentifier (A49).
+CI: MediaTests (19) и OriginalsTests (7) зелёные на симуляторе. MediaLibraryTests (интеграция PhotoKit, 8) на раннере пропускаются XCTSkip: simctl privacy grant photos пишет kTCCServicePhotos|com.glumpo.pileup.testhost|2 в TCC.db (проверено sqlite3 до и после установки хоста), но authorizationStatus(.readWrite) = .notDetermined, requestAuthorization ждёт системного диалога (Xcode 26.6, iOS 26). Тесты написаны, компилируются, но не выполнены.
+Риски: modificationDate меняется не только при правке (избранное и т. п.) — ревизия и T1 перерисовываются; fileSize ресурса — через KVC (непубличный ключ, с проверкой responds); codec — requestAVAsset на каждое видео при первом списке, кеш в памяти.
+
+Лид: слито в master, задача остаётся In Progress. Код PhotoKit собран и покрыт unit-тестами чистой логики, но 7 интеграционных тестов MediaLibraryTests на раннере пропускаются (нет доступа к медиатеке у хоста тестов) — то есть сам код работы с PhotoKit ни разу не выполнялся. Следующий шаг: выдать доступ на симуляторе через UI-тест, нажимающий «Разрешить» в системном диалоге, чтобы эти тесты реально шли в CI.
 <!-- SECTION:NOTES:END -->
+
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+iPhone отдаёт список медиа из PhotoKit в формате node.MediaItem (local_id = localIdentifier, время creationDate, размеры с ориентацией, MIME/размер/имя текущей версии, codec avc1/hvc1, hidden/screenshot), T1/T2 через PHImageManager без сети с локальными деривативами (JPEG q85, ориентация в пикселях) и оригинал по диапазонам pread из файла AVURLAsset или временной копии ресурса с кешем открытых файлов; iCloud-only даёт not_local: уже в OriginalSize. requestMediaPermissions — .readWrite, .limited = доступ; NSPhotoLibraryUsageDescription через config plugin. Unit-тесты чистой логики и кеша оригиналов зелёные в CI; интеграционные тесты PhotoKit на раннере пропускаются (симулятор не даёт хосту доступ к фото несмотря на simctl privacy) — нужно прогнать на Mac/iPhone; список непроверенного — doc/adr/ios.md §14. Решение A49.
+<!-- SECTION:FINAL_SUMMARY:END -->

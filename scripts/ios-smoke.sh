@@ -10,6 +10,8 @@ exe=$(/usr/libexec/PlistBuddy -c 'Print :CFBundleExecutable' "$app/Info.plist")
 echo "scenes $(plutil -extract UIApplicationSceneManifest json -o - "$app/Info.plist")"
 nm "$app/$exe" | grep 'OBJC_CLASS_$_PileupPresentationSceneDelegate'
 echo "external display scene delegate is linked"
+prompt=$(/usr/libexec/PlistBuddy -c 'Print :NSPhotoLibraryUsageDescription' "$app/Info.plist")
+echo "photo library prompt: $prompt"
 xcrun simctl boot "$sim" || true
 xcrun simctl bootstatus "$sim" -b
 xcrun simctl install "$sim" "$app"

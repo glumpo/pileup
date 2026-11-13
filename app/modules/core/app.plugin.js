@@ -33,6 +33,8 @@ module.exports = (config) => {
   config = withInfoPlist(config, (config) => {
     config.modResults.NSLocalNetworkUsageDescription =
       'Pileup ищет телефоны участников и телевизоры в этой Wi-Fi-сети, чтобы объединять фото и показывать их на экране.';
+    config.modResults.NSPhotoLibraryUsageDescription =
+      'Pileup добавляет фото и видео за выбранные даты в общую хронологию поездки. Участники видят их по Wi-Fi прямо с этого iPhone, без серверов.';
     config.modResults.NSBonjourServices = ['_pileup._tcp', '_googlecast._tcp', '_airplay._tcp'];
     const scenes = (config.modResults.UIApplicationSceneManifest ??= {});
     scenes.UISceneConfigurations = {
