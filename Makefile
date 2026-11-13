@@ -1,7 +1,7 @@
 SHELL := /bin/bash
 .SHELLFLAGS := -eo pipefail -c
 
-.PHONY: check test build licenses licenses-go licenses-npm app mobile-android android-debug android-test mobile-ios ios-boot ios-test ios-prebuild ios-build ios-smoke ios-simulator
+.PHONY: check test build licenses licenses-go licenses-npm app mobile-android android-debug android-test mobile-ios ios-boot ios-test ios-prebuild ios-build ios-device ios-smoke ios-simulator
 
 CORE_AAR := app/modules/core/android/libs/pileup-core.aar
 CORE_XCFRAMEWORK := app/modules/core/ios/Mobile.xcframework
@@ -63,7 +63,9 @@ ios-test: $(XCODEGEN)
 	cd app/modules/core/ios/TestHost && xcodebuild build-for-testing -project PileupNativeTests.xcodeproj -scheme PileupNativeTests -destination id=$(IOS_SIMULATOR) -derivedDataPath ../.build/xcode
 	xcrun simctl bootstatus $(IOS_SIMULATOR) -b
 	cd app/modules/core/ios/TestHost && xcodebuild test-without-building -project PileupNativeTests.xcodeproj -scheme PileupNativeTests -destination id=$(IOS_SIMULATOR) -derivedDataPath ../.build/xcode -only-testing:PhotoAccessUITests
-	cd app/modules/core/ios/TestHost && xcodebuild test-without-building -project PileupNativeTests.xcodeproj -scheme PileupNativeTests -destination id=$(IOS_SIMULATOR) -derivedDataPath ../.build/xcode -only-testing:PileupNativeTests
+	mkdir -p build
+	cd app/modules/core/ios/TestHost && xcodebuild test-without-building -project PileupNativeTests.xcodeproj -scheme PileupNativeTests -destination id=$(IOS_SIMULATOR) -derivedDataPath ../.build/xcode -only-testing:PileupNativeTests | tee $(CURDIR)/build/ios-native-tests.log
+	if [ -n "$(IOS_REQUIRE_PHOTOS)" ] && grep ' skipped (' build/ios-native-tests.log; then echo "tests above were skipped: no photo library access"; exit 1; fi
 
 ios-prebuild:
 	cd app && npm ci --no-audit --no-fund
@@ -74,6 +76,9 @@ ios-prebuild:
 
 ios-build:
 	cd app/ios && xcodebuild build -workspace Pileup.xcworkspace -scheme Pileup -configuration Release -destination id=$(IOS_SIMULATOR) -derivedDataPath build ONLY_ACTIVE_ARCH=YES LD_GENERATE_MAP_FILE=YES -quiet
+
+ios-device:
+	cd app/ios && xcodebuild build -workspace Pileup.xcworkspace -scheme Pileup -configuration Release -destination generic/platform=iOS -derivedDataPath build CODE_SIGNING_ALLOWED=NO -quiet
 
 ios-smoke:
 	scripts/ios-smoke.sh $(IOS_APP) $(IOS_SIMULATOR) build/ios-smoke
