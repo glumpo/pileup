@@ -13,6 +13,8 @@ import (
 	"os"
 	"path/filepath"
 	"slices"
+	"sync"
+	"time"
 
 	"github.com/fxamacker/cbor/v2"
 	"github.com/glumpo/pileup/core/crdt/op"
@@ -95,6 +97,7 @@ func (n *Node) Select(ctx context.Context, id []byte, from, to int64) error {
 	if err != nil {
 		return err
 	}
+	n.shown.put(id, c, cs)
 	return n.commit(ctx, p, c, cs)
 }
 
@@ -105,9 +108,12 @@ func (n *Node) Decide(ctx context.Context, id, asset []byte, selected bool) erro
 	if err != nil {
 		return err
 	}
-	cs, err := n.candidates(c)
-	if err != nil {
-		return err
+	cs, ok := n.shown.get(id, c)
+	if !ok {
+		if cs, err = n.candidates(c); err != nil {
+			return err
+		}
+		n.shown.put(id, c, cs)
 	}
 	if !slices.ContainsFunc(cs, func(x Candidate) bool { return bytes.Equal(x.Meta.AssetID, asset) }) {
 		return ErrUnknownAsset
@@ -125,6 +131,7 @@ func (n *Node) Selection(id []byte) (Selection, error) {
 	if err != nil {
 		return Selection{}, err
 	}
+	n.shown.put(id, c, cs)
 	mine, err := n.published(p)
 	if err != nil {
 		return Selection{}, err
@@ -239,6 +246,31 @@ func (n *Node) candidates(c store.Selection) ([]Candidate, error) {
 		}})
 	}
 	return out, nil
+}
+
+const listedFor = 5 * time.Minute
+
+type listing struct {
+	mu       sync.Mutex
+	pile     string
+	from, to int64
+	at       time.Time
+	items    []Candidate
+}
+
+func (l *listing) put(id []byte, c store.Selection, cs []Candidate) {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	l.pile, l.from, l.to, l.at, l.items = string(id), c.From, c.To, time.Now(), slices.Clone(cs)
+}
+
+func (l *listing) get(id []byte, c store.Selection) ([]Candidate, bool) {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	if l.pile != string(id) || l.from != c.From || l.to != c.To || time.Since(l.at) >= listedFor {
+		return nil, false
+	}
+	return slices.Clone(l.items), true
 }
 
 func wants(c store.Selection, x Candidate) bool {

@@ -130,6 +130,7 @@ type Node struct {
 	denied bool
 
 	selecting sync.Mutex
+	shown     listing
 	rendering turns
 	streamed  meter
 	serving   meter
