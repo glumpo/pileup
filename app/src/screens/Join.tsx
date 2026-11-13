@@ -57,7 +57,7 @@ export function Join({ api, onBack, onJoined }: { api: Api; onBack: () => void; 
 
   return (
     <Screen title="Войти в pile" onBack={onBack}>
-      <ScrollView contentContainerStyle={styles.body} keyboardShouldPersistTaps="handled">
+      <ScrollView contentContainerStyle={styles.body} keyboardShouldPersistTaps="handled" automaticallyAdjustKeyboardInsets>
         {scanning ? (
           <CameraView
             style={camera.view}

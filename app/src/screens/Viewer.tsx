@@ -10,6 +10,7 @@ import {
   View,
   ViewStyle,
 } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { Api, ApiError, Pile, TimelineItem } from '../api';
 import { adviceFor } from '../presence';
@@ -40,6 +41,7 @@ function problemOf(error: unknown, author: string): Problem {
 function Page({ api, pile, item, style }: { api: Api; pile: string; item: TimelineItem; style: ViewStyle }) {
   const [attempt, setAttempt] = useState(0);
   const [problem, setProblem] = useState<Problem>();
+  const insets = useSafeAreaInsets();
   const [loaded, setLoaded] = useState(false);
   const reloaded = useRef(false);
 
@@ -87,7 +89,7 @@ function Page({ api, pile, item, style }: { api: Api; pile: string; item: Timeli
           <Text style={styles.text}>Видео воспроизводится на экране: нажмите «На экран».</Text>
         </View>
       )}
-      {problem && <Text style={styles.problem}>{problem.text}</Text>}
+      {problem && <Text style={[styles.problem, { paddingBottom: insets.bottom + 16 }]}>{problem.text}</Text>}
     </View>
   );
 }
@@ -108,6 +110,7 @@ export function Viewer({
   onShow: (item: TimelineItem) => void;
 }) {
   const { width, height } = useWindowDimensions();
+  const insets = useSafeAreaInsets();
   const [current, setCurrent] = useState(index);
   const item = items[current];
   const renderPage = useCallback(
@@ -132,8 +135,8 @@ export function Viewer({
         onMomentumScrollEnd={(e) => setCurrent(Math.round(e.nativeEvent.contentOffset.x / width))}
         renderItem={renderPage}
       />
-      <View style={styles.caption}>
-        <Pressable accessibilityRole="button" onPress={onBack} hitSlop={12}>
+      <View style={[styles.caption, { paddingTop: insets.top + 12 }]}>
+        <Pressable accessibilityRole="button" accessibilityLabel="Закрыть" onPress={onBack} hitSlop={12}>
           <Text style={styles.text}>✕</Text>
         </Pressable>
         <View style={{ flex: 1 }}>
@@ -168,7 +171,6 @@ const styles = StyleSheet.create({
     top: 0,
     left: 0,
     right: 0,
-    paddingTop: 48,
     paddingHorizontal: 16,
     paddingBottom: 12,
     flexDirection: 'row',
@@ -185,7 +187,6 @@ const styles = StyleSheet.create({
     right: 0,
     bottom: 0,
     padding: 16,
-    paddingBottom: 32,
     color: '#fff',
     fontSize: 16,
     backgroundColor: 'rgba(0,0,0,0.6)',

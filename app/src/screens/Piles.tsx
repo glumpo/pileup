@@ -52,6 +52,7 @@ export function Piles({
     <Screen title="Pileup">
       <FlatList
         data={piles}
+        automaticallyAdjustKeyboardInsets
         keyExtractor={(p) => p.id}
         renderItem={({ item }) =>
           item.broken ? (

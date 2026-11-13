@@ -63,8 +63,8 @@
 | `make ios-boot` | загрузить симулятор (не ждёт; первая загрузка на раннере — до 1,5 мин миграции данных) |
 | `make ios-test` | скачать XcodeGen 2.46.0 в `build/bin` (sha256 проверяется), сгенерировать `TestHost/PileupNativeTests.xcodeproj`, `xcodebuild test` на симуляторе |
 | `make ios-prebuild` | `npm ci`, `expo prebuild --platform ios --clean --no-install`, `pod install` |
-| `make ios-build` | `xcodebuild` Release под симулятор (JS-бандл внутри, Metro не нужен), только активная архитектура, link map для замеров |
-| `make ios-smoke` | `scripts/ios-smoke.sh`: установка и запуск на симуляторе, проверка ядра (раздел 7) |
+| `make ios-build` | `xcodebuild` Release под симулятор (`Pileup.xcworkspace`, схема `Pileup`, продукт `Pileup.app`) (JS-бандл внутри, Metro не нужен), только активная архитектура, link map для замеров |
+| `make ios-smoke` | `scripts/ios-smoke.sh`: установка и запуск на симуляторе, проверка ядра (раздел 7); печатает идентификатор и отображаемое имя из `Info.plist` |
 | `make ios-simulator` | всё подряд, кроме тестов |
 
 Симулятор: `IOS_SIMULATOR` (UDID) или по умолчанию последний iPhone самой новой среды iOS из `simctl list`. Подпись: симуляторные сборки подписываются ad-hoc (`-`), Apple-аккаунт не нужен; сборки под устройство нет (TASK-1).
@@ -116,3 +116,12 @@ git show origin/ci-logs:$sha/<run>.<attempt>/ios-app/launch-1.png > /tmp/launch-
 - Нет сборки под устройство и подписи: нужен Apple-аккаунт (TASK-1).
 - `requestMediaPermissions` всегда `false`, медиатеки и превью нет (TASK-43); обнаружения нет (TASK-44).
 - Ветка `ci-logs` растёт на 1–3 МБ за прогон iOS-заданий; чистить её можно в любой момент, код от неё не зависит.
+
+## 11. Интерфейс на iPhone (TASK-45, A51)
+
+- Имя и идентификатор: `app.json` — `name: Pileup`, `ios.bundleIdentifier` и `android.package` — `com.glumpo.pileup`. Prebuild создаёт `app/ios/Pileup.xcworkspace`, схему и продукт `Pileup`; от этого зависят `IOS_APP` и `ios-build` в `Makefile` и `scripts/ios-sizes.sh` (`Pileup.app/Pileup`, `Pileup-LinkMap-*`). Путь APK не меняется (модуль Gradle по-прежнему `app`). Тексты разрешений: камера — плагин `expo-camera` в `app.json`, медиатека и локальная сеть — `app.plugin.js` модуля ядра.
+- Безопасные области: `react-native-safe-area-context`; `SafeAreaProvider` с `initialWindowMetrics` в `App.tsx`, `Safe` в `ui.tsx` — отступ сверху `inset.top + 12`, снизу `inset.bottom` (вместо прежних постоянных 48 сверху); через него идут `Screen`, экран запуска ядра, ошибка запуска и запасной экран `Boundary`. Просмотр: подпись сверху — `inset.top + 12`, текст проблемы снизу — `inset.bottom + 16`; сами фото и видео занимают весь экран. Отступы слева и справа не учитываются: ориентация только портретная.
+- Назад: на каждом экране, кроме списка pile и пульта, — «‹ Назад» в шапке `Screen` или «Закрыть» (`✕`) в просмотре; `BackHandler` на iOS ничего не делает, на Android остаётся. С пульта — только «Остановить показ» (A25). Жеста «свайп от края» нет.
+- Клавиатура: `automaticallyAdjustKeyboardInsets` у списков с полями ввода (список pile, вход по приглашению, «Мои файлы»); у полей дат — клавиатура `numbers-and-punctuation` (на Android значение игнорируется).
+- Тесты: `npm test` запускает каждый тест дважды — проекты jest `iOS` (`jest-expo/ios`) и `Android` (`jest-expo/android`), `Platform.OS` и выбор `*.ios.*`/`*.android.*` как на устройстве; один проект — `npx jest --selectProjects iOS`. Отличия iPhone — `test/iphone.test.tsx` (безопасные области — штатный мок `react-native-safe-area-context` с подменой `initialWindowMetrics`).
+- Не проверено без iPhone: реальные вырезы и Dynamic Island разных моделей (кроме симулятора дымового запуска), индикатор Home на экранах со списками, сдвиг полей над клавиатурой, отсутствие конфликта системного жеста «назад» и листания (жеста нет — проверить, что листание просмотра не открывает ничего лишнего), чтение «Закрыть» в VoiceOver, экспорт журнала через системное окно «Поделиться». Как проверить: на iPhone с Dynamic Island и на iPhone SE пройти все экраны — шапка ниже выреза, последняя кнопка выше индикатора Home; на «Pileup» с несколькими pile ввести название и имя — поле видно над клавиатурой; в «Моих файлах» клавиатура дат с цифрами и дефисом; в «Журнале» «Экспортировать» открывает окно «Поделиться» с текстом журнала.

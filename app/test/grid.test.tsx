@@ -110,7 +110,7 @@ test('opening and closing a file does not re-render the cells of the grid', asyn
   mockRenders.length = 0;
   await user.press(screen.getByTestId('asset-0003'));
   expect(screen.getByText('4 / 200')).toBeOnTheScreen();
-  await user.press(screen.getByRole('button', { name: '✕' }));
+  await user.press(screen.getByRole('button', { name: 'Закрыть' }));
   expect(screen.queryByText('4 / 200')).toBeNull();
   expect(gridRenders()).toEqual([]);
 });
