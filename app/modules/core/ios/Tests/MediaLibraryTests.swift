@@ -102,10 +102,37 @@ private final class Box: @unchecked Sendable {
 
 private var library: [Sample]?
 
+private var access: PHAuthorizationStatus?
+
+private final class Answer: @unchecked Sendable {
+  var status = PHAuthorizationStatus.notDetermined
+}
+
+private func photoAccess() async -> PHAuthorizationStatus {
+  if let access { return access }
+  var status = PHPhotoLibrary.authorizationStatus(for: .readWrite)
+  if status == .notDetermined {
+    status = await Task.detached {
+      let answered = DispatchSemaphore(value: 0)
+      let result = Answer()
+      PHPhotoLibrary.requestAuthorization(for: .readWrite) { answer in
+        result.status = answer
+        answered.signal()
+      }
+      _ = answered.wait(timeout: .now() + 10)
+      return result.status
+    }.value
+  }
+  access = status
+  return status
+}
+
 private func prepareLibrary() async throws -> [Sample] {
   if let library { return library }
-  XCTAssertEqual(PHPhotoLibrary.authorizationStatus(for: .readWrite), .authorized, "make ios-test grants photo access to the test host")
-  guard PHPhotoLibrary.authorizationStatus(for: .readWrite) == .authorized else { throw mediaError("no photo access") }
+  let status = await photoAccess()
+  guard status == .authorized else {
+    throw XCTSkip("no photo library access in this simulator (status \(status.rawValue)); make ios-test grants it with simctl privacy")
+  }
   let dir = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
   try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
   var samples = [
