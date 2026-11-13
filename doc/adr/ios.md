@@ -16,6 +16,7 @@
 | `Native/Renditions.swift` | `RenditionMaker` — заготовка, наполняет TASK-43 |
 | `Native/Discovery.swift` | `DiscoveryProvider`: Bonjour (раздел 11) |
 | `Native/Lifecycle.swift` | уведомления жизненного цикла: фоновая задача, перезапуск Bonjour, остановка ядра (раздел 11) |
+| `Native/Presentation.swift` | показ на Apple TV: сцена внешнего дисплея, слайды и `AVPlayer` с external playback (раздел 13) |
 | `PileupCore.podspec` | pod модуля: `PileupCoreModule.swift` + `Native/**`, `vendored_frameworks = Mobile.xcframework`, `libresolv` |
 | `Package.swift` | SwiftPM-пакет `PileupNative` из `Native/` и binaryTarget `Mobile.xcframework` — только для тестов |
 | `TestHost/` | `project.yml` для XcodeGen: приложение-хост и hosted unit-тесты из `Tests/` |
@@ -31,6 +32,7 @@
 - `start(): Promise<void>` — каталог данных `Application Support/core`, Keychain-сервис `com.glumpo.pileup.device`, платформа `"ios"`, версия — `CFBundleShortVersionString` бандла (A31), провайдеры из `Native/`. Повторный `start` при работающем ядре ничего не меняет (A13).
 - `stop(): Promise<void>`, `port(): number`, `token(): string` — прямо из фасада.
 - `requestMediaPermissions(): Promise<boolean>` — пока всегда `false` без запроса к системе (ключа `NSPhotoLibraryUsageDescription` в Info.plist ещё нет, а вызов PhotoKit без него роняет приложение). Полноценная реализация — TASK-43.
+- `present(slide | null): Promise<void>`, `externalDisplay(): Promise<boolean>`, события `onExternalDisplay {connected}` и `onPlayer {asset, state, message?}` — только iOS, AirPlay-показ (раздел 13). На Android их нет, и JS их там не вызывает: `present` — только при показе на экране `airplay`, который Android-хост не начинает, `externalDisplay` и подписка — только при `Platform.OS === 'ios'`.
 
 Жизненный цикл: ядро останавливается в `OnDestroy` модуля (перезагрузка JS, уничтожение модуля), по `UIApplication.willTerminateNotification` и по истечении фонового времени; при возврате на передний план пересоздаются объявления и поиск Bonjour (раздел 11).
 
@@ -179,3 +181,57 @@ git show origin/ci-logs:$sha/<run>.<attempt>/ios-app/launch-1.png > /tmp/launch-
 2. **Возврат из фона < 30 с:** заблокировать iPhone на 10 с, разблокировать. Второй телефон в pile: участник «на связи» без перезапуска; экран Cast в списке; в журнале iPhone «reconnect, requested by the app».
 3. **Фон > 30 с во время раздачи видео:** показ видео с iPhone на Cast, у iPhone — домашний экран. Через ~30 с на ТВ постер почти сразу после остановки (без паузы ~15 с), у участников iPhone «нет связи». Возврат: ядро перезапускается приложением (A54), pile и участники на месте, в журнале событие запуска «Pileup … ios started».
 4. **ECONNABORTED (TASK-49):** если фоновая задача не дала времени (мало заряда/режим энергосбережения), заблокировать на минуту и вернуться: `POST /reconnect` должен ответить, в журнале «port … does not accept connections, reopening» и затем входящие подключения проходят; если `/health` не отвечает — приложение само перезапускает ядро (A54). Признак зацикливания — 100% CPU у приложения в фоне в Xcode Instruments и пустой журнал после возврата.
+
+## 13. Показ на Apple TV (TASK-18, A52)
+
+### Как устроено
+
+| Шаг | Где | Что |
+|---|---|---|
+| Экран в списке | `core/node/discovery.go` | `_airplay._tcp`; на iOS `available`, на остальных — с причиной «только с iPhone». TXT `model` `AudioAccessory…`/`AirPort…` (HomePod, AirPort Express) экраном не считается; по `features` не фильтруем (нет уверенности в битах) |
+| Старт | `core/show` (`route`, `open`) | `POST /show` на `airplay:<имя>`: медиапорт показа (`GET /show/{token}/{asset}/{rev}/{2\|3}`, как у Cast) слушает локальный адрес маршрута к Apple TV (UDP-сокет к адресу экрана без отправки пакетов), закрывается при остановке. В состоянии показа `slide {image, video?, around}`: T2 текущего (у видео — постер), оригинал видео с Range (пока видео не недоступно и не закончилось), T2 следующего и предыдущего. Запись A63 с экраном `airplay` продолжается по сохранённому адресу, если обнаружение ещё не нашло экран |
+| Пульт → натив | `Remote.tsx` | после каждого обновления состояния (ответ команды или опроса) — `present({asset, image, video?, around, playing})`; `present(null)` при уходе с пульта и на «Показ завершён». Натив сам ядро не опрашивает (P6, вариант 1): слайд меняется сразу после ответа команды |
+| Натив | `Native/Presentation.swift` (`Presentation`, главный поток) | грузит `image` и `around` по URL без заголовков (`URLSession` ephemeral, ничего не пишется на диск и в журнал), декодирует заранее (`preparingForDisplay`), держит в памяти только текущий и соседние. Пока новый слайд грузится, на ТВ остаётся прежний; ошибка загрузки — чёрный экран и повтор раз в 1 с, пока слайд текущий. Без внешнего экрана ничего не грузит и не играет |
+| Сцена | `app.plugin.js`, `PresentationSceneDelegate` | роль `UIWindowSceneSessionRoleExternalDisplayNonInteractive` → делегат `PileupPresentationSceneDelegate` (`@objc`-имя, без модуля) дописывается в манифест сцен шаблона Expo; сцена Expo (`SceneDelegate`, роль приложения) не меняется, `UIApplicationSupportsMultipleScenes` остаётся `false`. Окно — `PresentationController`: чёрный фон, слайд `scaleAspectFit`, слой `AVPlayerLayer`; без показа — «Pileup готов к показу. На iPhone откройте pile и нажмите «Показать на экране».». Подключение и отключение сцены — в журнал (`renderer`, «external display connected/disconnected») и событием `onExternalDisplay` |
+| Видео | `Presentation.play` | `AVPlayer` с `allowsExternalPlayback` и `usesExternalPlaybackWhileExternalScreenIsActive`: при «Повторе экрана» видео уходит на Apple TV как AirPlay-поток, Apple TV сам тянет URL оригинала с медиапорта. Категория аудиосессии `.playback`. Пауза и воспроизведение — по `playing` из состояния ядра |
+| Плеер → ядро | `onPlayer` → `POST /show/player` | `buffering`/`playing` (`timeControlStatus`), `ended` (`AVPlayerItemDidPlayToEndTime`), `failed` (статус элемента, текст ошибки — в журнал). Ядро: буферизация и `stalled` как у Cast (A57); `ended` — постер до «Воспроизвести»; `failed` — `video_unavailable`, `unsupported` сразу, без повтора; отчёт о другом файле и пауза из плеера не принимаются |
+| Подсказки | `src/AirPlay.tsx` | выбор экрана на iPhone: есть доступный Apple TV и нет внешнего экрана — «Фото на Apple TV показываются через «Повтор экрана». Сначала включите «Повтор экрана»: откройте Пункт управления (…), нажмите «Повтор экрана» и выберите Apple TV…»; есть — «„Повтор экрана“ включён…». Пульт AirPlay-показа без внешнего экрана — «На экране «…» пока ничего нет: включите «Повтор экрана»…»; всегда — «Не блокируйте iPhone и не сворачивайте Pileup, пока идёт показ…». Keep-awake пульта — A47 |
+
+Фоновых режимов нет: свёрнутое приложение не рисует сцену (iOS показывает на ТВ зеркало), `AVPlayer` без режима `audio` в фоне не играет, а через ~30 с ядро и медиапорт останавливаются (A50). При возврате пульт сам продолжает показ из записи (A63), натив получает новые URL.
+
+### Что проверено
+
+- Go (`core/show/airplay_test.go`): слайды с медиапорта на не-loopback адресе этого устройства без заголовков, `around` — соседи, чужой токен — 403, после остановки порт закрыт; видео — постер и оригинал с Range, пауза не убирает видео; отчёты плеера (буферизация, `stalled` на второй, пауза не отменяется поздним `playing`, отчёт о другом файле не влияет, `ended` → постер → `play`, `failed` → `unsupported` и текст в журнале, неизвестное состояние, без показа); продолжение после перезапуска до обнаружения; у Cast нет `slide`. Отказ на Android-хосте — `TestAppleTVNeedsIPhoneHost`. API (`core/httpapi`): `slide` в JSON, `POST /show/player` и его ошибки, HomePod и AirPort не в `GET /screens` на обеих платформах.
+- jest (`test/airplay.test.tsx`, оба проекта): подсказка на выборе экрана и её смена по событию; без Apple TV и на Android подсказки нет и натив не спрашивается; слайды в `present` из ответа команды при зависшем опросе, порядок `present` (первый слайд, видео, `null` после остановки); Cast не трогает натив; подсказка на пульте до подключения и «не блокируйте» всегда; события плеера уходят в ядро. Android-сторона AC #5 в UI — `show.test.tsx` «…an Apple TV that cannot be used is shown with its reason».
+- `ios-native`: `SlideTests` (разбор того, что передаёт JS; какие состояния плеера уходят) и `PresentationTests`: настоящее ядро с фальшивой медиатекой, Apple TV объявлен по Bonjour (`_airplay._tcp`, `model=AppleTV14,1`), `POST /show` даёт `slide.image` на IPv4-адресе Mac (не 127.0.0.1), `PresentationController` загружает и показывает этот JPEG (64×48) при ATS как у приложения (`NSAllowsLocalNetworking`), неудачный слайд — чёрный экран, `show(nil)` — текст ожидания, `onDisplay` — `true`, `false`.
+- `ios-app`: `ios-prebuild` проверяет в `Info.plist` обе роли манифеста сцен (приложение — `…SceneDelegate`, внешний дисплей — `PileupPresentationSceneDelegate`); `ios-smoke` печатает манифест собранного `.app` и проверяет, что класс `PileupPresentationSceneDelegate` есть в бинарнике.
+
+### Не проверено без iPhone и Apple TV
+
+Внешний экран в симуляторе скриптом не подключить, Apple TV в CI нет. Главные риски этапа (§9 п. 7, §10) — понятность «Повтора экрана» и то, что на ТВ сцена, а не зеркало, — закрывает только проверка ниже.
+
+1. **Создаётся ли сцена.** Документация Apple про `UIApplicationSupportsMultipleScenes = false`: «UIKit never creates more than one scene for your app»; распространяется ли это на внешний дисплей, не сказано. Если на ТВ зеркало, а в журнале нет «external display connected» — поставить `UIApplicationSupportsMultipleScenes = true` в `app.plugin.js` (на iPhone других окон это не даёт; на iPad включит многооконность, `supportsTablet: true`, — тогда проверить, что второе окно приложения не запускает React Native повторно).
+2. **iOS 27.** «Beginning in iOS 27, your app receives a scene with the windowExternalDisplayNonInteractive role only after it registers a scene accessory» (`UIViewController.registerSceneAccessory(_:)`, `UISceneAccessory.externalNonInteractive(sceneConfiguration:)`, только в SDK iOS 27). CI собирает с SDK iOS 26.5; применяется ли новое правило к приложению со старым SDK, неизвестно. Если на iPhone с iOS 27 ТВ показывает зеркало — нужна сборка Xcode 27 и регистрация аксессуара из корневого контроллера React Native с конфигурацией `Presentation`.
+3. **External playback:** что Apple TV сам открывает URL оригинала (`Content-Type: video/mp4` для `.MOV`, Range), играет HEVC с iPhone и H.264 с Android, звук идёт на ТВ; что `timeControlStatus`, ошибки и конец ролика в режиме external playback доходят до локального `AVPlayer`.
+4. ATS на устройстве при загрузке слайда с LAN-адреса самого iPhone (на симуляторе — проверено), запрос «Локальная сеть» не мешает.
+5. Вид сцены на 1080p и 4K, размер текста ожидания, время смены слайда при листании подряд и при прыжке.
+6. Фон: что видно на ТВ при сворачивании, что видео останавливается, что после возврата показ продолжается.
+7. Выбор Apple TV в списке не связан с тем, куда включён повтор: с двумя Apple TV в сети слайд появится там, куда включён «Повтор экрана».
+8. Смена Wi-Fi-адреса iPhone во время показа: медиапорт остаётся на прежнем адресе (переподключения, как у Cast, нет) — «Остановить показ» и новый старт.
+
+### Сценарий проверки на iPhone и Apple TV
+
+Нужно: iPhone с Pileup (подписанная сборка, TASK-1) и pile, где есть фото и видео обоих участников (HEVC с iPhone, H.264 с Android), Apple TV в той же сети Wi-Fi, второй телефон-участник рядом и с открытым Pileup. При неудаче: «Журнал» → «Экспортировать» на iPhone и снимок экрана ТВ.
+
+1. На iPhone «Повтор экрана» выключен. Pile → «Показать на экране». Ожидается: Apple TV в списке с подписью «AirPlay», над списком жёлтая подсказка «Фото на Apple TV показываются через «Повтор экрана»…». HomePod в списке нет. Записать, понятна ли подсказка без объяснений (главный риск этапа).
+2. Включить «Повтор экрана» по подсказке (Пункт управления → «Повтор экрана» → Apple TV), вернуться в Pileup. Ожидается: на ТВ чёрный экран с текстом «Pileup готов к показу…», а не зеркало телефона; на iPhone вместо подсказки «„Повтор экрана“ включён…»; в журнале `renderer` «external display connected». Если на ТВ зеркало телефона и записи в журнале нет — п. 1–2 раздела выше.
+3. Выбрать Apple TV в списке. Ожидается: на ТВ первый слайд на весь экран, на телефоне пульт с тем же превью, подсказка «Не блокируйте iPhone и не сворачивайте Pileup…», экран телефона не гаснет. Журнал: «show started».
+4. Листать «Следующий» подряд 10–20 раз. Ожидается: слайд на ТВ меняется вслед за пультом без заметной задержки (≤ 0,5 с при последовательном листании), без чёрных вспышек. Записать время; при задержке — есть ли в журнале `timeout`/подсказки «Нет ответа от…».
+5. Дойти до видео с iPhone (HEVC). Ожидается: на ТВ видео на весь экран со звуком, на пульте «Пауза»; «Пауза»/«Воспроизвести» работают. Если на ТВ постер, а на пульте «Экран не воспроизводит это видео…» — в журнале `renderer` «playback …: <ошибка AVFoundation>» и «screen cannot play video … (codec …)». Если видео подгружается — на пульте «Видео подгружается…»/«Wi-Fi не успевает…».
+6. То же для видео с Android (H.264) — owner второй телефон. Записать результат по обоим источникам в задачу (AC #2).
+7. Досмотреть видео до конца. Ожидается: на ТВ постер, на пульте «Воспроизвести»; нажать — видео с начала.
+8. Выключить «Повтор экрана» в Пункте управления. Ожидается: на пульте подсказка «На экране «…» пока ничего нет: включите «Повтор экрана»…»; в журнале «external display disconnected». Включить снова — слайд снова на ТВ.
+9. Свернуть Pileup на 10 с и вернуться. Записать, что было на ТВ. Ожидается после возврата: тот же слайд на ТВ, пульт работает.
+10. Заблокировать iPhone на минуту и разблокировать. Ожидается: пульт сам продолжает показ с того же файла (A63), слайд снова на ТВ; в журнале «Pileup … ios started» и «show started». Если «Не удалось продолжить» — причина на пульте и в журнале.
+11. «Остановить показ». Ожидается: на ТВ текст «Pileup готов к показу…», затем при выключении «Повтора экрана» — обычное меню Apple TV.
+12. Android-хост в той же сети: «Показать на экране» — Apple TV в списке с текстом «Показ на Apple TV доступен только с iPhone. Запустите показ с iPhone участника.», нажать нельзя.
