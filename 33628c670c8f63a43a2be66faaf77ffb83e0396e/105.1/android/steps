@@ -1,0 +1,4 @@
+env began=19:25:24 exit=0 seconds=2
+android-debug began=19:25:26 exit=0 seconds=456
+android-test began=19:33:02 exit=0 seconds=9
+finished 19:33:11
