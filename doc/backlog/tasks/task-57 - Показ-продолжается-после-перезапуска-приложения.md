@@ -1,11 +1,11 @@
 ---
 id: TASK-57
 title: Показ продолжается после перезапуска приложения
-status: In Progress
+status: Done
 assignee:
   - '@claude'
 created_date: '2026-11-11T01:54:00Z'
-updated_date: '2026-11-13T07:46:00Z'
+updated_date: '2026-11-13T08:05:00Z'
 labels:
   - core
   - app
