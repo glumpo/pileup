@@ -1,11 +1,11 @@
 ---
 id: TASK-43
 title: 'iOS: медиатека, разрешения и превью'
-status: In Progress
+status: Done
 assignee:
   - '@claude'
 created_date: '2026-11-11T01:20:00Z'
-updated_date: '2026-11-13T12:59:00Z'
+updated_date: '2026-11-13T14:19:00Z'
 labels:
   - ios
   - app
@@ -58,6 +58,8 @@ CI: MediaTests (19) и OriginalsTests (7) зелёные на симулятор
 Лид: слито в master, задача остаётся In Progress. Код PhotoKit собран и покрыт unit-тестами чистой логики, но 7 интеграционных тестов MediaLibraryTests на раннере пропускаются (нет доступа к медиатеке у хоста тестов) — то есть сам код работы с PhotoKit ни разу не выполнялся. Следующий шаг: выдать доступ на симуляторе через UI-тест, нажимающий «Разрешить» в системном диалоге, чтобы эти тесты реально шли в CI.
 
 Продолжение (ветка ios/media-tests): доступ к фото на раннере выдаёт UI-тест PhotoAccessUITests — нажимает «Allow Full Access» в алерте springboard (simctl privacy на Xcode 26.6/iOS 26 не действует). Прогон 95.1 (8b32806): MediaLibraryTests 8 из 8 выполнены, 0 пропущено; всего 64 теста, 0 ошибок. Найдено: PhotoKit на iOS 26 не отдаёт скрытые фото вовсе (ни fetchAssets с includeHiddenAssets, ни по localIdentifier) — код не менялся (скрытые и так не должны выбираться), тест принимает оба исхода, A49 и ios.md уточнены. Остальной код PhotoKit ошибок не показал: размеры с ориентацией, fileSize ресурса = длина файла, codec avc1/hvc1, T1/T2 с ориентацией, чтение оригинала по 4 КиБ совпадает с файлом, через ядро thumbhash и T2 1920×1440. Не отмечены #5 и #7: iCloud на симуляторе нет (not_local и деривативы — только unit-тест и устройство). #8: codec проверен тестом, объяснение и «Открыть настройки» — SelectionScreen из TASK-55.
+
+Лид: продолжение слито в master (14ea701). На master все четыре задания CI зелёные, в ios-native 67 тестов Swift без пропусков, включая 8 тестов MediaLibraryTests с настоящим PhotoKit и PresentationTests. Критерии 5 и 7 не отмечены осознанно: оригинал только в iCloud проверяется только на iPhone — doc/adr/ios.md §14, проверка в TASK-20.
 <!-- SECTION:NOTES:END -->
 
 ## Final Summary
