@@ -48,4 +48,14 @@ for run in 1 2; do
     exit 1
   fi
 done
+journal="$(xcrun simctl get_app_container "$sim" "$id" data)/Library/Application Support/core/diag.log"
+jq -c '{kind, message, count}' "$journal"
+started=$(jq -r 'select(.kind == "app" and (.message | test("^Pileup .* ios started$"))) | .count' "$journal" | tail -1)
+echo "core start events in the journal: $started"
+[ "$started" = 2 ]
+if jq -e -s 'any(.[]; .kind == "app" and (.message | test("^Pileup .* ios started$") | not))' "$journal" >/dev/null; then
+  echo "the app reported errors to the journal:"
+  jq -r 'select(.kind == "app" and (.message | test("^Pileup .* ios started$") | not)) | .message' "$journal"
+  exit 1
+fi
 echo smoke ok
