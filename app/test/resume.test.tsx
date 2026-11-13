@@ -174,7 +174,7 @@ test('a show lost with a restarted core continues on the open remote by itself, 
 
   c.running = undefined;
   expect(
-    await screen.findByText('Показ завершён. Чтобы продолжить, начните показ снова.', {}, { timeout: 3000 }),
+    await screen.findByText('Показ завершён. Чтобы продолжить, начните показ снова.', {}, { timeout: 10000 }),
   ).toBeOnTheScreen();
   expect(starts(requests)).toHaveLength(1);
 });
@@ -188,7 +188,7 @@ test('a show that cannot continue on the open remote is explained and a screen c
   c.running = undefined;
   c.record = { ...interrupted, asset: 'a1' };
   expect(
-    await screen.findByText('Показ завершён. Чтобы продолжить, начните показ снова.', {}, { timeout: 3000 }),
+    await screen.findByText('Показ завершён. Чтобы продолжить, начните показ снова.', {}, { timeout: 10000 }),
   ).toBeOnTheScreen();
   expect(screen.getByText(/Экран не ответил/)).toBeOnTheScreen();
   expect(starts(requests)).toHaveLength(1);

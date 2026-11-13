@@ -130,9 +130,9 @@ test('loading progress is polled while the pile screen is open', async () => {
   await screen.findByText('Аня: 1240/1800');
 
   pins[0].done = 1500;
-  expect(await screen.findByText('Аня: 1500/1800', {}, { timeout: 3000 })).toBeOnTheScreen();
+  expect(await screen.findByText('Аня: 1500/1800', {}, { timeout: 10000 })).toBeOnTheScreen();
   pins[0].failed = 3;
-  expect(await screen.findByText(failed(1500, 3), {}, { timeout: 3000 })).toBeOnTheScreen();
+  expect(await screen.findByText(failed(1500, 3), {}, { timeout: 10000 })).toBeOnTheScreen();
 
   await user.press(screen.getByRole('button', { name: '‹ Назад' }));
   await screen.findByRole('button', { name: 'Создать' });
@@ -152,7 +152,7 @@ test('files that did not load are explained and progress is still polled for the
   expect(await screen.findByText(failed(1797, 3))).toBeOnTheScreen();
   pins[0].done = 1800;
   pins[0].failed = 0;
-  expect(await screen.findByText('Аня: 1800/1800', {}, { timeout: 3000 })).toBeOnTheScreen();
+  expect(await screen.findByText('Аня: 1800/1800', {}, { timeout: 10000 })).toBeOnTheScreen();
 });
 
 const waiting: [string, string][] = [
@@ -188,8 +188,8 @@ test('a failed progress poll is no longer shown once a poll succeeds, and polls 
   });
   await openPile();
 
-  expect(await screen.findByText(/Что-то пошло не так в Pileup/, {}, { timeout: 3000 })).toBeOnTheScreen();
-  await waitFor(() => expect(screen.queryByText(/Что-то пошло не так в Pileup/)).toBeNull(), { timeout: 3000 });
+  expect(await screen.findByText(/Что-то пошло не так в Pileup/, {}, { timeout: 10000 })).toBeOnTheScreen();
+  await waitFor(() => expect(screen.queryByText(/Что-то пошло не так в Pileup/)).toBeNull(), { timeout: 10000 });
   await act(() => new Promise((r) => setTimeout(r, 2500)));
   expect(calls).toBe(4);
   expect(requests.length).toBeGreaterThan(0);

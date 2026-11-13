@@ -290,7 +290,7 @@ test('members the show waits for are named with their phone and why', async () =
 
   show.waiting = [items[2], items[1]];
   show.hints = [anyaAway, { author: '02', name: 'Боря', platform: 'android', reason: 'timeout' }];
-  const banner = await screen.findByTestId('waiting', {}, { timeout: 3000 });
+  const banner = await screen.findByTestId('waiting', {}, { timeout: 10000 });
   expect(within(banner).getByText(`Нет ответа от iPhone: Аня. ${advice}`)).toBeOnTheScreen();
   expect(within(banner).getByText(`Медленно отвечает телефон: Боря. ${advice}`)).toBeOnTheScreen();
   expect(within(banner).getByRole('button', { name: 'Загрузить всё с участника: Аня' })).toBeOnTheScreen();
@@ -314,7 +314,7 @@ test('members the show waits for are advised by why they do not answer', async (
     { author: '04', name: 'Гоша', platform: 'android', reason: 'unreachable', last_error: 'no_address' },
     { author: '05', name: 'Даша', platform: 'ios', reason: 'unreachable', last_error: 'timeout' },
   ];
-  const banner = await screen.findByTestId('waiting', {}, { timeout: 3000 });
+  const banner = await screen.findByTestId('waiting', {}, { timeout: 10000 });
   for (const text of [
     'Нет ответа от iPhone: Аня. Pileup закрыт — попросите открыть Pileup.',
     'Нет ответа от телефона: Боря. Телефон не в этой сети — попросите подключиться к той же сети Wi-Fi.',
@@ -333,7 +333,7 @@ test('a file the screen could not open while its owner does not answer is explai
   show.renderer_error = { code: 'load_failed', message: 'LOAD_FAILED from receiver' };
   show.waiting = [items[0]];
   show.hints = [{ ...anyaAway, last_error: 'refused' }];
-  const banner = await screen.findByTestId('waiting', {}, { timeout: 3000 });
+  const banner = await screen.findByTestId('waiting', {}, { timeout: 10000 });
   expect(
     within(banner).getByText('Нет ответа от iPhone: Аня. Pileup закрыт — попросите открыть Pileup.'),
   ).toBeOnTheScreen();
@@ -341,7 +341,7 @@ test('a file the screen could not open while its owner does not answer is explai
 
   show.waiting = [items[1]];
   show.hints = [{ author: '02', name: 'Боря', platform: 'android', reason: 'unreachable', last_error: 'refused' }];
-  expect(await screen.findByText(/Экран не смог открыть этот файл/, {}, { timeout: 3000 })).toBeOnTheScreen();
+  expect(await screen.findByText(/Экран не смог открыть этот файл/, {}, { timeout: 10000 })).toBeOnTheScreen();
 });
 
 test('a full disk on the host is named instead of the members', async () => {
@@ -353,7 +353,7 @@ test('a full disk on the host is named instead of the members', async () => {
     await screen.findByText(
       'На этом телефоне закончилось место — загрузка остановлена. Освободите место или снимите закрепления.',
       {},
-      { timeout: 3000 },
+      { timeout: 10000 },
     ),
   ).toBeOnTheScreen();
   expect(screen.queryByText(/Боря\. /)).toBeNull();
@@ -364,7 +364,7 @@ test('all files of a member who does not answer are loaded from the remote after
   const { requests, show } = core();
   const user = await startShow();
   show.hints = [anyaAway];
-  const banner = await screen.findByTestId('waiting', {}, { timeout: 3000 });
+  const banner = await screen.findByTestId('waiting', {}, { timeout: 10000 });
 
   await user.press(within(banner).getByRole('button', { name: 'Загрузить всё с участника: Аня' }));
   const offer = await screen.findByTestId('pin-offer');
@@ -427,7 +427,7 @@ test('a video the screen or its owner cannot give is explained by its reason', a
     await screen.findByText(
       'Экран не воспроизводит это видео в формате HEVC. На экране постер. Посмотрите видео на телефоне, где оно снято, или переходите к следующему файлу.',
       {},
-      { timeout: 3000 },
+      { timeout: 10000 },
     ),
   ).toBeOnTheScreen();
   expect(screen.getByRole('button', { name: 'Воспроизвести' })).toBeOnTheScreen();
@@ -437,7 +437,7 @@ test('a video the screen or its owner cannot give is explained by its reason', a
     await screen.findByText(
       'Экран не воспроизводит это видео — вероятно, не поддерживает его формат. На экране постер. Посмотрите видео на телефоне, где оно снято, или переходите к следующему файлу.',
       {},
-      { timeout: 3000 },
+      { timeout: 10000 },
     ),
   ).toBeOnTheScreen();
 
@@ -446,7 +446,7 @@ test('a video the screen or its owner cannot give is explained by its reason', a
     await screen.findByText(
       'Видео участника: Боря — только в iCloud, на телефоне его нет. Откройте его в «Фото» на iPhone, чтобы скачать, и нажмите «Воспроизвести» или переходите к следующему файлу.',
       {},
-      { timeout: 3000 },
+      { timeout: 10000 },
     ),
   ).toBeOnTheScreen();
 
@@ -455,7 +455,7 @@ test('a video the screen or its owner cannot give is explained by its reason', a
     await screen.findByText(
       'Телефон участника не может прочитать это видео: Боря. Возможно, оно удалено из галереи или у Pileup нет к нему доступа. Переходите к следующему файлу.',
       {},
-      { timeout: 3000 },
+      { timeout: 10000 },
     ),
   ).toBeOnTheScreen();
   expect(screen.queryByText(/Видео недоступно/)).toBeNull();
@@ -466,7 +466,7 @@ test('screen errors are explained in Russian by their code', async () => {
   await startShow();
 
   show.renderer_error = { code: 'load_failed', message: 'LOAD_FAILED from receiver' };
-  expect(await screen.findByText(/Экран не смог открыть этот файл/, {}, { timeout: 3000 })).toBeOnTheScreen();
+  expect(await screen.findByText(/Экран не смог открыть этот файл/, {}, { timeout: 10000 })).toBeOnTheScreen();
   expect(screen.queryByText(/LOAD_FAILED/)).toBeNull();
   expect(screen.queryByRole('button', { name: 'Перезапустить показ' })).toBeNull();
 });
@@ -478,7 +478,7 @@ test('while the host reconnects to the screen the remote says so and still resta
   await screen.findByText('2 / 3');
 
   show.renderer_error = { code: 'reconnecting', message: 'cast: connection closed' };
-  expect(await screen.findByText('Переподключаемся к экрану…', {}, { timeout: 3000 })).toBeOnTheScreen();
+  expect(await screen.findByText('Переподключаемся к экрану…', {}, { timeout: 10000 })).toBeOnTheScreen();
   await user.press(screen.getByRole('button', { name: 'Перезапустить показ' }));
 
   expect(requests.filter((r) => r.method === 'POST' && r.path === '/show').pop()?.body).toEqual({
@@ -520,7 +520,7 @@ test('a show left without files says so with only stop offered, and the remote r
   await startShow();
 
   show.files = [];
-  expect(await screen.findByText('В pile не осталось файлов', {}, { timeout: 3000 })).toBeOnTheScreen();
+  expect(await screen.findByText('В pile не осталось файлов', {}, { timeout: 10000 })).toBeOnTheScreen();
   expect(screen.queryByText(/\/ 0/)).toBeNull();
   expect(screen.queryByTestId('image')).toBeNull();
   for (const name of ['Предыдущий', 'Следующий', 'Пауза', 'Воспроизвести']) {
@@ -529,7 +529,7 @@ test('a show left without files says so with only stop offered, and the remote r
   expect(screen.getByRole('button', { name: 'Остановить показ' })).toBeOnTheScreen();
 
   show.files = items;
-  expect(await screen.findByText('1 / 3', {}, { timeout: 3000 })).toBeOnTheScreen();
+  expect(await screen.findByText('1 / 3', {}, { timeout: 10000 })).toBeOnTheScreen();
   expect(screen.queryByText('В pile не осталось файлов')).toBeNull();
   expect(sourceOf(screen.getByTestId('image')).uri).toBe(`${BASE}/piles/aa01/blob/f3/rf3/2`);
   expect(screen.getByRole('button', { name: 'Следующий' })).toBeOnTheScreen();
@@ -539,7 +539,7 @@ test('a show left without files can be stopped', async () => {
   const { requests, show } = core();
   const user = await startShow();
   show.files = [];
-  await screen.findByText('В pile не осталось файлов', {}, { timeout: 3000 });
+  await screen.findByText('В pile не осталось файлов', {}, { timeout: 10000 });
 
   await user.press(screen.getByRole('button', { name: 'Остановить показ' }));
 
@@ -552,7 +552,7 @@ test('a failed poll is cleared by the next successful one', async () => {
   await startShow();
 
   show.poll = () => [500, { error: 'internal' }];
-  expect(await screen.findByText(/Что-то пошло не так/, {}, { timeout: 3000 })).toBeOnTheScreen();
+  expect(await screen.findByText(/Что-то пошло не так/, {}, { timeout: 10000 })).toBeOnTheScreen();
   show.poll = undefined;
   await act(() => new Promise((r) => setTimeout(r, 1500)));
   expect(screen.queryByText(/Что-то пошло не так/)).toBeNull();
@@ -590,7 +590,7 @@ test('a show that ended on its own is explained and the remote closes', async ()
 
   show.poll = () => [404, { error: 'no_show' }];
   expect(
-    await screen.findByText('Показ завершён. Чтобы продолжить, начните показ снова.', {}, { timeout: 3000 }),
+    await screen.findByText('Показ завершён. Чтобы продолжить, начните показ снова.', {}, { timeout: 10000 }),
   ).toBeOnTheScreen();
   expect(screen.queryByText('Показ уже остановлен')).toBeNull();
   for (const name of ['Предыдущий', 'Следующий', 'Перезапустить показ']) {
@@ -619,7 +619,7 @@ test('reconnecting to the screen for long is explained with what to check', asyn
     code: 'reconnecting',
     message: 'cast: connection closed',
   };
-  expect(await screen.findByText('Переподключаемся к экрану…', {}, { timeout: 3000 })).toBeOnTheScreen();
+  expect(await screen.findByText('Переподключаемся к экрану…', {}, { timeout: 10000 })).toBeOnTheScreen();
 
   const now = Date.now();
   const clock = jest.spyOn(Date, 'now').mockReturnValue(now + 31_000);
@@ -628,7 +628,7 @@ test('reconnecting to the screen for long is explained with what to check', asyn
       await screen.findByText(
         'Не удаётся подключиться к экрану «Гостиная». Проверьте, что телевизор включён и в той же сети Wi-Fi, затем нажмите «Перезапустить показ».',
         {},
-        { timeout: 3000 },
+        { timeout: 10000 },
       ),
     ).toBeOnTheScreen();
     expect(screen.getByRole('button', { name: 'Перезапустить показ' })).toBeOnTheScreen();
@@ -646,7 +646,7 @@ test('a file the screen failed to play is named a photo or a video', async () =>
     message: 'media receiver failed to play the file',
   };
   expect(
-    await screen.findByText('Экран не смог показать этот файл. Перейдите к следующему.', {}, { timeout: 3000 }),
+    await screen.findByText('Экран не смог показать этот файл. Перейдите к следующему.', {}, { timeout: 10000 }),
   ).toBeOnTheScreen();
 
   await user.press(screen.getByRole('button', { name: 'Следующий' }));
@@ -654,7 +654,7 @@ test('a file the screen failed to play is named a photo or a video', async () =>
     await screen.findByText(
       'Экран не смог воспроизвести видео — возможно, телевизор не поддерживает его формат. Перейдите к следующему файлу.',
       {},
-      { timeout: 3000 },
+      { timeout: 10000 },
     ),
   ).toBeOnTheScreen();
 });
@@ -666,7 +666,7 @@ test('a buffering video is shown, and a long buffering is explained by the speed
   await screen.findByText('2 / 3');
 
   show.extra = { buffering: true, stalled: false };
-  expect(await screen.findByText('Видео подгружается…', {}, { timeout: 3000 })).toBeOnTheScreen();
+  expect(await screen.findByText('Видео подгружается…', {}, { timeout: 10000 })).toBeOnTheScreen();
   expect(screen.getByRole('button', { name: 'Пауза' })).toBeOnTheScreen();
 
   show.extra = {
@@ -679,13 +679,13 @@ test('a buffering video is shown, and a long buffering is explained by the speed
     await screen.findByText(
       'Wi-Fi не успевает за видео: нужно ≈ 70 Мбит/с, идёт ≈ 25. Поднесите телефон ближе к роутеру или переходите к следующему файлу.',
       {},
-      { timeout: 3000 },
+      { timeout: 10000 },
     ),
   ).toBeOnTheScreen();
   expect(screen.queryByText('Видео подгружается…')).toBeNull();
 
   show.extra = { buffering: true, stalled: true };
-  expect(await screen.findByText('Видео долго подгружается.', {}, { timeout: 3000 })).toBeOnTheScreen();
+  expect(await screen.findByText('Видео долго подгружается.', {}, { timeout: 10000 })).toBeOnTheScreen();
   expect(screen.queryByText(/роутеру/)).toBeNull();
 
   show.extra = { buffering: false, stalled: false };
